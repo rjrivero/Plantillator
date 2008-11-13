@@ -157,7 +157,7 @@ class CommandEngine(object):
         funcion no devuelve el resultado directamente. En su lugar, una vez
         cargada la lista de patrones, hay que iterar sobre self.templates.
         """
-        self._templates.append((source, data))
+        self._templates.append((source, data.copy()))
     
     @as_iterator
     def command_if(self, match, block, data):
@@ -220,11 +220,7 @@ class CommandEngine(object):
         de todos los items dados.
         Las variables de los items definidos primero tiene "prioridad", 
         sobreescriben a las de los bloques posteriores.
-        Si el bloque esta vacio, mete en data el valor de ese item
-        para el resto del template.
         """
-        if len(block):
-            data = data.copy()
         data[match.group('var')] = eval(match.group('expr'), data)
         return block.render(data)
 
@@ -320,9 +316,9 @@ class CommandEngine(object):
             expr = eval(match.group('expr'), data)
         except KeyError:
             return
-        copied, forset = data.copy(), set()
+        forset = set
         for item in self._asseq(expr):
-            copied[var], result = item, list()
+            data[var], result = item, list()
             for item in block.render(copied):
                 if type(item) == str:
                     result.append(item)
