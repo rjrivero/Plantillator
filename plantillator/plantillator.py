@@ -40,8 +40,10 @@ class Plantillator(object):
         self.__dict__.update(Plantillator.OPTIONS)
 
     def render(self, engine):
-        self._loadfiles(engine)
+        data, tmpl = self._classify()
+        self._loaddata(data)
         self._addobjects()
+        self._loadtmpl(engine, tmpl)
         if self.collapse:
             # borro el fichero de salida combinado
             if os.path.isfile(self.outpath):
@@ -50,21 +52,32 @@ class Plantillator(object):
             for block in self._renderfile(template, data):
                 yield block
 
-    def _loadfiles(self, engine):
-        """carga los ficheros de datos y patrones"""
-        self.dataparser = DataParser()
-        finder = PathFinder(self.path)
+    def _classify(self):
+        """divide los ficheros en datos y patrones"""
+        data, tmpl, finder = [], [], PathFinder(self.path)
         for fname in self.inputfiles:
             parts = os.path.splitext(fname)
             if len(parts) < 2:
                 raise ValueError, "Fichero sin extension: %s" % fname
             ext = parts[1].lower()
             if ext in Plantillator.TMPL_SUFFIX:
-                engine.read(self.dataparser, finder.find(fname))
+                tmpl.append(finder.find(fname))
             elif ext in Plantillator.DATA_SUFFIX:
-                self.dataparser.read(finder.find(fname))
+                data.append(finder.find(fname))
             else:
                 raise ValueError, "Extension desconocida: %s" % fname
+        return data, tmpl
+
+    def _loaddata(self, data_sources):
+        """carga los ficheros de datos"""
+        self.dataparser = DataParser()
+        for source in data_sources:
+            self.dataparser.read(source)
+
+    def _loadtmpl(self, engine, tmpl_sources):
+       """carga los patrones de texto"""
+       for source in tmpl_sources:
+            engine.read(self.dataparser, source)
 
     def _addobjects(self):
         """Carga objetos predefinidos e indicados en la linea de comandos."""

@@ -55,9 +55,6 @@ class CommandEngine(object):
     """Motor que interpreta todos los comandos del lenguaje del patron"""
 
     COMMANDS = [(re.compile(exp), cmd) for (exp, cmd) in (
-        # comando SET
-        # p.e. "var = var1 (+ var2)*
-        (r'(?P<var>%(varflat)s)\s+(=|es\s)\s*(?P<expr>.*)' % VARPATTERN, 'set'),
         # comando FOR
         # p.e. "for var in path.to(list)"
         (r'(for|(por cada))\s+(?P<var>%(varflat)s)\s+(in|en|de|del)\s+((el|la|los|las)\s+)?(?P<expr>.*)' % VARPATTERN, 'for'),
@@ -87,6 +84,9 @@ class CommandEngine(object):
         # Comando DEFINE
         # p.ej. "define <blockname>"
         (r'(define|definir|bloque|funcion)\s+(?P<blockname>%(varflat)s)\s*' % VARPATTERN, 'define'),
+        # comando SET
+        # p.e. "var = var1 (+ var2)*
+        (r'(?P<var>[^=]+)\s*=\s*(?P<expr>.+)' % VARPATTERN, 'set'),
         # Comando RECALL
         # ESTE COMANDO DEBE SER EL ULTIMO!
         (r'(?P<blockname>%(varflat)s)\s*' % VARPATTERN, 'recall'),
@@ -157,7 +157,7 @@ class CommandEngine(object):
         funcion no devuelve el resultado directamente. En su lugar, una vez
         cargada la lista de patrones, hay que iterar sobre self.templates.
         """
-        self._templates.append((source, data.copy()))
+        self._templates.append((source, data))
     
     @as_iterator
     def command_if(self, match, block, data):
@@ -221,7 +221,8 @@ class CommandEngine(object):
         Las variables de los items definidos primero tiene "prioridad", 
         sobreescriben a las de los bloques posteriores.
         """
-        data[match.group('var')] = eval(match.group('expr'), data)
+        parts = (match.group(x).strip() for x in ('var', 'expr'))
+        exec (" = ".join(parts)) in globals(), data
         return block.render(data)
 
     @as_iterator
@@ -271,8 +272,8 @@ class CommandEngine(object):
         """
         var = match.group("var")
         art = match.group("art")
-        exp = list(self._asseq(eval(match.group("expr"), data)))
         if not var in data:
+            exp = list(self._asseq(eval(match.group("expr"), data)))
             yield ("select", var, art, exp, data)
         if not var in data:
             raise ValueError, "No se ha seleccionado %s" % var
@@ -316,10 +317,10 @@ class CommandEngine(object):
             expr = eval(match.group('expr'), data)
         except KeyError:
             return
-        forset = set
+        forset = set()
         for item in self._asseq(expr):
             data[var], result = item, list()
-            for item in block.render(copied):
+            for item in block.render(data):
                 if type(item) == str:
                     result.append(item)
                 else:
