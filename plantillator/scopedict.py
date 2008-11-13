@@ -72,6 +72,11 @@ class ScopeDict(dict):
         except KeyError:
             return defval
 
+    @property
+    def up(self):
+        """Devuelve el objeto padre, si existe"""
+        return self._fallback[0] if len(self._fallback) == 1 else None
+
     def __getattr__(self, attrib):
         """Busca el atributo en el diccionario y los fallbacks"""
         try:

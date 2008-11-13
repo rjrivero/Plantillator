@@ -7,7 +7,7 @@ import os.path
 import re
 import sys
 from contextlib import contextmanager
-from myoperator import MyOperator, MySearcher
+from myoperator import MyOperator, MySearcher, asList, asRange
 from dataparser import DataParser
 from mytokenizer import PathFinder
 from mycommands import VARPATTERN
@@ -24,8 +24,8 @@ class Plantillator(object):
     }
 
     PREDEFINIDOS = {
-        'LISTA':             DataParser._aslist,
-        'RANGO':             DataParser._asrange,
+        'LISTA':             asList,
+        'RANGO':             asRange,
         'cualquiera':        MyOperator(),
         '_cualquiera_de':    MySearcher(),
         'ninguno':           (MyOperator() == None),

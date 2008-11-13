@@ -10,6 +10,7 @@ from scopedict import ScopeDict
 from scopelist import ScopeList
 from mytokenizer import PathFinder
 from datatokenizer import DataTokenizer
+from myoperator import normalize
 
 
 DATA_COMMENT = "!"
@@ -160,7 +161,6 @@ class DataParser(ScopeDict):
             contenido de otro fichero.
     """
 
-    _RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
     _Instrucciones = {
         'variables': ('nombre', 'valor'),
         'dependencias': ('fichero',),
@@ -186,7 +186,7 @@ class DataParser(ScopeDict):
             return # ya ha sido cargado
         self._includes.add(tokenizer.source.id)
         for line in tokenizer.tokens():
-            line = (self._normalize(field) for field in line)
+            line = (normalize(field) for field in line)
             head = line.next()
             if head:
                 try:
@@ -203,46 +203,6 @@ class DataParser(ScopeDict):
                 data = self[instruccion]
                 del(self[instruccion])
                 getattr(self, "_%s" % instruccion)(tokenizer, data)
-
-    @staticmethod
-    def _normalize(item):
-        """Normaliza un elemento
-
-        Convierte los enteros en enteros, las cadenas vacias en None,
-        y al resto le quita los espacios de alrededor.
-        """
-        item = item.strip()
-        if item.isdigit():
-            return int(item)
-        return item or None if not item.isspace() else None
-
-    @staticmethod
-    def _aslist(varlist):
-        """Interpreta una cadena de caracteres como una lista
-
-        Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
-        es un conjunto de valores separados por ','.
-        """
-        return [DataParser._normalize(i) for i in varlist.split(",")]
-
-    @staticmethod
-    def _asrange(varrange):
-        """Interpreta una cadena de caracteres como un rango
-
-        Crea al vuelo un rango a partir de una cadena de caracteres.
-        La cadena es un rango (numeros separados por '-'), posiblemente
-        rodeado de un prefijo y sufijo no numerico.
-        """
-        match = DataParser._RANGO.match(varrange)
-        rango = []
-        if match:
-            start = int(match.group('from'))
-            stop = int(match.group('to'))
-            pref = match.group('pref') or ''
-            suff = match.group('suff') or ''
-            for i in range(start, stop+1):
-                rango.append(DataParser._normalize("%s%d%s" % (pref, i, suff)))
-        return rango
 
 
 if __name__ == "__main__":

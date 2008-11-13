@@ -65,11 +65,20 @@ class ScopeList(list):
         attribs = (item for item in attribs if item is not None)
         subtype = self.dicttype.subtypes.get(attrib, None)
         if subtype:
-            sublist = DataList(subtype, None)
+            sublist = ScopeList(subtype, None)
             sublist.extend(itertools.chain(*list(attribs)))
         else:
             sublist = frozenset(attribs)
         return sublist
+
+    @property
+    def up(self):
+        sublist = ScopeList(None, None)
+        for item in self:
+            up = item.up
+            if item.up not in sublist:
+                sublist.append(up)
+        return sublist[0] if len(sublist) == 1 else sublist
 
     def __repr__(self):
         # una lista tiene un orden inherente (secuencial), asi que

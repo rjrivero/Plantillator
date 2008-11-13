@@ -2,6 +2,56 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
 import operator
+import re
+
+
+def normalize(item):
+    """Normaliza un elemento
+
+    Convierte los enteros en enteros, las cadenas vacias en None,
+    y al resto le quita los espacios de alrededor.
+    """
+    item = item.strip()
+    if item.isdigit():
+        return int(item)
+    return item or None if not item.isspace() else None
+
+
+def asList(varlist):
+    """Interpreta una cadena de caracteres como una lista
+
+    Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
+    es un conjunto de valores separados por ','.
+    """
+    return [normalize(i) for i in varlist.split(",")]
+
+
+_RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
+
+def asRange(varrange):
+    """Interpreta una cadena de caracteres como un rango
+
+    Crea al vuelo un rango a partir de una cadena de caracteres.
+    La cadena es un rango (numeros separados por '-'), posiblemente
+    rodeado de un prefijo y sufijo no numerico.
+    """
+    match = _RANGO.match(varrange)
+    rango = []
+    if match:
+        start = int(match.group('from'))
+        stop = int(match.group('to'))
+        pref = match.group('pref') or ''
+        suff = match.group('suff') or ''
+        for i in range(start, stop+1):
+            rango.append(normalize("%s%d%s" % (pref, i, suff)))
+    return rango
+
+
+def iterWrapper(expr):
+    """Devuelve un iterable"""
+    if operator.isMappingType(expr) or not hasattr(expr, '__iter__'):
+        expr = (expr,)
+    return expr
 
 
 class UnaryOperator(object):
@@ -110,9 +160,11 @@ class MySearcher(object):
     """Operador para comprobar la pertenencia a una lista"""
 
     def __eq__(self, arg):
+        arg = iterWrapper(arg)
         return DeferredOperation("any", lambda x, y: x in y, arg)
 
-    def __ne__(self, *arg):
+    def __ne__(self, arg):
+        arg = iterWrapper(arg)
         return DeferredOperation("no", lambda x, y: x not in y, arg)
 
     def __repr__(self):

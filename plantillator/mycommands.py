@@ -7,6 +7,7 @@ import operator
 import functools
 from os.path import basename, dirname
 
+from myoperator import iterWrapper
 from mytokenizer import FileSource, Tokenizer
 from tmplparser import TmplParser, CommandError
 from dataparser import DataParser
@@ -273,7 +274,7 @@ class CommandEngine(object):
         var = match.group("var")
         art = match.group("art")
         if not var in data:
-            exp = list(self._asseq(eval(match.group("expr"), data)))
+            exp = list(iterWrapper(eval(match.group("expr"), data)))
             yield ("select", var, art, exp, data)
         if not var in data:
             raise ValueError, "No se ha seleccionado %s" % var
@@ -289,13 +290,6 @@ class CommandEngine(object):
         fname = match.group('path').strip()
         self.read(data, self.source.resolve(fname))
         
-    def _asseq(self, expr):
-        if type(expr) == str:
-            expr = DataParser._aslist(expr)
-        elif operator.isMappingType(expr):
-            expr = (expr,)
-        return expr
-
     def command_for(self, match, block, data):
         """comando "for"
         for var in expr
@@ -318,7 +312,7 @@ class CommandEngine(object):
         except KeyError:
             return
         forset = set()
-        for item in self._asseq(expr):
+        for item in iterWrapper(expr):
             data[var], result = item, list()
             for item in block.render(data):
                 if type(item) == str:
