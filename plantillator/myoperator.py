@@ -103,7 +103,7 @@ class DeferredAny(UnaryOperator):
     """
 
     def __init__(self, unary_operator):
-        self.operator = operator
+        self.operator = unary_operator
 
     def __call__(self, deferred):
         return any(self.operator(item) for item in deferred)
