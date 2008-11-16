@@ -58,14 +58,8 @@ class UnaryOperator(object):
 
     """Operador unario"""
 
-    def __call__(self):
-        pass
-
-    def __repr__(self):
-        pass
-
-    def __str__(self):
-        pass
+    def __call__(self, item):
+        raise NotImplementedError, "UnaryOperator"
 
 
 class DeferredOperation(UnaryOperator):
@@ -75,22 +69,12 @@ class DeferredOperation(UnaryOperator):
     Pospone la evaluacion de un operador binario
     """
 
-    def __init__(self, name, operator, operand):
-        self.name = name
+    def __init__(self, operator, operand):
         self.operator = operator
         self.operand  = operand
 
     def __call__(self, deferred):
         return self.operator(deferred, self.operand)
-
-    def __repr__(self):
-        return "DeferredOperation(%s, %s, %s)" % (
-                repr(self.name),
-                repr(self.operator),
-                repr(self.operand))
-
-    def __str__(self):
-        return "<X> %s %s" % (self.name, self.operand)
 
 
 class DeferredAny(UnaryOperator):
@@ -103,16 +87,10 @@ class DeferredAny(UnaryOperator):
     """
 
     def __init__(self, unary_operator):
-        self.operator = operator
+        self.operator = unary_operator
 
     def __call__(self, deferred):
         return any(self.operator(item) for item in deferred)
-
-    def __repr__(self):
-        return "DeferredAny(%s)" % repr(self.operator)
-
-    def __str__(self):
-        return "any (%s) for <X> in [Y]" % (self.operator)
 
 
 class MyOperator(UnaryOperator):
@@ -128,31 +106,25 @@ class MyOperator(UnaryOperator):
     """
 
     def __eq__(self, other):
-        return DeferredOperation("==", operator.eq, other)
+        return DeferredOperation(operator.eq, other)
 
     def __ne__(self, other):
-        return DeferredOperation("!=", operator.ne, other)
+        return DeferredOperation(operator.ne, other)
 
     def __lt__(self, other):
-        return DeferredOperation("<",  operator.lt, other)
+        return DeferredOperation(operator.lt, other)
 
     def __le__(self, other):
-        return DeferredOperation("<=", operator.le, other)
+        return DeferredOperation(operator.le, other)
 
     def __gt__(self, other):
-        return DeferredOperation(">",  operator.gt, other)
+        return DeferredOperation(operator.gt, other)
 
     def __ge__(self, other):
-        return DeferredOperation(">=", operator.ge, other)
+        return DeferredOperation(operator.ge, other)
 
     def __call__(self, item):
         return bool(item)
-
-    def __repr__(self):
-        return "MyOperator()"
-
-    def __str__(self):
-        return "<X> == cualquiera"
 
 
 class MySearcher(object):
@@ -160,16 +132,8 @@ class MySearcher(object):
     """Operador para comprobar la pertenencia a una lista"""
 
     def __eq__(self, arg):
-        arg = iterWrapper(arg)
-        return DeferredOperation("any", lambda x, y: x in y, arg)
+        return DeferredOperation(lambda x, y: x in y, iterWrapper(arg))
 
     def __ne__(self, arg):
-        arg = iterWrapper(arg)
-        return DeferredOperation("no", lambda x, y: x not in y, arg)
-
-    def __repr__(self):
-        return "MySearcher()"
-
-    def __str__(self):
-        return "<X> == [cualquiera ==|!=]"
+        return DeferredOperation(lambda x, y: x not in y, iterWrapper(arg))
 

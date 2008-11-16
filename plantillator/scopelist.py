@@ -8,15 +8,6 @@ class ScopeList(list):
 
     """Lista de ScopeDicts con un ScopeType comun"""
 
-    def _find(self, key, val):
-        """Busca un solo elemento, sin fallbacks"""
-        for item in self:
-            # la clave primaria nunca se hereda, asi que puedo buscarla
-            # en el diccionario y no como atributo.
-            if item[key] == val:
-                return item
-        raise KeyError, val
-
     def __init__(self, dicttype, fallback, fieldset=None):
         """Crea una lista vacia
 
@@ -67,9 +58,11 @@ class ScopeList(list):
         if subtype:
             sublist = ScopeList(subtype, None)
             sublist.extend(itertools.chain(*list(attribs)))
+            if len(sublist) == 1:
+                sublist = sublist[0]
         else:
             sublist = frozenset(attribs)
-        return sublist
+        return sublist 
 
     @property
     def up(self):
@@ -79,10 +72,4 @@ class ScopeList(list):
             if item.up not in sublist:
                 sublist.append(up)
         return sublist[0] if len(sublist) == 1 else sublist
-
-    def __repr__(self):
-        # una lista tiene un orden inherente (secuencial), asi que
-        # no la ordeno. Los elementos deben aparecer en el orden en que
-        # se definen en el fichero de datos.
-        return "\n".join((repr(self.dicttype), list.__repr__(self)))
 

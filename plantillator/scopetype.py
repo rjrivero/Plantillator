@@ -64,6 +64,8 @@ class ScopeType(object):
         fieldset = tuple(self._normfield(f) for f in fields)
         if not self.pkey:
             self.pkey = fieldset[0]
+            if not self.pkey:
+                raise ValueError, "no hay clave primaria!"
         elif self.pkey != fieldset[0]:
             raise SyntaxError, "Cambio de clave primaria no permitido"
         return fieldset
@@ -73,7 +75,13 @@ class ScopeType(object):
         self.subtypes[name] = subtype
         self.blockset.add(name)
 
-    def search_crit(self, arg, kw):
+    def fallback(self, scoped, attrib):
+        """Busca un atributo en los fallbacks"""
+        if attrib not in self.blockset:
+            return getattr(scoped.up, attrib)
+        raise KeyError, attrib
+
+    def normcrit(self, arg, kw):
         """Normaliza criterios de busqueda
 
         Un criterio de busqueda es un conjunto de pares "atributo" =>
@@ -98,47 +106,4 @@ class ScopeType(object):
             kw.update({self.pkey: arg[0]})
         # se convierten todos los argumentos en callable.
         return dict(self._normcrit(k, v) for k, v in kw.iteritems())
-
-    def fallback(self, attrib, fallbacks):
-        """Busca un atributo en los fallbacks"""
-        if attrib not in self.blockset:
-            for fallback in fallbacks:
-                try:
-                    return getattr(fallback, attrib)
-                except KeyError:
-                    pass
-        raise KeyError, attrib
-
-    def copy(self):
-        """Devuelve una copia del ScopeType actual"""
-        newtype = ScopeType()
-        newtype.pkey = self.pkey
-        newtype.subtypes = self.subtypes.copy()
-        newtype.blockset = self.blockset.copy()
-        return newtype
-
-    def update(self, other):
-        """Actualiza el ScopeType actual con los datos contenidos en otro
-
-        - La clave primaria se conserva si es igual en los dos ScopeTypes,
-            en otro caso se establece a None.
-        - La lista de campos bloqueados se combina
-        - La lista de subtipos se combina. Si hay subtipos con el mismo
-            nombre, prevalecen los especificados en "other".
-
-        Devuelve self.
-        """
-        if self.pkey != other.pkey:
-            self.pkey = None
-        self.subtypes.update(other.subtypes)
-        self.blockset.update(other.blockset)
-        return self
-
-    def __repr__(self):
-        """Esto se usa en los unittests"""
-        return "ScopeType[pkey: %s, subtypes: %s, blocks: %s]" % (
-                self.pkey,
-                repr(sorted(self.subtypes.iteritems())),
-                repr(sorted(self.blockset))
-        )
 

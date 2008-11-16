@@ -29,6 +29,15 @@ class DataList(ScopeList):
     actualiza el antiguo con los elementos del nuevo.
     """
 
+    def _find(self, key, val):
+        """Busca un solo elemento, sin fallbacks"""
+        for item in self:
+            # la clave primaria nunca se hereda, asi que puedo buscarla
+            # en el diccionario y no como atributo.
+            if item._data[key] == val:
+                return item
+        raise KeyError, val
+
     def __init__(self, dicttype, fallback, fieldset=None):
         """Crea una lista vacia
 

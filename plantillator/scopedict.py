@@ -8,7 +8,7 @@ from operator import itemgetter
 from scopetype import ScopeType
 
 
-class ScopeDict(dict):
+class ScopeDict(object):
 
     """Diccionario accesible por "scopes"
 
@@ -20,20 +20,20 @@ class ScopeDict(dict):
     no encontrar el atributo buscado en el diccionario actual.
     """
 
-    def __init__(self, mytype, data=None, *fallback):
+    def __init__(self, mytype, data=None, fallback=None):
         """Inicializa el ScopeDict con los datos y fallback especificados
 
         Los datos se chequean contra la lista de palabras reservadas
         (ver _keywords()).
         """
-        dict.__init__(self, data or {})
+        self.up = fallback
+        self._data = data.copy() if data else {}
         self._type = mytype
-        self._fallback = fallback
         self._check_kw()
 
     def _check_kw(self):
         """Comprueba que ningun valor del diccionario es un keyword"""
-        kw = set(self.keys()).intersection(self._keywords())
+        kw = set(self._data.keys()).intersection(self._keywords())
         if kw:
            raise ValueError, "Palabras Reservadas: %s" % kw
 
@@ -62,46 +62,24 @@ class ScopeDict(dict):
                 return False
         return True
 
-    def copy(self):
-        """Copia el ScopeDict y usa el actual como fallback del nuevo"""
-        return ScopeDict(self._type, self, self)
-
     def get(self, key, defval=None):
         try:
-            return getattr(self, key)
+            return self[key]
         except KeyError:
             return defval
-
-    @property
-    def up(self):
-        """Devuelve el objeto padre, si existe"""
-        return self._fallback[0] if len(self._fallback) == 1 else None
 
     def __getattr__(self, attrib):
         """Busca el atributo en el diccionario y los fallbacks"""
         try:
-            return self[attrib]
+            return self._data[attrib]
         except KeyError:
-            return self._type.fallback(attrib, self._fallback)
+            return self._type.fallback(self, attrib)
 
-    def __add__(self, added):
-        """Une dos ScopeDicts y usa los originales como fallback
-        
-        El primer elemento de la suma tiene preferencia, es decir,
-        en caso de que un campo se repita en los dos ScopeDicts, el valor
-        que queda es el que estuviera en el primero.
-        
-        En el caso de los fallbacks, los fallbacks del primero tambien
-        tienen preferencia sobre los del segundo.
-        """
-        newtype = added._type.copy().update(self._type)
-        newdict = ScopeDict(newtype, added, self, added)
-        newdict.update(self)
-        return newdict
+    __getitem__ = __getattr__
 
-    def __eq__(self, other):
-        """Compara por identidad, no por valor"""
-        return self is other
+    def __setitem__(self, index, item):
+        """Almacena un item en el diccionario"""
+        self._data[index] = item
 
     def __call__(self, *arg, **kw):
         """Busca un ScopeDict que cumpla el criterio especificado por arg, kw
@@ -113,7 +91,7 @@ class ScopeDict(dict):
 
         - argumentos posicionales (arg): puede haber como maximo 1, y se
             compara con la clave primaria del dict.
-        - argumentos "nombrados (kw): puede haber varios. Cada uno se refiere
+        - argumentos "nombrados"(kw): puede haber varios. Cada uno se refiere
             a un atributo / clave del dict, y se compara con el valor de
             dicha clave.
 
@@ -122,14 +100,7 @@ class ScopeDict(dict):
         """
         if not arg and not kw:
             return self
-        if self._matches(self._type.search_crit(arg, kw)):
+        if self._matches(self._type.normcrit(arg, kw)):
             return self
         raise KeyError, (arg, kw)
- 
-    def __repr__(self):
-        # muestro los elementos del diccionario ordenados, para que la
-        # representacion sea estable y pueda usarse en los unittests 
-        inners = sorted(self.iteritems(), key=itemgetter(0))
-        status = chain((repr(self._type),), (repr(x) for x in inners))
-        return "\n".join(status)
 
