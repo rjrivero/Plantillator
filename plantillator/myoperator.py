@@ -58,7 +58,7 @@ class UnaryOperator(object):
 
     """Operador unario"""
 
-    def __call__(self):
+    def __call__(self, item):
         pass
 
     def __repr__(self):
