@@ -3,6 +3,7 @@
 
 import operator
 import re
+import itertools
 
 
 def normalize(item):
@@ -23,7 +24,7 @@ def asList(varlist):
     Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
     es un conjunto de valores separados por ','.
     """
-    return [normalize(i) for i in varlist.split(",")]
+    return MyFrozenset(normalize(i) for i in str(varlist).split(","))
 
 
 _RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
@@ -35,7 +36,7 @@ def asRange(varrange):
     La cadena es un rango (numeros separados por '-'), posiblemente
     rodeado de un prefijo y sufijo no numerico.
     """
-    match = _RANGO.match(varrange)
+    match = _RANGO.match(str(varrange))
     rango = []
     if match:
         start = int(match.group('from'))
@@ -44,7 +45,7 @@ def asRange(varrange):
         suff = match.group('suff') or ''
         for i in range(start, stop+1):
             rango.append(normalize("%s%d%s" % (pref, i, suff)))
-    return rango
+    return MyFrozenset(rango)
 
 
 def iterWrapper(expr):
@@ -52,6 +53,17 @@ def iterWrapper(expr):
     if operator.isMappingType(expr) or not hasattr(expr, '__iter__'):
         expr = (expr,)
     return expr
+
+
+class MyFrozenset(frozenset):
+
+    def __init__(self, *args):
+        frozenset.__init__(self, *args)
+
+    def __add__(self, other):
+        if not hasattr(other, '__iter__'):
+            other = asList(other)
+        return MyFrozenset(itertools.chain(self, other))
 
 
 class UnaryOperator(object):
