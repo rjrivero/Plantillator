@@ -57,9 +57,6 @@ def iterWrapper(expr):
 
 class MyFrozenset(frozenset):
 
-    def __init__(self, *args):
-        frozenset.__init__(self, *args)
-
     def __add__(self, other):
         if not hasattr(other, '__iter__'):
             other = asList(other)
