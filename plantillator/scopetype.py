@@ -4,6 +4,7 @@
 
 import operator
 from myoperator import *
+from scopelist import ScopeList
 
 
 class ScopeType(object):
@@ -107,7 +108,7 @@ class ScopeType(object):
                     return getattr(fallback, attrib)
                 except KeyError:
                     pass
-        raise KeyError, attrib
+        return ScopeList(self.subtypes[attrib], self)
 
     def copy(self):
         """Devuelve una copia del ScopeType actual"""
