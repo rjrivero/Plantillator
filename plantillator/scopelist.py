@@ -2,6 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 import itertools
+from myoperator import MyFrozenset
 
 
 class ScopeList(list):
@@ -61,7 +62,7 @@ class ScopeList(list):
             if len(sublist) == 1:
                 sublist = sublist[0]
         else:
-            sublist = frozenset(attribs)
+            sublist = MyFrozenset(attribs)
         return sublist 
 
     @property

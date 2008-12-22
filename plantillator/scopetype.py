@@ -4,6 +4,7 @@
 
 import operator
 from myoperator import *
+from scopelist import ScopeList
 
 
 class ScopeType(object):
@@ -76,10 +77,14 @@ class ScopeType(object):
         self.blockset.add(name)
 
     def fallback(self, scoped, attrib):
-        """Busca un atributo en los fallbacks"""
+        """Busca un atributo en los fallbacks
+        
+        Si el atributo es una sublista y no existen items, devuelve
+        una sublista vacía del tipo correcto.
+        """
         if attrib not in self.blockset:
             return getattr(scoped.up, attrib)
-        raise KeyError, attrib
+        return ScopeList(self.subtypes[attrib], self)
 
     def normcrit(self, arg, kw):
         """Normaliza criterios de busqueda
