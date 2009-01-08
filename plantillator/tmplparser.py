@@ -81,7 +81,11 @@ class TmplList(list):
         posible ampliar el motor de patrones para que lance otro tipo de
         objetos.
         """
-        repfnc = lambda match: str(eval(match.group('expr'), data))
+        def repfnc(match):
+            try:
+                return str(eval(match.group('expr'), data))
+            except KeyError:
+                return "/*EMPTY*/"
         try:
             for item in self:
                 if type(item) == str:
