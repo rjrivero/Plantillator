@@ -38,7 +38,10 @@ class ScopeType(object):
         - Los nombres vacios se sustituyen por None
         - El resto de nombres se incluyen en la lista de bloqueo.
         """
-        field = (field.strip() or None) if field else None
+        try:
+            field = (field.strip() or None) if field else None
+        except AttributeError:
+            raise SyntaxError, "El nombre \"%s\" no es un nombre de columna valido" % str(field)
         if field:
             if field.endswith("*"):
                 return field[:-1].strip() or None

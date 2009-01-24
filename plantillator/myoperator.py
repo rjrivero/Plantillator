@@ -15,7 +15,12 @@ def normalize(item):
     item = item.strip()
     if item.isdigit():
         return int(item)
-    return item or None if not item.isspace() else None
+    item = item or None if not item.isspace() else None
+    # si se quiera tratar un numero como una cadena de texto, hay que
+    # escaparlo entre comillas simples.
+    if item and item.startswith("'") and item.endswith("'"):
+        item = item[1:-1] or None
+    return item
 
 
 def asList(varlist):
