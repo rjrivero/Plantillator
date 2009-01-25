@@ -1,28 +1,36 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
-import itertools
+from itertools import chain
+
 from myoperator import MyFrozenset
+from scopetype import DataSignature
 
 
-class ScopeList(list):
-
+class ScopeList(list, DataSignature):
     """Lista de ScopeDicts con un ScopeType comun"""
 
-    def __init__(self, dicttype, fallback, fieldset=None):
-        """Crea una lista vacia
+    __iter__ = list.__iter__
 
-        @dicttype: Objeto ScopeType con el que se crearan los ScopeDicts.
-        @fallback: el diccionario al que los ScopeDicts creados deben
-            hacer fallback.
-        @fieldset: las claves a usar para cada columna al crear el ScopeDict.
-            si fieldset == None, el datalist queda "reducido": no se pueden
-            insertar nuevos valores.
+    def __init__(self, dicttype, data=None):
+        """Crea una lista vacia"""
+        list.__init__(self, data or tuple())
+        self._type = dicttype
+
+    def _collapse(self, key, dicttype, data):
+        """Colapsa la tupla dada
+
+        Si la tupla contiene un solo elemento, devuelve el elemento
+        (que se supone que es un ScopeDict). Si tiene varios,
+        devuelve un ScopeList del tipo indicado.
+
+        Si la tupla tiene longitud 0, lanza un KeyError
         """
-        list.__init__(self)
-        self.dicttype = dicttype
-        self.fieldset = fieldset or tuple()
-        self.fallback = fallback
+        if len(data) == 0:
+            raise KeyError, key
+        if len(data) == 1:
+            return data[0]
+        return ScopeList(dicttype, data)
 
     def __call__(self, *arg, **kw):
         """Busca los elementos de la lista que cumplan los criterios dados.
@@ -35,14 +43,8 @@ class ScopeList(list):
 
         Si no hay ninguno, lanza un KeyError.
         """
-        if not arg and not kw:
-            return self if len(self != 1) else self[0]
-        filt = ScopeList(self.dicttype, self.fallback)
-        crit = self.dicttype.search_crit(arg, kw)
-        filt.extend(item for item in self if item._matches(crit))
-        if not len(filt):
-            raise KeyError, repr(crit)
-        return filt if len(filt) != 1 else filt[0]
+        items = (x for x in self if x._matches(self._type.normcrit(arg, kw)))
+        return self._collapse((arg, kw), self._dicttype, tuple(items))
 
     def __getattr__(self, attrib):
         """Selecciona un atributo en la lista
@@ -53,24 +55,18 @@ class ScopeList(list):
         Si el atributo seleccionado es una sublista, en lugar de un set
         se devuelve un ScopeList con todos los elementos encadenados.
         """
-        attribs = (item.get(attrib, None) for item in self)
-        attribs = (item for item in attribs if item is not None)
-        subtype = self.dicttype.subtypes.get(attrib, None)
-        if subtype:
-            sublist = ScopeList(subtype, None)
-            sublist.extend(itertools.chain(*list(attribs)))
-            if len(sublist) == 1:
-                sublist = sublist[0]
-        else:
-            sublist = MyFrozenset(attribs)
-        return sublist 
+        items = (item.get(attrib, None) for item in self)
+        items = tuple(x for x in items if x is not None)
+        if not len(items):
+            raise KeyError, attrib
+        stype = self._type.subtypes.get(attrib, None)
+        if stype:
+            return self._collapse(attrib, stype, tuple(chain(*items)))
+        return MyFrozenset(items)
 
     @property
     def up(self):
-        sublist = ScopeList(None, None)
-        for item in self:
-            up = item.up
-            if item.up not in sublist:
-                sublist.append(up)
-        return sublist[0] if len(sublist) == 1 else sublist
+        sublist = tuple(item.up for item in self if item.up is not None)
+        return self._collapse('up', self._type.up, sublist)
+
 

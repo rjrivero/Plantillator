@@ -11,16 +11,17 @@ def normalize(item):
 
     Convierte los enteros en enteros, las cadenas vacias en None,
     y al resto le quita los espacios de alrededor.
+
+    Si se quiera tratar un numero como una cadena de texto, hay que
+    escaparlo entre comillas simples.
     """
     item = item.strip()
     if item.isdigit():
         return int(item)
-    item = item or None if not item.isspace() else None
-    # si se quiera tratar un numero como una cadena de texto, hay que
-    # escaparlo entre comillas simples.
-    if item and item.startswith("'") and item.endswith("'"):
-        item = item[1:-1] or None
-    return item
+    if item.startswith("'") and item.endswith("'"):
+        return item[1:-1]
+    return item or None if not item.isspace() else None
+
 
 
 def asList(varlist):
@@ -55,16 +56,12 @@ def asRange(varrange):
 
 def iterWrapper(expr):
     """Devuelve un iterable"""
-    if operator.isMappingType(expr) or not hasattr(expr, '__iter__'):
-        expr = (expr,)
-    return expr
+    return expr if hasattr(expr, '__iter__') else (expr,)
 
 
 class MyFrozenset(frozenset):
 
     def __add__(self, other):
-        if not hasattr(other, '__iter__'):
-            other = asList(other)
         return MyFrozenset(itertools.chain(self, other))
 
 

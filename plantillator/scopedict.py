@@ -4,11 +4,31 @@
 from inspect import getmembers
 from itertools import chain
 from operator import itemgetter
+from gettext import gettext as _
 
 from scopetype import ScopeType
 
 
-class ScopeDict(object):
+class DataSignature(object):
+    """Propiedades basicas de los objetos manipulables por las plantillas
+
+    El motor de plantillas va a trabajar con objetos sobre los que se puede:
+        * iterar
+        * obtener atributos
+        * filtrar
+    """
+
+    def __iter__(self):
+        return tuple()
+
+    def __getattr__(self, attrib):
+        raise KeyError, attrib
+
+    def __call__(self, *arg, **kw):
+        raise KeyError, (arg, kw)
+
+     
+class ScopeDict(DataSignature):
 
     """Diccionario accesible por "scopes"
 
@@ -20,6 +40,8 @@ class ScopeDict(object):
     no encontrar el atributo buscado en el diccionario actual.
     """
 
+    _RESERVEDKW = _("\"%(kw)s\" es una palabra reservada")
+
     def __init__(self, mytype, data=None, fallback=None):
         """Inicializa el ScopeDict con los datos y fallback especificados
 
@@ -27,15 +49,18 @@ class ScopeDict(object):
         (ver _keywords()).
         """
         self.up = fallback
-        self._data = data.copy() if data else {}
+        self._data = data.copy() if data else dict()
         self._type = mytype
         self._check_kw()
+
+    def __iter__(self):
+        yield self
 
     def _check_kw(self):
         """Comprueba que ningun valor del diccionario es un keyword"""
         kw = set(self._data.keys()).intersection(self._keywords())
         if kw:
-           raise ValueError, "Palabras Reservadas: %s" % kw
+           raise ValueError, self._RESERVEDKW % { 'kw': kw }
 
     def _keywords(self):
         """Devuelve una lista de palabras reservadas"""
@@ -51,16 +76,9 @@ class ScopeDict(object):
 
         Si el atributo indicado no existe, tambien se invoca al operador,
         pero con el valor None. Esto es para permitir operadores que
-        comprueben que no exisrte un cierto atributo.
+        comprueben que no existe un cierto atributo.
         """
-        for key, crit in kw.iteritems():
-            try:
-                item = getattr(self, key)
-            except KeyError:
-                item = None
-            if not crit(item):
-                return False
-        return True
+        return all(crit(self.get(key, None)) for key, crit in kw.iteritems)
 
     def get(self, key, defval=None):
         try:
@@ -68,21 +86,30 @@ class ScopeDict(object):
         except KeyError:
             return defval
 
-    def __getattr__(self, attrib):
-        """Busca el atributo en el diccionario y los fallbacks"""
-        try:
-            return self._data[attrib]
-        except KeyError:
-            return self._type.fallback(self, attrib)
+    def __getitem__(self, index):
+        """Busca el atributo en el diccionario y los fallbacks
 
-    __getitem__ = __getattr__
+        Si el atributo no esta lanza un KeyError, excepto en el
+        caso de que el atributo sea un subtipo. En ese caso, devuelve
+        una DataSignature vacia
+        """
+        try:
+            return self._data[index]
+        except KeyError:
+            if self.up and index not in self._type.blockset:
+                return self.up[index]
+            if index in self._type.subtypes:
+                return DataSignature()
+            raise KeyError, index
+
+    __getattr__ = __getitem__
 
     def __setitem__(self, index, item):
         """Almacena un item en el diccionario"""
         self._data[index] = item
 
     def __call__(self, *arg, **kw):
-        """Busca un ScopeDict que cumpla el criterio especificado por arg, kw
+        """Comprueba si el ScopeDict cumple el criterio dado por arg, kw
 
         En este caso, devuelve self si el ScopeDict cumple los criterios y
         lanza un KeyError si no los cumple.
@@ -98,9 +125,9 @@ class ScopeDict(object):
         Los argumentos pueden ser objetos simples (se compara la igualdad),
         o UnaryOperators (se aplican al valor del atributo / clave).
         """
-        if not arg and not kw:
-            return self
         if self._matches(self._type.normcrit(arg, kw)):
             return self
         raise KeyError, (arg, kw)
+
+
 

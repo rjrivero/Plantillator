@@ -2,9 +2,9 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-import operator
-from myoperator import *
-from scopelist import ScopeList
+from gettext import gettext as _
+
+from myoperator import UnaryOperator, MyOperator, DeferredAny
 
 
 class ScopeType(object):
@@ -26,10 +26,17 @@ class ScopeType(object):
     que marcar el nombre del campo con un "*" al final.
     """
 
-    def __init__(self):
+    _BADCOLUMNNAME = _("\"%(field)s\" no es un nombre de columna valido")
+    _MISSINGPKEY = _("No se ha especificado clave primaria")
+    _PKEYCHANGEFORBIDDEN = _("No se permite cambiar la clave primaria")
+    _UNDEFINEDKEY = _("No se ha definido una clave primaria")
+    _ONLYONEARG = _("Solo se admite un argumento posicional")
+
+    def __init__(self, parent=None):
         self.pkey = None
-        self.subtypes = dict()
         self.blockset = set()
+        self.subtypes = dict()
+        self.up = parent
 
     def _normfield(self, field):
         """Normaliza un nombre de campo.
@@ -38,10 +45,9 @@ class ScopeType(object):
         - Los nombres vacios se sustituyen por None
         - El resto de nombres se incluyen en la lista de bloqueo.
         """
-        try:
-            field = (field.strip() or None) if field else None
-        except AttributeError:
-            raise SyntaxError, "El nombre \"%s\" no es un nombre de columna valido" % str(field)
+        if not isinstance(field, str):
+            raise SyntaxError, self._BADCOLUMNNAME % {'field': str(field)}
+        field = (field.strip() or None) if field else None
         if field:
             if field.endswith("*"):
                 return field[:-1].strip() or None
@@ -55,7 +61,7 @@ class ScopeType(object):
         - si "key" identifica una sublista, "val" se envuelve en un DeferredAny
         """
         if not isinstance(val, UnaryOperator):
-            val = DeferredOperation("==", operator.eq, val)
+            val = (MyOperator() == val)
         if key in self.subtypes:
             # si lo que se busca es un subtipo, hay que aplicar el
             # operador no al atributo (que sera una lista), sino a
@@ -66,28 +72,12 @@ class ScopeType(object):
     def fieldset(self, fields):
         """Construye un fieldset normalizando una lista de campos."""
         fieldset = tuple(self._normfield(f) for f in fields)
+        self.pkey = self.pkey or fieldset[0]
         if not self.pkey:
-            self.pkey = fieldset[0]
-            if not self.pkey:
-                raise ValueError, "no hay clave primaria!"
-        elif self.pkey != fieldset[0]:
-            raise SyntaxError, "Cambio de clave primaria no permitido"
+           raise ValueError, self._MISSINGPKEY
+        if self.pkey != fieldset[0]:
+           raise SyntaxError, self._PKEYCHANGEFORBIDDEN
         return fieldset
-
-    def addtype(self, name, subtype):
-        """Registra un nuevo subtipo"""
-        self.subtypes[name] = subtype
-        self.blockset.add(name)
-
-    def fallback(self, scoped, attrib):
-        """Busca un atributo en los fallbacks
-        
-        Si el atributo es una sublista y no existen items, devuelve
-        una sublista vacía del tipo correcto.
-        """
-        if attrib not in self.blockset:
-            return getattr(scoped.up, attrib)
-        return ScopeList(self.subtypes[attrib], self)
 
     def normcrit(self, arg, kw):
         """Normaliza criterios de busqueda
@@ -109,9 +99,21 @@ class ScopeType(object):
         # si hay un argumento posicional, se asocia a la clave primaria
         kw = kw or dict()
         if arg:
-            if not self.pkey or len(arg) > 1:
-                raise KeyError, arg
-            kw.update({self.pkey: arg[0]})
+            if not self.pkey:
+                raise KeyError, self._UNDEFINEDPKEY
+            if len(arg) > 1:
+                raise ValueError, self._ONLYONEARG
+            kw[self.pkey] = arg[0]
         # se convierten todos los argumentos en callable.
         return dict(self._normcrit(k, v) for k, v in kw.iteritems())
+
+    def subtype(self, name):
+        """Devuelve el suvbtipo indicado, o crea uno nuevo si no existia"""
+        subtype = self.subtypes.get(name, None)
+        if not subtype:
+            subtype = ScopeType(self)
+            self.subtypes[name] = subtype
+            self.blockset.add(name)
+        return subtype
+
 

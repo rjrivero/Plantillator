@@ -214,6 +214,100 @@ class DataParser(ScopeDict):
                 getattr(self, "_%s" % instruccion)(tokenizer, data)
 
 
+class ScopeTree(object):
+
+    """Arbol de tipos
+
+    Define una jerarquia de tipos, donde unos tipos son sub-tipos de otros.
+
+    En la linea CSV que define cada elemento de la lista, la primera
+    columna debe ser un campo que sirva para indexar la lista "madre". Por
+    ejemplo:
+
+    principal; id; nombre
+             ; 1 ; elemento_1
+             ; 2 ; elemento_2
+
+    principal.anidada_1; principal.id; nombre
+                       ; 1           ; sub_elemento_1_1
+                       ; 1           ; sub_elemento_1_2
+                       ; 2           ; sub_elemento_2_1
+
+    principal.anidada_2; principal.nombre; nombre
+                       ; elemento_1  ; sub_elemento_1_1
+                       ; elemento_1  ; sub_elemento_1_2
+                       ; elemento_2  ; sub_elemento_2_1
+
+    Las listas pueden anidarse tantos niveles como se desee.
+    """
+
+    def __init__(self, tokenizer, root, head, fields):
+        """Inicializa la ruta
+
+        @tokenizer: el tokenizer, para lanzar errores.
+        @root: Objeto ScopeDict raiz de la ruta
+        @fields: nombre y conjunto de campos (la linea completa del CSV)
+        """
+        self.root = root
+        path = list(p.strip() for p in head.split("."))
+        if len(fields) < len(path):
+            tokenizer.error("No hay bastantes columnas de indice")
+        self.make_path(path, fields)
+        self.make_type(fields)
+
+    def make_path(self, path, fields):
+        """Obtiene el conjunto de atributos que se usan como path"""
+        def last_part(field):
+            return field.split(".").pop().strip()
+        self.attr = path.pop()
+        self.path = tuple((item, last_part(fields.pop(0))) for item in path)
+
+    def make_type(self, fields):
+        """Construye el ScopeType adecuado y actualiza el tipo padre
+
+        Cuando se crea una sublista, se insertan nuevos campos en
+        la lista "madre". Esos campos deben figurar como nuevos campos
+        en el tipo que usa la lista madre, para que por error no se
+        haga fallback y acabemos usando una lista de un nivel superior.
+        """
+        typedict = self.root._TypeDict
+        # creo un tipo para los elementos de esta lista "hija"
+        parentlist = list(listname for listname, attrib in self.path)
+        sublist = parentlist + [self.attr]
+        self.dicttype = typedict.setdefault(".".join(sublist), ScopeType())
+        self.fieldset = self.dicttype.fieldset(fields)
+        # actualizo el tipo de la lista "madre"
+        if self.path:
+            typedict[".".join(parentlist)].addtype(self.attr, self.dicttype)
+
+    def additems(self, tokenizer, items):
+        """Inserta un elemento en la lista
+
+        Avanza por la ruta hasta llegar a la lista indicada, y
+        cuando llega, inserta el elemento.
+        """
+        if len(items) <= len(self.path):
+            tokenizer.error("No hay bastantes valores de indice")
+        base = self.root
+        try:
+            for listname, attrib in self.path:
+                base = base[listname]._find(attrib, items.pop(0))
+        except KeyError:
+            tokenizer.error("No se encuentra el indice")
+        try:
+            target = base[self.attr]
+        except KeyError:
+            target = DataList(self.dicttype, base, self.fieldset)
+            base[self.attr] = target
+        target.additems(tokenizer, items)
+
+    def addtype(self, name, subtype):
+        """Registra un nuevo subtipo"""
+        self.subtypes[name] = subtype
+        self.blockset.add(name)
+
+
+
 if __name__ == "__main__":
     import sys
     import pprint

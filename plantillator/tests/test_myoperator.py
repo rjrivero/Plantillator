@@ -28,6 +28,14 @@ class Test_Normalize(unittest.TestCase):
         """Strings are stripped"""
         self.failUnless(normalize("  hello!\n") == "hello!")
 
+    def test_escape_string(self):
+        """Escaped strings are not interpreted"""
+        self.failUnless(normalize("'   Hi!\n'") == "   Hi!\n")
+
+    def test_escape_int(self):
+        """Escaped integers are not interpreted"""
+        self.failUnless(normalize("'25'") == "25")
+
 
 class Test_AsList(unittest.TestCase):
 
@@ -45,6 +53,9 @@ class Test_AsList(unittest.TestCase):
         al = asList(" hello!\n")
         self.failUnless(len(al) == 1)
         self.failUnless(al[0] == "hello!")
+        al = asList("'100'")
+        self.failUnless(len(al) == 1)
+        self.failUnless(al[0] == "100")
 
     def test_multivalue(self):
         """Multiple values are split by comma"""
@@ -70,7 +81,7 @@ class Test_AsRange(unittest.TestCase):
         self.failUnless(ranges[2] == "pref-  3")
 
     def test_suffix(self):
-        """Add prefix to generated range"""
+        """Add suffix to generated range"""
         ranges = asRange("  15-16- suff ")
         self.failUnless(len(ranges) == 2)
         self.failUnless(ranges[0] == "15- suff")
