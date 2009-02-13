@@ -3,11 +3,7 @@
 
 import unittest
 import operator
-
-from helper import tester
-from scopetype import ScopeType
-from scopedict import ScopeDict
-from myoperator import *
+from data.operators import *
 
 
 class Test_Normalize(unittest.TestCase):

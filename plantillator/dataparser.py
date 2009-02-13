@@ -13,6 +13,61 @@ from datatokenizer import DataTokenizer
 from myoperator import normalize
 
 
+def normalize(item):
+    """Normaliza un elemento
+
+    Convierte los enteros en enteros, las cadenas vacias en None,
+    y al resto le quita los espacios de alrededor.
+
+    Si se quiera tratar un numero como una cadena de texto, hay que
+    escaparlo entre comillas simples.
+    """
+    item = item.strip()
+    if item.isdigit():
+        return int(item)
+    if item.startswith("'") and item.endswith("'"):
+        return item[1:-1]
+    return item or None if not item.isspace() else None
+
+
+
+def asList(varlist):
+    """Interpreta una cadena de caracteres como una lista
+
+    Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
+    es un conjunto de valores separados por ','.
+    """
+    return MyFrozenset(normalize(i) for i in str(varlist).split(","))
+
+
+_RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
+
+def asRange(varrange):
+    """Interpreta una cadena de caracteres como un rango
+
+    Crea al vuelo un rango a partir de una cadena de caracteres.
+    La cadena es un rango (numeros separados por '-'), posiblemente
+    rodeado de un prefijo y sufijo no numerico.
+    """
+    match = _RANGO.match(str(varrange))
+    rango = []
+    if match:
+        start = int(match.group('from'))
+        stop = int(match.group('to'))
+        pref = match.group('pref') or ''
+        suff = match.group('suff') or ''
+        for i in range(start, stop+1):
+            rango.append(normalize("%s%d%s" % (pref, i, suff)))
+    return MyFrozenset(rango)
+
+
+def iterWrapper(expr):
+    """Devuelve un iterable"""
+    return expr if hasattr(expr, '__iter__') else (expr,)
+
+
+
+
 DATA_COMMENT = "!"
 
 
