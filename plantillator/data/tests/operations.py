@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
-import unittest
+
+from unittest import TestCase, main
 import operator
-from data.operators import *
+from data.operations import *
 
 
-class Test_DeferredOp(unittest.TestCase):
+class Test_DeferredOp(TestCase):
 
     def setUp(self):
         self.first, self.second = None, None
-        self.deferred = DeferredOperation(self.myop, "second")
+        self.deferred = DeferredOp(self.myop, "second")
 
     def myop(self, first, second):
         self.first = first
@@ -27,10 +28,10 @@ class Test_DeferredOp(unittest.TestCase):
         self.failUnless(self.second == "second")
 
 
-class Test_DeferredAny(unittest.TestCase):
+class Test_DeferredAny(TestCase):
 
     def setUp(self):
-        self.deferred = DeferredOperation(operator.ge, 10)
+        self.deferred = DeferredOp(operator.ge, 10)
         self.deferredany = DeferredAny(self.deferred)
 
     def test_construct(self):
@@ -69,27 +70,25 @@ DeferrerTests = [
     (lambda x, y: x - y,      2,      (1,2,3),      False),
     (lambda x, y: x - y,      4,      (1,2,3),      True),
     (lambda x, y: x - y,      "ok",   ("ok","ko"),  False),
-    (lambda x, y: x - y,      "KO",   ("ok","ko"),  False),
+    (lambda x, y: x - y,      "KO",   ("ok","ko"),  True),
     (lambda x, y: x * y,      "ok",   "k.*",        True),
-    (lambda x, y: x * y,      "ok",   "ko"          False)
+    (lambda x, y: x * y,      "ok",   "ko",         False)
 ]
 
-def make_deferred_tests():
-    class Test(object):
-        def __init__(self, func, x, y, expected):
-            self.func = func
-            self.x = x
-            self.y = y
-            self.expected = expected
-        def __call__(self):
-            return (self.func(Deferred(), self.y)(self.x) == self.expected)
-    tests = dict(("test_%d" % index, Test(*data))
-                for index, data in enumerate(DeferrerTests))
-    return type("Test_Deferrer", (unittest.TestCase,), tests)
+def deferrer_test(func, x, y, expected):
+    def test(self):
+        if func(Deferrer(), y)(x) != expected:
+            print "Error: %s <op> %s != %s" % (str(x), str(y), str(expected))
+            self.fail()
+    return test
 
-Test_Deferrer = make_deferrer_tests()
+def test_iterator():
+    for index, data in enumerate(DeferrerTests):
+        yield ("test_%d" % index, deferrer_test(*data))
+    
+Test_Deferrer = type("Test_Deferrer", (TestCase,), dict(test_iterator()))
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()
 

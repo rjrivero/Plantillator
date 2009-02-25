@@ -72,7 +72,7 @@ class Deferrer(object):
 
     def __mul__(self, arg):
         """Comprueba la coincidencia con una exp. regular"""
-        return DeferredOp(lambda x, y: y.search(x), re.compile(arg))
+        return DeferredOp(lambda x, y: y.search(x) and True or False, re.compile(arg))
 
     def __add__(self, arg):
         """Comprueba la pertenecia a una lista"""
