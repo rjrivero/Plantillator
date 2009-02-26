@@ -4,6 +4,8 @@
 
 from unittest import TestCase, main
 import operator
+
+from tests.helper import *
 from data.operations import *
 
 
@@ -75,18 +77,14 @@ DeferrerTests = [
     (lambda x, y: x * y,      "ok",   "ko",         False)
 ]
 
-def deferrer_test(func, x, y, expected):
+def deferrer_tester(func, x, y, expected):
     def test(self):
         if func(Deferrer(), y)(x) != expected:
             print "Error: %s <op> %s != %s" % (str(x), str(y), str(expected))
             self.fail()
     return test
 
-def test_iterator():
-    for index, data in enumerate(DeferrerTests):
-        yield ("test_%d" % index, deferrer_test(*data))
-    
-Test_Deferrer = type("Test_Deferrer", (TestCase,), dict(test_iterator()))
+Test_Deferrer = build_tester("Test_Deferrer", DeferrerTests, deferrer_tester)
 
 
 if __name__ == "__main__":
