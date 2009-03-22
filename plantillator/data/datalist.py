@@ -6,6 +6,11 @@ from itertools import chain
 from data.operations import Deferrer
 
 
+def not_none(filter_me):
+    """Devuelve los objetos de la lista que no son None"""
+    return (x for x in filter_me if x is not None)
+
+
 class BaseSet(set):
 
     def __add__(self, other):
@@ -29,12 +34,7 @@ class DataSet(set):
         self.__type = mytype
 
     def __call__(self, **kw):
-        """Busca los elementos de la lista que cumplan los criterios dados.
-
-        Si se llama sin ningun argumento, "colapsa" la lista:
-             * Si la lista tiene un solo elemento, lo extrae y lo devuelve
-             * Si tiene varios elementos (o ninguno), lanza KeyError
-        """
+        """Busca los elementos de la lista que cumplan los criterios dados"""
         crit = self.__type.adapt(kw)
         return DataList(self.__type, (x for x in self if x.__matches(crit)))
 
@@ -53,8 +53,7 @@ class DataSet(set):
         Si el atributo seleccionado es una sublista, en lugar de un set
         se devuelve un ScopeList con todos los elementos encadenados.
         """
-        items = (x.__get(attrib, None) for x in self)
-        items = (x for x in items if x is not None)
+        items = not_none(item.__get(attrib) for item in self)
         stype = self.__type.subtypes.get(attrib, None)
         if stype is not None:
             return DataSet(subtype, chain(*tuple(items)))
@@ -62,6 +61,5 @@ class DataSet(set):
 
     @property
     def up(self):
-        subset = (item.up for item in self if item.up is not None)
-        return DataSet(self.__type.up, subset)
+        return DataSet(self.__type.up, not_none(item.up for item in self))
 

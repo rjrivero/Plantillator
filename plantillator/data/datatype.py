@@ -70,3 +70,4 @@ class DataType(object):
         if name is None:
             raise SyntaxError, self._EMPTYNAME
         return (name, self.subtypes.setdefault(name, DataType(self)))
+

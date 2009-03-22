@@ -4,7 +4,6 @@
 
 from unittest import TestCase, main
 
-from tests.helper import *
 from data.datatype import *
 
 
@@ -28,31 +27,43 @@ class Test_DataType_Construct(TestCase):
 # Test add_field function
 #------------------------
 
-AddFieldTests = [
-    # arguments to add  |  expected field name | blocked?
-    (("field", True),      "field",              True),
-    (("field",),           "field",              True),
-    (("field", False),     "field",              False),
-    (("0invalid", True),   None,                 None),
-    (("0invalid", False),  None,                 None),
-    ((" stripme ", True),  "stripme",            True),
-    ((" stripme ", False), "stripme",            False),
-    (("", True),           None,                 False),
-    (("", False),          None,                 False),
-    (("  ", True),         None,                 False),
-    (("  ", False),        None,                 False)
-]
+AddFieldTests = {
+                       # arguments to add  |  expected field name | blocked?
+    'block_field':     (("field", True),      "field",              True),
+    'block_default':   (("field",),           "field",              True),
+    'unblock_field':   (("field", False),     "field",              False),
+    'invalid_block':   (("0invalid", True),   None,                 None),
+    'invalid_unblock': (("0invalid", False),  None,                 None),
+    'strip_block':     ((" stripme ", True),  "stripme",            True),
+    'strip_unblock':   ((" stripme ", False), "stripme",            False),
+    'blank_block':     (("", True),           None,                 False),
+    'blank_unblock':   (("", False),          None,                 False),
+    'space_block':     (("  ", True),         None,                 False),
+    'space_unblock':   (("  ", False),        None,                 False)
+}
 
-def addfield_tester(args, result, blocked):
+class Test_AddField(unittest.TestCase):
+
+    def setUp(self):
+        self.dt = DataType()
+
+    @tester(AddFieldTests)
+    for testname, params in AddFieldTests.iteritems():
+        args, name, blocked = params
+        if blocked:
+            @tester(testname, params)
+            def test_raises(self, args, name, blocked):
+                self.assertRaises(SyntaxError, self.dt.add_field, *args)
+        else:
+
+AddFieldTests_run(self, args, result, blocked)):
     if blocked is None:
-        def test(self):
-            self.assertRaises(SyntaxError, self.dt.add_field, *args)
+        self.assertRaises(SyntaxError, self.dt.add_field, *args)
     else:
-        def test(self):
-            field = self.dt.add_field(*args)
-            self.failUnless(field == result)
-            self.failUnless((field in self.dt.blocked) == blocked)
-    return test
+        field = self.dt.add_field(*args)
+        self.failUnless(field == result)
+        self.failUnless((field in self.dt.blocked) == blocked)
+
                 
 class Test_Add(build_tester("AddFieldTester", AddFieldTests, addfield_tester)):
     
@@ -94,7 +105,7 @@ class Test_Subtype(build_tester("AddSubtypeTester", AddSubtypeTests, addsubtype_
 
 
 #------------------------
-# Test addapt function
+# Test adapt function
 #------------------------
 
 def imTrue(ignore):

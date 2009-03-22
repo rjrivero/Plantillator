@@ -48,6 +48,10 @@ class Test_DeferredAny(TestCase):
         self.failUnless(self.deferredany((6, 7, 8)) == False)
 
 
+@SimpleObject
+def DeferrerTest(self, func, x, y, result):
+    self.failUnless(func(Deferrer(), y)(x) == expected)
+    
 DeferrerTests = [
     (lambda x, y: x == y,     5,      10,           False),
     (lambda x, y: x == y,     "ok",   "ko",         False),
