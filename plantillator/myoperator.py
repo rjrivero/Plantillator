@@ -29,7 +29,7 @@ def asList(varlist):
     Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
     es un conjunto de valores separados por ','.
     """
-    return MyFrozenset(normalize(i) for i in str(varlist).split(","))
+    return MyList(normalize(i) for i in str(varlist).split(","))
 
 
 _RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
@@ -66,6 +66,14 @@ class MyFrozenset(frozenset):
         if not hasattr(other, '__iter__'):
             other = asList(other)
         return MyFrozenset(itertools.chain(self, other))
+
+
+class MyList(list):
+
+    def __add__(self, other):
+        if not hasattr(other, '__iter__'):
+            other = asList(other)
+        return MyList(itertools.chain(self, other))
 
 
 class UnaryOperator(object):
