@@ -17,11 +17,20 @@ class BaseSet(set):
         """Concatena dos sets"""
         return BaseSet(itertools.chain(self, other))
 
+    def __pop(self, data):
+        data = list(data)
+        if len(data) == 1:
+            return data[0]
+        return BaseSet(data)
+
     def __call__(self, arg):
-        """Devuelve el subconjunto de elementos que cumple el criterio"""
+        """Devuelve el subconjunto de elementos que cumple el criterio
+        
+        Si solo se encuentra uno, lo devuelve ya desencapsulado.
+        """
         if not hasattr(arg, '__call__'):
             arg = (Deferrer() == arg)
-        return BaseSet(x for x in self if arg(x))
+        return self.__pop(x for x in self if arg(x))
 
 
 class DataSet(set):
@@ -33,16 +42,25 @@ class DataSet(set):
         set.__init__(self, data or tuple())
         self.__type = mytype
 
+    def __pop(self, type, data):
+        data = list(data)
+        if len(data) == 1:
+            return data[0]
+        return DataSet(type, data)
+
     def __call__(self, **kw):
-        """Busca los elementos de la lista que cumplan los criterios dados"""
+        """Busca los elementos de la lista que cumplan los criterios dados
+        
+        Si solo se encuentra uno, lo devuelve ya desencapsulado.
+        """
         crit = self.__type.adapt(kw)
-        return DataList(self.__type, (x for x in self if x.__matches(crit)))
+        return self.__pop(self.__type, x for x in self if x.__matches(crit))
 
     def __add__(self, other):
         """Concatena dos DataSets"""
         if self.__type != other.__type:
             raise TypeError, other
-        return DataSet(self.__type, chain(self, other))
+        return self.__pop(self.__type, chain(self, other))
 
     def __getattr__(self, attrib):
         """Selecciona un atributo en la lista
@@ -56,10 +74,10 @@ class DataSet(set):
         items = not_none(item.__get(attrib) for item in self)
         stype = self.__type.subtypes.get(attrib, None)
         if stype is not None:
-            return DataSet(subtype, chain(*tuple(items)))
-        return BaseSet(items)
+            return self.__pop(subtype, chain(*tuple(items)))
+        return BaseSet().__pop(items)
 
     @property
     def up(self):
-        return DataSet(self.__type.up, not_none(item.up for item in self))
+        return self.__pop(self.__type.up, not_none(item.up for item in self))
 
