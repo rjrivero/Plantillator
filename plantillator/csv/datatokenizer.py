@@ -3,10 +3,8 @@
 
 import csv
 
-from mytokenizer import Tokenizer
 
-
-class DataTokenizer(Tokenizer):
+class DataTokenizer(object):
 
     """Tokenizer de fichero de datos
 
@@ -15,7 +13,14 @@ class DataTokenizer(Tokenizer):
     """
 
     def __init__(self, source, comment):
-        Tokenizer.__init__(self, source)
+        """Conecta el tokenizer a un flujo de lineas
+
+        Genera los atributos:
+            "source": objeto source.
+            "lineno": numero de linea, comienza en 0.
+        """
+        self.source = source
+        self.lineno = 0
         self.comment = comment
     
     def tokens(self):
@@ -44,25 +49,18 @@ class DataTokenizer(Tokenizer):
         separado por ",". Tocate las narices.
         """
         # lo unico que me interesa es el delimiter, lo demas vale por defecto
-        crit  = {
-            ',': [0, 0, 0],
-            ';': [0, 0, 0]
-                # primer valor: veces que el caracter es el primero de la linea
-                # segundo valor: lineas en las que aparece el caracter
-                # tercer valor: numero total de veces que aparece el caracter
-        }
+        valid = set(',', ';')
         for line in self.source.readlines():
-            for char, data in crit.iteritems():
-                if line.startswith(char):
-                    data[0] += 1
-                count = line.count(char)
-                if count:
-                    data[1] += 1
-                    data[2] += count
-        for comma_count, semicolon_count in zip(crit[','], crit[';']):
-            if comma_count != semicolon_count:
-                return "," if comma_count > semicolon_count else ';'
-        # si todos los criterios son iguales, solo nos queda devolver
-        # un valor cualquiera. Por defecto, escogemos la coma.
-        return ","
+            if line and line[0] in valid:
+                return line[0]
+        return ','
 
+    def error(self, msg):
+        """Genera un error de sintaxis con el mensaje dado"""
+        self.msg = msg
+        raise SyntaxError, str(self)
+
+    def __str__(self):
+        """Genera un mensaje de error indicando fuente y linea actual"""
+        return "%s, LINE %d: %s" % (
+                self.source, self.lineno+1, self.msg)

@@ -39,7 +39,7 @@ class DataSet(set):
         return DataList(self.__type, (x for x in self if x.__matches(crit)))
 
     def __add__(self, other):
-        """Concatena dos DataLists"""
+        """Concatena dos DataSets"""
         if self.__type != other.__type:
             raise TypeError, other
         return DataSet(self.__type, chain(self, other))

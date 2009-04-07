@@ -3,7 +3,7 @@
 
 
 from data.datatype import DataType
-from data.datalist import DataList
+from data.datalist import DataSet
 
 
 class DataObject(object):
@@ -25,7 +25,7 @@ class DataObject(object):
         if self.up and attrib not in self.__type.blocked:
             return getattr(self.up, attrib)
         try:
-            return DataList(self.__type.subtypes[attrib])
+            return DataSet(self.__type.subtypes[attrib])
         except KeyError:
             raise AttributeError, attrib
 
@@ -48,4 +48,3 @@ class DataObject(object):
             return getattr(self, attrib)
         except AttributeError:
             return defval
-

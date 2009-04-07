@@ -37,7 +37,15 @@ def asList(varlist):
     Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
     es un conjunto de valores separados por ','.
     """
-    return MyFrozenset(normalize(i) for i in str(varlist).split(","))
+    return BaseList(normalize(i) for i in str(varlist).split(","))
+
+def asSet(varlist):
+    """Interpreta una cadena de caracteres como una lista
+
+    Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
+    es un conjunto de valores separados por ','.
+    """
+    return BaseSet(normalize(i) for i in str(varlist).split(","))
 
 
 _RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
