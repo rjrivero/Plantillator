@@ -8,6 +8,11 @@ from gettext import gettext as _
 from data.operations import DeferredAny, Deferrer
 
 
+_FIELD_RE = re.compile(r"^[a-zA-Z][\w\d]*$")
+_INVALIDFIELD = _("\"%(field)s\" no es un nombre de campo valido")
+_EMPTYNAME = _("Debe dar un nombre al subtipo")
+
+
 class DataType(object):
 
     """Definicion de tipo
@@ -20,10 +25,6 @@ class DataType(object):
     bloquea la herencia del atributo correspondiente en los DataObjects
     que pertenezcan a ese tipo.
     """
-
-    _FIELD_RE = re.compile(r"^[a-zA-Z][\w\d]*$")
-    _INVALIDFIELD = _("\"%(field)s\" no es un nombre de campo valido")
-    _EMPTYNAME = _("Debe dar un nombre al subtipo")
 
     def __init__(self, parent=None):
         self.up, self.blocked, self.subtypes = parent, set(), dict()
@@ -58,8 +59,8 @@ class DataType(object):
         """Incluye un campo, opcionalmente bloqueando la herencia"""
         field = field.strip() or None if field else None
         if field:
-            if not self._FIELD_RE.match(field):
-                raise SyntaxError, self._INVALIDFIELD % { 'field': field }
+            if not _FIELD_RE.match(field):
+                raise SyntaxError, _INVALIDFIELD % { 'field': field }
             if block:
                 self.blocked.add(field)
         return field
@@ -68,6 +69,5 @@ class DataType(object):
         """Recupera o crea un subtipo"""
         name = self.add_field(name, True)
         if name is None:
-            raise SyntaxError, self._EMPTYNAME
+            raise SyntaxError, _EMPTYNAME
         return (name, self.subtypes.setdefault(name, DataType(self)))
-

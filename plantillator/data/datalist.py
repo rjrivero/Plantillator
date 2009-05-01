@@ -11,26 +11,21 @@ def not_none(filter_me):
     return (x for x in filter_me if x is not None)
 
 
-class BaseSet(set):
+def BaseMaker(basetype):
+    class BaseSequence(basetype):
+        def __add__(self, other):
+            """Concatena dos secuencias"""
+            return BaseSequence(itertools.chain(self, other))
+        def __call__(self, arg):
+            """Devuelve el subconjunto de elementos que cumple el criterio"""
+            if not hasattr(arg, '__call__'):
+                arg = (Deferrer() == arg)
+            return BaseSequence(x for x in self if arg(x))
+    return BaseSequence
 
-    def __add__(self, other):
-        """Concatena dos sets"""
-        return BaseSet(itertools.chain(self, other))
 
-    def __pop(self, data):
-        data = list(data)
-        if len(data) == 1:
-            return data[0]
-        return BaseSet(data)
-
-    def __call__(self, arg):
-        """Devuelve el subconjunto de elementos que cumple el criterio
-        
-        Si solo se encuentra uno, lo devuelve ya desencapsulado.
-        """
-        if not hasattr(arg, '__call__'):
-            arg = (Deferrer() == arg)
-        return self.__pop(x for x in self if arg(x))
+BaseList = BaseMaker(tuple)
+BaseSet = BaseMaker(frozenset)
 
 
 class DataSet(set):
@@ -42,25 +37,16 @@ class DataSet(set):
         set.__init__(self, data or tuple())
         self.__type = mytype
 
-    def __pop(self, type, data):
-        data = list(data)
-        if len(data) == 1:
-            return data[0]
-        return DataSet(type, data)
-
     def __call__(self, **kw):
-        """Busca los elementos de la lista que cumplan los criterios dados
-        
-        Si solo se encuentra uno, lo devuelve ya desencapsulado.
-        """
+        """Busca los elementos de la lista que cumplan los criterios dados"""
         crit = self.__type.adapt(kw)
-        return self.__pop(self.__type, x for x in self if x.__matches(crit))
+        return DataSet(self.__type, x for x in self if x.__matches(crit))
 
     def __add__(self, other):
         """Concatena dos DataSets"""
         if self.__type != other.__type:
             raise TypeError, other
-        return self.__pop(self.__type, chain(self, other))
+        return DataSet(self.__type, chain(self, other))
 
     def __getattr__(self, attrib):
         """Selecciona un atributo en la lista
@@ -74,10 +60,8 @@ class DataSet(set):
         items = not_none(item.__get(attrib) for item in self)
         stype = self.__type.subtypes.get(attrib, None)
         if stype is not None:
-            return self.__pop(subtype, chain(*tuple(items)))
-        return BaseSet().__pop(items)
+            return DataSet(stype, chain(*tuple(items)))
+        return BaseSet(items)
 
     @property
     def up(self):
-        return self.__pop(self.__type.up, not_none(item.up for item in self))
-

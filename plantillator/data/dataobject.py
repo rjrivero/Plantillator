@@ -20,9 +20,6 @@ class DataObject(object):
         self.__dict__.update(data or dict())
         self.__type, self.up = mytype, fallback
 
-    def __iter__(self):
-        yield self
-
     def __getattr__(self, attrib):
         """Busca el atributo en el objeto y los fallbacks"""
         if self.up and attrib not in self.__type.blocked:
@@ -31,17 +28,6 @@ class DataObject(object):
             return DataSet(self.__type.subtypes[attrib])
         except KeyError:
             raise AttributeError, attrib
-
-    def __setattr__(self, attrib, val):
-        def iter(object):
-            yield object
-        if not hastattr(val, '__call__') or not hastattr(val, '__iter__'):
-            newtype = type("newtype", (type(val),), {'__iter__': iter})
-            try:
-                val.__class__ = newtype
-            except TypeError:
-                val = newtype(val)
-        object.__setattr__(self, attrib, val)
 
     def __getitem__(self, key):
         """Busca el atributo en el objeto y los fallbacks"""
@@ -62,8 +48,3 @@ class DataObject(object):
             return getattr(self, attrib)
         except AttributeError:
             return defval
-
-    def __call__(self, **kw):
-        """Devuelve el elemento actual, si cumple los criterios dados"""
-        crit = self.__type.adapt(kw)
-        return self if self.__matches(crit) else DataSet(self.__type)
