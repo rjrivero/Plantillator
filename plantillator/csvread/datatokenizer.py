@@ -49,18 +49,9 @@ class DataTokenizer(object):
         separado por ",". Tocate las narices.
         """
         # lo unico que me interesa es el delimiter, lo demas vale por defecto
-        valid = set(',', ';')
+        valid = set([',', ';'])
         for line in self.source.readlines():
             if line and line[0] in valid:
                 return line[0]
         return ','
 
-    def error(self, msg):
-        """Genera un error de sintaxis con el mensaje dado"""
-        self.msg = msg
-        raise SyntaxError, str(self)
-
-    def __str__(self):
-        """Genera un mensaje de error indicando fuente y linea actual"""
-        return "%s, LINE %d: %s" % (
-                self.source, self.lineno+1, self.msg)

@@ -31,9 +31,9 @@ class FileSource(LineSource):
 
     """Wrapper sobre un fichero"""
 
-    def __init__(self, includepath, filename):
-        LineSource.__init__(self, os.path.abspath(filename))
-        self.path = PathFinder(includepath)
+    def __init__(self, fullpath, resolvepath):
+        LineSource.__init__(self, os.path.abspath(fullpath))
+        self.path = PathFinder(resolvepath)
         self.path.insert(0, os.path.dirname(self.id))
 
     def readlines(self, mode="r"):
@@ -62,9 +62,9 @@ class PathFinder(list):
     Busca ficheros en un path determinado.
     """
 
-    def __init__(self, path):
+    def __init__(self, path=None):
         """Establece el path de busqueda."""
-        list.__init__(self, path)
+        list.__init__(self, path or [])
         if not "." in self:
             self.append(".")
 
@@ -89,3 +89,4 @@ class PathFinder(list):
             if os.path.isfile(fpath):
                 return fpath
         raise ValueError, _("No se encuentra %s en %s" % (fname, self))
+

@@ -32,8 +32,8 @@ class DataType(object):
     def as_callable(self, key, val):
         """Normaliza un criterio
 
-        - si "val" no es UnaryOperator, se convierte con "MyOperator() == val"
-        - si "key" identifica una sublista, "val" se envuelve en un DeferredAny
+        - si "val" no es callable, se pasa a "MyOperator() == val"
+        - si "key" identifica una lista, "val" se envuelve en un DeferredAny
         """
         if not hasattr(val, '__call__'):
             val = (Deferrer() == val)
@@ -71,3 +71,32 @@ class DataType(object):
         if name is None:
             raise SyntaxError, _EMPTYNAME
         return (name, self.subtypes.setdefault(name, DataType(self)))
+
+
+class TypeTree(object):
+
+    """Arbol de tipos
+
+    Define una jerarquia de tipos, donde unos tipos son sub-tipos de otros.
+    """
+
+    def __init__(self):
+        """Inicializa el arbol"""
+        self.root = DataType(None)
+
+    def get_types(self, datapath):
+        """Obtiene la secuencia de tipos identificada por la ruta dada
+
+        La ruta es una cadena de texto con el formato
+        "tipo.subtipo.subsubtipo..."
+
+        Genera una secuencia de pares (nombre de tipo, tipo)
+        """
+        base = self.root
+        try:
+            for step in datapath.split("."):
+                name, base = base.add_subtype(step)
+                yield (name, base)
+        except SyntaxError:
+            raise SyntaxError, datapath
+
