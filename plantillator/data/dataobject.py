@@ -29,6 +29,9 @@ class DataObject(dict):
     def __cmp__(self, other):
         return cmp(id(self), id(other))
 
+    def __iter__(self):
+        yield self
+
     def __getitem__(self, item):
         try:
             return dict.__getitem__(self, item)
@@ -60,4 +63,9 @@ class DataObject(dict):
             return self[item]
         except KeyError:
             return defval
+
+    def __call__(self, **kw):
+        """Busca los elementos de la lista que cumplan los criterios dados"""
+        crit = self._type.adapt(kw)
+        return self if self._matches(crit) else DataSet(self._type)
 

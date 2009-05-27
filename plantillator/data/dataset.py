@@ -101,7 +101,8 @@ class DataSet(set):
     def __call__(self, **kw):
         """Busca los elementos de la lista que cumplan los criterios dados"""
         crit = self._type.adapt(kw)
-        return DataSet(self._type, (x for x in self if x._matches(crit)))
+        dset = DataSet(self._type, (x for x in self if x._matches(crit)))
+        return dset if len(dset) != 1 else dset.pop()
 
     def __add__(self, other):
         """Concatena dos DataSets"""
