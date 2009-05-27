@@ -11,6 +11,7 @@ from data.operations import DeferredAny, Deferrer
 _FIELD_RE = re.compile(r"^[a-zA-Z][\w\d]*$")
 _INVALIDFIELD = _("\"%(field)s\" no es un nombre de campo valido")
 _EMPTYNAME = _("Debe dar un nombre al subtipo")
+_INVALIDPATH = _("La ruta %(path)s no es valida")
 
 
 class DataType(object):
@@ -60,7 +61,7 @@ class DataType(object):
         field = field.strip() or None if field else None
         if field:
             if not _FIELD_RE.match(field):
-                raise SyntaxError, _INVALIDFIELD % { 'field': field }
+                raise SyntaxError(_INVALIDFIELD % { 'field': field })
             if block:
                 self.blocked.add(field)
         return field
@@ -69,7 +70,7 @@ class DataType(object):
         """Recupera o crea un subtipo"""
         name = self.add_field(name, True)
         if name is None:
-            raise SyntaxError, _EMPTYNAME
+            raise SyntaxError(_EMPTYNAME)
         return (name, self.subtypes.setdefault(name, DataType(self)))
 
 
@@ -98,5 +99,4 @@ class TypeTree(object):
                 name, base = base.add_subtype(step)
                 yield (name, base)
         except SyntaxError:
-            raise SyntaxError, datapath
-
+            raise SyntaxError(_INVALID_PATH % {'path': datapath})

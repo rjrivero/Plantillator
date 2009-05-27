@@ -10,6 +10,7 @@ from data.datatype import DataType, TypeTree
 
 _NOT_ENOUGH_INDEXES = _("No hay suficientes indices")
 _INDEX_NOT_FOUND = _("No se encuentra el indice")
+_ATTRIB_NOT_FOUND = _("El campo %(attrib)s no esta definido")
 
 
 TableFilter = NamedTuple("TableFilter",
@@ -118,11 +119,14 @@ class TableParser(object):
         """
         for name, dtype, fields in filters:
             if len(fields) > len(line):
-                raise ValueError, _NOT_ENOUGH_INDEXES
+                raise SyntaxError, _NOT_ENOUGH_INDEXES
             crit = dict(zip(fields, line))
             line = line[len(fields):]
-            dataset = getattr(dataset, name)(**crit)
-            if not dataset:
-                raise ValueError, _INDEX_NOT_FOUND
+            try:
+                dataset = getattr(dataset, name)(**crit)
+            except AttributeError as details:
+                raise SyntaxError, _ATTRIB_NOT_FOUND % {'attrib': str(details)}
+            else:
+                if not dataset:
+                    raise SyntaxError, _INDEX_NOT_FOUND
         return (dataset, line)
-

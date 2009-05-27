@@ -12,14 +12,13 @@ from csvread.tableloader import TableLoader
 from csvread.tableparser import TableParser
 
 
-class DataLoader(TableLoader):
+class DataSource(TableLoader):
 
     """Carga e interpreta ficheros de datos"""
 
-    _HOOKS = {
-        "DEPENDENCIAS": ("ruta",),
-        "VARIABLES":    ("nombre", "valor")
-    }
+    _HOOKS = (
+        "DEPENDENCIAS", "VARIABLES"
+    )
 
     def __init__(self, typetree, dataobject):
         TableLoader.__init__(self)
@@ -34,41 +33,36 @@ class DataLoader(TableLoader):
         Devuelve una lista con las dependencias del fichero.
         """
         tables = TableLoader.read(self, source)
-        self.dependencies = set()
+        self.dependencies = list()
         for datapath, blocks in tables.iteritems():
-            try:
-                hooked = self._HOOKS[datapath.upper()]
-                datapath = datapath.upper()
-            except KeyError:
-                hooked = None
+            if datapath.upper() in self._HOOKS:
+                hook = getattr(self, "onHook_%s" % datapath.upper())
+            else:
+                hook = None
             for block in blocks:
                 self.lineno, header = block.pop(0)
                 filters = list(self.parser.get_filters(datapath, header))
                 last = filters.pop()
-                if hooked is not None:
-                    header = hooked
-                else:
+                if hook is None:
                     header = self.parser.do_type(last.dtype, header)
-                for self.lineno, line in block:
-                    self.addrow(filters, last, header, line)
-            if hooked:
-                getattr(self, "onHook_%s" % datapath)()
+                    for self.lineno, line in block:
+                        self.addrow(filters, last, header, line)
+                else:
+                    for self.lineno, line in block:
+                        hook(line)                    
         return self.dependencies
 
-    def onHook_DEPENDENCIAS(self):
-        for item in self.dataobject.DEPENDENCIAS:
-            self.dependencies.add(item.ruta)
-        del(self.dataobject["DEPENDENCIAS"])
+    def onHook_DEPENDENCIAS(self, line):
+        self.dependencies.append(line[0])
 
-    def onHook_VARIABLES(self):
+    def onHook_VARIABLES(self, line):
         try:
-            for item in self.dataobject.VARIABLES:
-                self.dataobject[item.nombre] = item.valor
-            del(self.dataobject["VARIABLES"])
+            self.dataobject[line[0]] = line[1]
         except KeyError:
-            raise SyntaxError, item.nombre
+            raise SyntaxError, line[0]
 
     def addrow(self, filters, last, header, line):
+        """inserta una linea del CSV en los datos."""
         base, line = self.parser.do_filter(self.dataset, filters, line)
         if not last.fields:
             vals = dict((x, y) for (x, y) in zip(header, line)
@@ -89,7 +83,7 @@ if __name__ == "__main__":
     finder = PathFinder()
     ttree = TypeTree()
     dataobject = DataObject(ttree.root)
-    loader = DataLoader(ttree, dataobject)
+    loader = DataSource(ttree, dataobject)
     for f in sys.argv[1:]:
         source = FileSource(finder(f), finder)
         loader.read(source)

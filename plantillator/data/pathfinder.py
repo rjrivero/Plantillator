@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
+
+import os
 import os.path
 from gettext import gettext as _
+
+
+_FILE_NOT_FOUND = _("No se encuentra %(file)s en %(path)s")
 
 
 class LineSource(object):
@@ -31,7 +36,7 @@ class FileSource(LineSource):
 
     """Wrapper sobre un fichero"""
 
-    def __init__(self, fullpath, resolvepath):
+    def __init__(self, fullpath=None, resolvepath=None):
         LineSource.__init__(self, os.path.abspath(fullpath))
         self.path = PathFinder(resolvepath)
         self.path.insert(0, os.path.dirname(self.id))
@@ -40,7 +45,7 @@ class FileSource(LineSource):
         return open(self.id, mode).readlines()
 
     def resolve(self, sourcename):
-        return FileSource(self.path, self.path(sourcename))
+        return FileSource(self.path(sourcename), self.path)
 
 
 class StringSource(LineSource):
@@ -65,8 +70,7 @@ class PathFinder(list):
     def __init__(self, path=None):
         """Establece el path de busqueda."""
         list.__init__(self, path or [])
-        if not "." in self:
-            self.append(".")
+        self.insert(0, ".")
 
     def __getslice__(self, i, j):
         return PathFinder(list.__getslice__(self, i, j))
@@ -88,5 +92,5 @@ class PathFinder(list):
         for fpath in (os.path.join(dir, fname) for dir in self):
             if os.path.isfile(fpath):
                 return fpath
-        raise ValueError, _("No se encuentra %s en %s" % (fname, self))
-
+        raise ValueError(_FILE_NOT_FOUND %
+                         {'file': fname, 'path': os.pathsep.join(self)})

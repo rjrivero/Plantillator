@@ -5,24 +5,8 @@ import os.path
 import itertools
 
 from data.pathfinder import PathFinder, FileSource
+from data.dataset import normalize
 from csvread.datatokenizer import DataTokenizer
-
-
-def normalize(item):
-    """Normaliza un elemento
-
-    Convierte los enteros en enteros, las cadenas vacias en None,
-    y al resto le quita los espacios de alrededor.
-
-    Si se quiera tratar un numero como una cadena de texto, hay que
-    escaparlo entre comillas simples.
-    """
-    item = item.strip()
-    if item.isdigit():
-        return int(item)
-    if item.startswith("'") and item.endswith("'"):
-        return item[1:-1]
-    return item or None if not item.isspace() else None
 
 
 DATA_COMMENT = "!"

@@ -3,6 +3,7 @@
 
 from os import linesep
 from itertools import chain
+import re
 
 from data.operations import Deferrer
 
@@ -31,6 +32,23 @@ def BaseMaker(basetype):
 
 BaseList = BaseMaker(tuple)
 BaseSet = BaseMaker(frozenset)
+
+
+def normalize(item):
+    """Normaliza un elemento
+
+    Convierte los enteros en enteros, las cadenas vacias en None,
+    y al resto le quita los espacios de alrededor.
+
+    Si se quiera tratar un numero como una cadena de texto, hay que
+    escaparlo entre comillas simples.
+    """
+    item = item.strip()
+    if item.isdigit():
+        return int(item)
+    if item.startswith("'") and item.endswith("'"):
+        return item[1:-1]
+    return item or None if not item.isspace() else None
 
 
 def asList(varlist):
@@ -88,7 +106,7 @@ class DataSet(set):
     def __add__(self, other):
         """Concatena dos DataSets"""
         if self._type != other._type:
-            raise TypeError, other
+            raise TypeError, other._type
         return DataSet(self._type, chain(self, other))
 
     def __getitem__(self, item):
@@ -100,7 +118,7 @@ class DataSet(set):
         Si el atributo seleccionado es una sublista, en lugar de un set
         se devuelve un ScopeList con todos los elementos encadenados.
         """
-        items = not_none(x._get(item) for x in self)
+        items = not_none(x.get(item) for x in self)
         stype = self._type.subtypes.get(item, None)
         if stype is not None:
             return DataSet(stype, chain(*tuple(items)))
