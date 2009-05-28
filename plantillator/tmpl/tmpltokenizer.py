@@ -15,13 +15,13 @@ _PARSE_ERROR = _("Fichero %(file)s [%(lineno)d]: %(msg)s")
 
 class Token(object):
 
-    def __init__(self, lineno, head, body):
+    def __init__(self, lineno, head=None, body=None):
         self.lineno = lineno
         self.head = head
         self.body = body
 
     def __str__(self):
-        return "[%d] %s" % (self.lineno, self.head or self.body)
+        return self.head or self.body
 
 
 class ParseError(Exception):
@@ -86,3 +86,4 @@ class TmplTokenizer(object):
             raise ParseError(self.source, self.lineno, _UNEXPECTED_EOF)
         if tokens:
             raise ParseError(self.source, tokens.pop(0).lineno, _UNBALANCED)
+
