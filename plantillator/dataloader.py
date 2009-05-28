@@ -29,22 +29,21 @@ class DataLoader(object):
         self.tree = TypeTree()
         self.data = DataObject(self.tree.root)
         self.hist = set()
-
-    def load(self, source):
-        sources = [source]
-        glob = {
+        self.glob = {
             "__builtins__": __builtins__,
             "LISTA": asList,
             "RANGO": asRange,
             "GRUPO": asSet,
             "cualquiera": Deferrer()
         }
+
+    def load(self, source):
+        sources = [source]
         while sources:
             source = sources.pop(0)
             if source.id not in self.hist:
                 sources.extend(self._resolve(source))
                 self.hist.add(source.id)
-        return (glob, self.data)
 
     def _resolve(self, source):
         ext = source.id.split(".").pop().strip().lower()
