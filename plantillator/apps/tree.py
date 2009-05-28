@@ -6,94 +6,93 @@ import Tkinter as tk
 from idlelib.TreeWidget import TreeItem, TreeNode
 
 
-class BaseItem(TreeItem):
+class Tagger(object):
 
-    def __init__(self, name):
+    _NAMING_ATTRIBS = ["descripcion", "nombre", "host"]
+
+    def name(self, data, name=None, hint=None):
+        """Intenta dar nombre a un item, en funcion de su tipo.
+        "hint" es una pista para crear el nombre (por ejemplo, la clave si el
+        item ha salido de un diccionario, el indice si el item ha salido de
+        una lista)
+        """
+        if not name and isinstance(data, dict):
+            for attr in self._NAMING_ATTRIBS:
+                if attr in data:
+                    return data[attr]
+        elif not hasattr(data, "__iter__"):
+            return "%s = %s" % (name, str(data)) if name else str(data)
+        return name or hint or "<>"
+
+    def icon(self, item):
+        """Devuelve el nombre del icono a usar"""
+        return "folder" if item.expandable else "plusnode"
+
+    def selicon(self, item):
+        """Devuelve el nombre del icono a usar cuando el item se abre"""
+        return "openfolder" if item.expandable else "minusnode"
+
+    def item(self, data, name=None, hint=None):
+        return Item(self.name(data, name, hint), data, self)
+
+
+class Item(TreeItem):
+
+    def __init__(self, name, data=None, tagger=None):
+        TreeItem.__init__(self)
         self.name = name
-        self.expandable = self.isExpandable()
+        self.data = data
+        self.tagger = tagger or Tagger()
+        # check properties
+        self.expandable = (data is not None and hasattr(data, '__iter__'))
+        if isinstance(data, dict):
+            self.GetSubList = self._dict
+        elif hasattr(data, '__iter__'):
+            if hasattr(data, '__getitem__'):
+                # no ordenamos los elementos de una lista, porque si se
+                # elige una lista el orden es importante
+                # (por ejemplo: la secuencia de lineas de una plantilla)
+                self.GetSubList = self._list
+            else:
+                self.GetSubList = self._set
+        else:
+            self.GetSubList = lambda self: None
+
     def __cmp__(self, other):
-        return cmp(self.name, other.name)
+        # not expandable items first, then alphabetical order
+        retval = cmp(self.expandable, other.expandable)
+        return retval if retval != 0 else cmp(self.name, other.name)
 
     def GetText(self):
         return self.name
 
     def isExpandable(self):
-        return False
-
-    def GetSubList(self):
-        return None
+        return self.expandable
 
     def GetIconName(self):
-        return "folder" if self.expandable else "minusnode"
+        return self.tagger.icon(self)
 
     def GetSelectedIconName(self):
-        return "openfolder" if self.expandable else "minusnode"
+        return self.tagger.selicon(self)
 
+    def _list(self):
+        return list(self.tagger.item(x, hint="[%d]"%index)
+                      for index, x in enumerate(self.data))
 
-class DictItem(BaseItem):
+    def _set(self):
+        return sorted(self._list())
 
-    def __init__(self, name, data=None):
-	self.data = data or {}
-	BaseItem.__init__(self, name)
-
-    def isExpandable(self):
-	return bool(self.data)
-    
-    def GetSubList(self):
-        simple, compound = [], []
-        for name, val in self.data.iteritems():
-            if name.startswith("_"):
-                continue
-            if isinstance(val, dict):
-                compound.append(DictItem(name, val))
-            elif hasattr(val, "__iter__"):
-                compound.append(ListItem(name, val))
-            else:
-                simple.append(BaseItem(name + " = " + str(val)))
-        return sorted(simple) + sorted(compound)
-
-
-_NAMING_ATTRIBS = ["descripcion", "nombre", "host"]
-                              
-class ListItem(BaseItem):
-
-    def __init__(self, name, data=None):
-	self.data = data or {}
-	BaseItem.__init__(self, name)
-
-    def isExpandable(self):
-    	return bool(self.data)
-    
-    def GetSubList(self):
-        simple, compound = [], []
-        for index, val in enumerate(self.data):
-            name = "[%s]" % str(index)
-            if isinstance(val, dict):
-                for attr in _NAMING_ATTRIBS:
-                    if attr in val:
-                        name = val[attr]
-                        break
-                compound.append(DictItem(name, val))
-            elif hasattr(val, "__iter__"):
-                compound.append(ListItem(name, val))
-            else:
-                simple.append(BaseItem(name + " = " + str(val)))
-        return sorted(simple) + sorted(compound)
-
-
-def Item(name, data=None):
-    if isinstance(data, dict):
-        return DictItem(name, data)
-    elif hasattr(data, "__iter__"):
-        return ListItem(name, data)
-    else:
-        return BaseItem("%s = %s" % (name, str(data)))
+    def _dict(self):
+        return sorted(self.tagger.item(x, name)
+                      for name, x in self.data.iteritems()
+                      if not name.startswith('_'))
 
 
 class TreeCanvas(tk.Canvas):
 
-    def __init__(self, master):
+    def __init__(self, master, tagger=None):
         tk.Canvas.__init__(self, master)
+        self.tagger = tagger or Tagger()
         self.config(bg='white')
         # add scrollbar
         self.scrollbar = tk.Scrollbar(master)
@@ -110,6 +109,6 @@ class TreeCanvas(tk.Canvas):
             self.yview_scroll(-2, 'units')
 
     def show(self, name, data):
-        node = TreeNode(self, None, Item(name, data))
+        node = TreeNode(self, None, self.tagger.item(data, name))
         node.update()
         node.expand()

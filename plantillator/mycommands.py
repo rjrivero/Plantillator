@@ -13,43 +13,6 @@ from tmplparser import TmplParser, CommandError
 from dataparser import DataParser
 
 
-
-def asList(varlist):
-    """Interpreta una cadena de caracteres como una lista
-
-    Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
-    es un conjunto de valores separados por ','.
-    """
-    return MyFrozenset(normalize(i) for i in str(varlist).split(","))
-
-
-_RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
-
-def asRange(varrange):
-    """Interpreta una cadena de caracteres como un rango
-
-    Crea al vuelo un rango a partir de una cadena de caracteres.
-    La cadena es un rango (numeros separados por '-'), posiblemente
-    rodeado de un prefijo y sufijo no numerico.
-    """
-    match = _RANGO.match(str(varrange))
-    rango = []
-    if match:
-        start = int(match.group('from'))
-        stop = int(match.group('to'))
-        pref = match.group('pref') or ''
-        suff = match.group('suff') or ''
-        for i in range(start, stop+1):
-            rango.append(normalize("%s%d%s" % (pref, i, suff)))
-    return MyFrozenset(rango)
-
-
-def iterWrapper(expr):
-    """Devuelve un iterable"""
-    return expr if hasattr(expr, '__iter__') else (expr,)
-
-
-
 # nombres de variables permitidos
 VARPATTERN = {
     'varflat': r'[a-zA-Z][\w\_]*',

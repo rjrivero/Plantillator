@@ -6,9 +6,10 @@ import re
 from os.path import basename
 from sys import exc_info
 import traceback
+from gettext import gettext as _
 
-from mytokenizer import PathFinder
-from tmpltokenizer import TmplTokenizer
+from data.pathfinder import PathFinder
+from tmpl.tmpltokenizer import TmplTokenizer
 
 
 # delimitadores de bloques de comandos
@@ -17,6 +18,10 @@ DELIMITERS = re.compile(r'({{|}})')
 PLACEHOLDS = re.compile(r'\?(?P<expr>[^\?]+)\?')
 # CARACTER DE COMENTARIO
 TMPL_COMMENT = "#"
+
+
+_RUNTIME_ERROR = _("Error ejecutando %(command)s")
+_ERROR_LOCATION = _("Origen %(fname)s, linea $(lineno)d")
 
 
 class CommandError(Exception):
@@ -31,8 +36,7 @@ class CommandError(Exception):
     - self.exc_info:  datos de la excepcion original
 
     Estas excepciones son excepciones de tiempo de proceso. Las excepciones
-    durante el parsing se suelen indicar con SyntaxErrors levantados por la
-    funcion tokenizer.error.
+    durante el parsing se indican con SyntaxErrors.
     """
 
     def __init__(self, block, data, offending):
@@ -41,17 +45,15 @@ class CommandError(Exception):
         self.offending = offending
         self.exc_info = exc_info()
 
-    def __repr__(self):
+    def __str__(self):
         block = self.block
         error = [
-            "%s, LINE %s\n" % (block.source, block.lineno),
-            "Error ejecutando %s\n" % str(self.offending)
+            _ERROR_LOCATION % {
+                'fname': str(block.source), 'lineno': block.lineno},
+            _RUNTIME_ERROR % {'command': str(self.offending)}
         ]
         error.extend(traceback.format_exception(*self.exc_info))
-        return "".join(error)
-
-    def __str__(self):
-        return repr(self)
+        return "\n".join(error)
 
 
 class TmplList(list):
@@ -111,19 +113,6 @@ class TmplList(list):
                 token = TmplList(command).read(tokenizer, tokens, engine)
             self.append(token)
         return self
-
-    def __str__(self):
-        return repr(self)
-
-    def __repr__(self):
-        """Esta es la informacion que se comprueba en los unittests"""
-        pref = ["%s[source: %s, lineno: %s]\n" % (
-            TMPL_COMMENT, self.source, self.lineno)]
-        suff = []
-        if self.command:
-            pref.append("{{%s" % str(self.command))
-            suff.append("}}\n")            
-        return "".join(itertools.chain(pref, (repr(x) for x in self), suff))
 
 
 class TmplParser(TmplList):

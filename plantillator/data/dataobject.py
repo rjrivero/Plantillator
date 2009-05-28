@@ -69,3 +69,6 @@ class DataObject(dict):
         crit = self._type.adapt(kw)
         return self if self._matches(crit) else DataSet(self._type)
 
+    def replace(self, match):
+        """evalua match.group("expr") usandose a si mismo como locals"""
+        return str(eval(match.group('expr'), self))

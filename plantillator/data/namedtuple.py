@@ -29,3 +29,27 @@ def NamedTuple(class_name, docstr, **fields):
     tdict.update({ '__new__': tnew, '__doc__': docstr })
     return type(class_name, (tuple,), tdict)
 
+
+def NamedDict(class_name, docstr, **fields):
+    """Crea un tipo de NamedDict con los campos indicados
+
+    los argumentos con nombre definen los nombres de los campos,
+    y su valor es el valor por defecto del campo dentro del dict.
+
+    Por ejemplo:
+    >>> Point = NamedDict("Point", "a 2D Point", x=5, y=15)
+    >>> p = Point(x=10)
+    >>> p.x
+    10
+    >>> p.y
+    15
+    >>> p["x"]
+    10
+    >>> p["y"]
+    15
+    """
+    def tinit(self):
+        self.update(fields)
+    tdict = dict((x, property(itemgetter(x))) for x in fields.keys())
+    tdict.update({ '__init__': tinit, '__doc__': docstr })
+    return type(class_name, (dict,), tdict)

@@ -47,6 +47,9 @@ class FileSource(LineSource):
     def resolve(self, sourcename):
         return FileSource(self.path(sourcename), self.path)
 
+    def __str__(self):
+        return os.path.basename(self.id)
+
 
 class StringSource(LineSource):
 
@@ -59,7 +62,10 @@ class StringSource(LineSource):
     def readlines(self, mode="r"):
         return self.lines
 
-    
+    def __str__(self):
+        return self.id
+
+
 class PathFinder(list):
 
     """Localizador de ficheros
