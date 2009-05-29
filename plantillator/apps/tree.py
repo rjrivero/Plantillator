@@ -45,6 +45,7 @@ class Item(TreeItem):
         self.tagger = tagger or Tagger()
         # check properties
         self.expandable = (data is not None and hasattr(data, '__iter__'))
+        self.editable = False
         if isinstance(data, dict):
             self.GetSubList = self._dict
         elif hasattr(data, '__iter__'):
@@ -68,6 +69,9 @@ class Item(TreeItem):
 
     def isExpandable(self):
         return self.expandable
+
+    def isEditable(self):
+        return self.editable
 
     def GetIconName(self):
         return self.tagger.icon(self)
@@ -108,7 +112,15 @@ class TreeCanvas(tk.Canvas):
         if event.num == 4 or event.delta >= 120:
             self.yview_scroll(-2, 'units')
 
-    def show(self, name, data):
+    def show(self, name, data, expanded=False):
         node = TreeNode(self, None, self.tagger.item(data, name))
-        node.update()
         node.expand()
+        if expanded:
+            for item in node.children:
+                self._expand(item)
+        node.update()
+
+    def _expand(self, node):
+        node.expand()
+        for item in node.children:
+            self._expand(item)

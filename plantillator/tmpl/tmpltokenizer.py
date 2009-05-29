@@ -6,34 +6,12 @@ import re
 from gettext import gettext as _
 
 from data.namedtuple import NamedTuple
+from engine.base import *
 
 
 _UNEXPECTED_EOF = _("No se esperaba el fin del fichero")
 _UNBALANCED = _("No se esperaba el fin de bloque")
 _PARSE_ERROR = _("Fichero %(file)s [%(lineno)d]: %(msg)s")
-
-
-class Token(object):
-
-    def __init__(self, lineno, head=None, body=None):
-        self.lineno = lineno
-        self.head = head
-        self.body = body
-
-    def __str__(self):
-        return self.head or self.body
-
-
-class ParseError(Exception):
-
-    def __init__(self, source, lineno, errmsg):
-        self.source = source
-        self.lineno = lineno
-        self.errmsg = errmsg
-
-    def __str__(self):
-        return _PARSE_ERROR % {'file': str(self.source), 'line': self.lineno,
-                               'msg': self.errmsg}
 
 
 class TmplTokenizer(object):
@@ -83,7 +61,7 @@ class TmplTokenizer(object):
             for item in self._tree(tokens):
                 yield item
         except IndexError:
-            raise ParseError(self.source, self.lineno, _UNEXPECTED_EOF)
+            eof = Token(self.lineno, "<EOF>")
+            raise ParseError(self.source, eof, _UNEXPECTED_EOF)
         if tokens:
-            raise ParseError(self.source, tokens.pop(0).lineno, _UNBALANCED)
-
+            raise ParseError(self.source, tokens.pop(0), _UNBALANCED)

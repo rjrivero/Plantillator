@@ -3,159 +3,99 @@
 
 
 import re
+import itertools
 import functools
 from gettext import gettext as _
 
 from data.datatype import DataType
 from data.dataobject import DataObject
+from engine.base import *
 
 
-# nombres de variables permitidos
-VARPATTERN = {
-    'var': r'[a-zA-Z][\w\_]*',
-    'en':  r'en(\s+(el|la|los|las))?',
-    'de':  r'(en|de|del)(\s+(el|la|los|las))?'
-}
-# marcadores de parametros a reemplazar
-PLACEHOLD = re.compile(r'\?(?P<expr>[^\?]+)\?')
-
-_RUNTIME_ERROR = _("Error ejecutando %(command)s")
-_ERROR_LOCATION = _("Origen %(fname)s, linea $(lineno)d")
+# cadenas de error
+_UNDEFINED_BLOCK = _("El bloque %(blockname)s no esta definido")
+_NOT_SELECTED = _("No se ha seleccionado un(a) %(var)s")
+_WRONG_PARAMS = _("La cadena %(params)s no es valida"
 
 
-class CommandError(Exception):
-
-    """Excepcion que se lanza al detectar un error procesando el template.
-
-    Encapsula la excepcion original, y el bloque que la ha originado:
-
-    - self.token:     Token que levanto la excepcion
-    - self.data:      datos que se estaban evaluando
-    - self.exc_info:  datos de la excepcion original
-
-    Estas excepciones son excepciones de tiempo de proceso. Las excepciones
-    durante el parsing se indican con SyntaxErrors.
-    """
-
-    def __init__(self, source, token, glob, data):
-        self.source = source
-        self.token  = token
-        self.glob   = glob
-        self.data   = data
-        self.exc_info = exc_info()
-
-
-def as_iterator(func):
-    """Decorador que se asegura de que la funcion devuelva algo iterable"""
-    @functools.wraps(func)
-    def wrap(self, glob, data):
-        result = func(self, glob, data)
-        return result or tuple()
-    return wrap
-
-
-class Literal(object):
-    def __init__(self, token):
-        self.token = token
-
-    def run(self, glob, data):
-        yield PLACEHOLD.sub(data.replace, self.token.body)
-
-
-class Command(list):
-
-    def __init__(self, up, token, match):
-        list.__init__(self)
-        self.__dict__.update(match.groupdict())
-        self.up = up
-        self.token = token
-
-    def __str__(self):
-        return str(self.token)
-
-    def chain(self, command):
-        return self.up.chain(command)
-
-    def run(self, glob, data):
-        for item in self:
-            try:
-                for block in item.run(glob, data):
-                    yield block
-            except CommandError:
-                raise
-            except:
-                raise CommandError(None, item.token, glob, data)
+def as_iterator(item):
+    """Se asegura de que un objeto es iterable"""
+    return item if hasattr(item, '__iter__') else (item,)
 
 
 class Condition(Command):
+    """Condicion.
+    Concuerda si una expresion es verdadera.
+    """
 
     def match(self, glob, data):
         try:
             return bool(eval(self.expr, glob, data)) if self.expr else True
-        except AttributeError, KeyError:
+        except (AttributeError, KeyError):
             return False
 
+    def run(self, glob, data):
+        if self.match(glob, data):
+            return Command.run(self, glob, data)
+        return tuple()
 
-class ConditionFalse(Condition):
+
+class ConditionNot(Condition):
+    """Condicion negada
+    Concuerda si una expresion es falsa o si lanza un AttributeError
+    o un KeyError (tipico de acceder a un objeto que no existe).
+    """
 
     def match(self, glob, data):
         try:
             return not bool(eval(self.expr, glob, data)) if self.expr else True
-        except AttributeError, KeyError:
+        except (AttributeError, KeyError):
             return True
 
 
 class ConditionExist(Condition):
+    """Comprobacion de variable
+    Concuerda si una variable esta definida en la lista que
+    (se espera que) devuelva la evaluzacion de una expresion.
+    """
 
     def match(self, glob, data):
         try:
             expr = eval(self.expr, glob, data)
             if (self.var in expr):
                 return True
-        except AttributeError, KeyError:
+        except (AttributeError, KeyError):
             return False
         
 
 class ConditionNotExist(ConditionExist):
+    """Comprobacion de no existencia de variable
+    Concuerda si una variable no esta en la lista que (se espera que)
+    devuelva la evaluacion de una expresion, o si al intentar
+    evaluar la expresion se lanza un AttributeError o un KeyError.
+    """
 
     def match(self, glob, data):
         try:
             expr = eval(self.expr, glob, data)
             if not (self.var in expr):
                 return True
-        except AttributeError, KeyError:
+        except (AttributeError, KeyError):
             return True
 
 
-class CommandIf(Command):
-
-    def __init__(self, up, token, match, condition):
-        Command.__init__(self)
-        self.append(condition(up, token, match))
-
-    def match(self, glob, data):
-        for item in self:
-            try:
-                if item.match(glob, data):
-                    return item
-            except CommandError:
-                raise
-            except:
-                raise CommandError(None, item.token, glob, data)
-
-    def run(self, glob, data):
-        match = self.match(glob, data)
-        if match:
-            return match.run(glob, data)
-
 class CommandFor(Command):
+    """Iterador sobre una lista.
+    Itera sobre los elementos de una lista interpretando los comandos
+    del bloque. Agrupa los resultados y los inserta en un "set", de forma
+    que si varias iteraciones prdocuen exactamente el mismo resultado,
+    este se elimina.
+    """
 
     def run(self, glob, data):
         try:
-            expr = eval(self.expr, glob, data)
-            if not hasattr(expr, '__iter__'):
-                expr = (expr,)
-        except AttributeError, KeyError:
+            expr = as_iterator(eval(self.expr, glob, data))
+        except (AttributeError, KeyError):
             return
         forset = set()
         for item in expr:
@@ -171,7 +111,6 @@ class CommandFor(Command):
 
 class CommandSet(Command):
     """Comando "set"
-
     Ejecuta una asignacion.
     """
 
@@ -180,7 +119,7 @@ class CommandSet(Command):
         try:
             exec(assign, glob, data) 
             return Command.run(glob, data)
-        except AttributeError, KeyError:
+        except (AttributeError, KeyError):
             pass
 
 
@@ -191,24 +130,78 @@ class CommandDefine(Command):
     su nombre en cualquier otro punto del patron.
     """
 
-    def __init__(self, up, token, match):
-        Command.__init__(self, up, token)
-        if hasattr(self, 'params'):
+    def __init__(self, token, match):
+        Command.__init__(self, token, match)
+        if self.params:
             self.params = tuple(x.strip() for x in self.params.split(","))
         else:
             self.params = tuple()
         self.fake_type = DataType(None)
         for item in self.params:
             if item != self.fake_type.add_field(item):
-                raise SyntaxError(item)
+                raise ParseError(None, token,
+                                 _WRONG_PARAMS % {'params': str(self.params)}
 
     def invoke(self, glob, data, params):
         if len(params) != len(self.params):
             raise ValueError(params)
         vals = dict(zip(self.params, params))
         data = DataObject(self.fake_type, vals, data)
-        Command.run(self, glob, data)
+        return Command.run(self, glob, data)
 
     def run(self, glob, data):
-        data._blocks[self.blockname] = self.invoke
+        self.run = lambda self, glob, data: tuple()
+        data.setdefault("_blocks", {})[self.blockname] = self
+        return tuple()
 
+
+class CommandRecall(Command):
+    """Invocacion de bloque
+    Inserta un bloque previamente definido. Antes de insertarlo, ejecuta el
+    cuerpo del bloque recall, para poder utilizarlo para definir variables
+    y cosas asi.
+    """
+
+    def run(self, glob, data):
+        try:
+            block = data._blocks[self.blockname]
+        except (AttributeError, KeyError):
+            raise ValueError(_UNDEFINED_BLOCK % {'blockname': self.blockname})
+        params = eval(self.params, glob, data) if self.params else tuple()
+        return itertools.chain(Command.run(self, glob, data),
+                               block.invoke(glob, data, params))
+
+
+class CommandInclude(Command):
+    """Inserta un fichero "en-linea"
+    Sustituye el bloque por un fichero externo.
+    """
+
+    def run(self, glob, data):
+        yield ("INCLUDE", self, glob, data)
+
+
+class CommandSelect(Command):
+    """Seleccion de variable
+    Comprueba si <var> esta definida. si no lo esta,
+    pide al usuario que seleccione un valor de la lista <expr>
+    """
+
+    def run(self, glob, data):
+        if var in data:
+            return
+        expr = list(as_iter(eval(self.expr, glob, data)))
+        yield ("SELECT", self, glob, data)
+        if not var in data:
+            raise ValueError(_NOT_SELECTED % {'var': var})
+
+
+class CommandAppend(Command):
+    """comando "append"
+    Coloca un fichero en la lista de proceso, para ser procesado
+    despues del fichero actual.
+    """
+
+    def run(self, glob, data):
+        self.run = lambda self, glob, data: tuple()
+        yield("APPEND", self, glob, data)
