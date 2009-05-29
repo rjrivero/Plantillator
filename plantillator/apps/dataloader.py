@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
+
+from os.path import splitext
+
 import csvread.datasource
 from data.operations import Deferrer
 from data.datatype import TypeTree
@@ -46,7 +49,7 @@ class DataLoader(object):
                 self.hist.add(source.id)
 
     def _resolve(self, source):
-        ext = source.id.split(".").pop().strip().lower()
+        ext = splitext(source.id)[-1].lower()
         if not ext in _DATASOURCES:
             ext = _DEFAULT_EXT
         ds = _DATASOURCES[ext](self.tree, self.data)
@@ -54,3 +57,10 @@ class DataLoader(object):
             return list(source.resolve(item) for item in ds.read(source))
         except (SyntaxError, ValueError) as details:
             raise LoadError(source, ds.lineno, details.message)
+
+    def evaluate(self, ext):
+        return eval(expr, self.glob, self.data)
+
+    def known(self, ext):
+        return ext.lower() in _DATASOURCES
+

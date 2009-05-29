@@ -7,6 +7,7 @@ import itertools
 import functools
 from gettext import gettext as _
 
+from data.namedtuple import NamedTuple
 from data.datatype import DataType
 from data.dataobject import DataObject
 from engine.base import *
@@ -15,12 +16,19 @@ from engine.base import *
 # cadenas de error
 _UNDEFINED_BLOCK = _("El bloque %(blockname)s no esta definido")
 _NOT_SELECTED = _("No se ha seleccionado un(a) %(var)s")
-_WRONG_PARAMS = _("La cadena %(params)s no es valida"
+_WRONG_PARAMS = _("La cadena %(params)s no es valida")
 
 
 def as_iterator(item):
     """Se asegura de que un objeto es iterable"""
     return item if hasattr(item, '__iter__') else (item,)
+
+
+YieldBlock = NamedTuple("YieldBlock",
+    """Bloque que es lanzado por un comando para indicar que necesita
+    informacion o procesamiento adicional para traducir un patron
+    """,
+    opcode=0, command=1, glob=2, data=3)
 
 
 class Condition(Command):
@@ -100,9 +108,9 @@ class CommandFor(Command):
         forset = set()
         for item in expr:
             data[self.var], result = item, list()
-            for shot in Command.run(self, data):
+            for shot in Command.run(self, glob, data):
                 if type(shot) == str:
-                    result.append(item)
+                    result.append(shot)
                 else:
                     yield shot
             forset.add("".join(result))
@@ -140,7 +148,7 @@ class CommandDefine(Command):
         for item in self.params:
             if item != self.fake_type.add_field(item):
                 raise ParseError(None, token,
-                                 _WRONG_PARAMS % {'params': str(self.params)}
+                                 _WRONG_PARAMS % {'params': str(self.params)})
 
     def invoke(self, glob, data, params):
         if len(params) != len(self.params):
@@ -178,8 +186,13 @@ class CommandInclude(Command):
     """
 
     def run(self, glob, data):
-        yield ("INCLUDE", self, glob, data)
-
+        yield YieldBlock("INCLUDE", self, glob, data)
+        # despues del yield, espera que alguien le haya puesto en
+        # "included" el fichero que tiene que ejecutar.
+        for block in self.included.run(glob, data):
+            yield block
+        # En la proxima ejecucion no hace falta volver a pasar por este tramite.
+        self.run = self.included.run
 
 class CommandSelect(Command):
     """Seleccion de variable
@@ -188,11 +201,17 @@ class CommandSelect(Command):
     """
 
     def run(self, glob, data):
-        if var in data:
+        if self.var in data:
             return
-        expr = list(as_iter(eval(self.expr, glob, data)))
-        yield ("SELECT", self, glob, data)
-        if not var in data:
+        elif not self.expr:
+            raise ValueError, self.var
+        # Antes de lanzar el yield, almacena en self.pick la lista
+        # de objetos de la que se puede elegir la variable. De esta forma,
+        # si evaluar la expresion provoca algun error, sera capturado y tratado
+        # como un CommandError
+        self.pick = list(as_iterator(eval(self.expr, glob, data)))
+        yield YieldBlock("SELECT", self, glob, data)
+        if not self.var in data:
             raise ValueError(_NOT_SELECTED % {'var': var})
 
 
@@ -203,5 +222,6 @@ class CommandAppend(Command):
     """
 
     def run(self, glob, data):
-        self.run = lambda self, glob, data: tuple()
-        yield("APPEND", self, glob, data)
+        yield YieldBlock("APPEND", self, glob, data)
+        self.run = lambda glob, data: tuple()
+

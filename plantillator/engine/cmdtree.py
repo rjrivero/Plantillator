@@ -104,7 +104,11 @@ class CommandTree(list):
                 for block in item.run(glob, data):
                     yield block
             except CommandError as details:
-                details.source = self.source
+                # en el caso de un CommandInclude, se puede levantar un
+                # CommandError con una fuente distinta a la de este cmdtree.
+                # por eso, solo machaco el campo source si no esta definido.
+                details.source = details.source or self.source
                 raise details
             except:
                 raise CommandError(self.source, item.token, glob, data)
+

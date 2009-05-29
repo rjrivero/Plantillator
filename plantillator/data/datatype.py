@@ -28,7 +28,10 @@ class DataType(object):
     """
 
     def __init__(self, parent=None):
-        self.up, self.blocked, self.subtypes = parent, set(), dict()
+        # self.blocked antes era un set, pero lo he convertido en una
+        # list para preservar el orden de los campos, que puede ser significativo
+        # para algunas aplicaciones.
+        self.up, self.blocked, self.subtypes = parent, list(), dict()
 
     def as_callable(self, key, val):
         """Normaliza un criterio
@@ -62,8 +65,8 @@ class DataType(object):
         if field:
             if not _FIELD_RE.match(field):
                 raise SyntaxError(_INVALIDFIELD % { 'field': field })
-            if block:
-                self.blocked.add(field)
+            if block and field not in self.blocked:
+                self.blocked.append(field)
         return field
 
     def add_subtype(self, name):

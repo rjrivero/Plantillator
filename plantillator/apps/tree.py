@@ -2,13 +2,13 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
+from data.dataobject import NAMING_ATTRIBS
+
 import Tkinter as tk
 from idlelib.TreeWidget import TreeItem, TreeNode
 
 
 class Tagger(object):
-
-    _NAMING_ATTRIBS = ["descripcion", "nombre", "host"]
 
     def name(self, data, name=None, hint=None):
         """Intenta dar nombre a un item, en funcion de su tipo.
@@ -17,9 +17,7 @@ class Tagger(object):
         una lista)
         """
         if not name and isinstance(data, dict):
-            for attr in self._NAMING_ATTRIBS:
-                if attr in data:
-                    return data[attr]
+            return str(data)
         elif not hasattr(data, "__iter__"):
             return "%s = %s" % (name, str(data)) if name else str(data)
         return name or hint or "<>"
@@ -113,12 +111,12 @@ class TreeCanvas(tk.Canvas):
             self.yview_scroll(-2, 'units')
 
     def show(self, name, data, expanded=False):
-        node = TreeNode(self, None, self.tagger.item(data, name))
-        node.expand()
+        self.node = TreeNode(self, None, self.tagger.item(data, name))
+        self.node.expand()
         if expanded:
-            for item in node.children:
+            for item in self.node.children:
                 self._expand(item)
-        node.update()
+        self.node.update()
 
     def _expand(self, node):
         node.expand()

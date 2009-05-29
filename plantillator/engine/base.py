@@ -4,6 +4,8 @@
 
 from sys import exc_info
 import re
+import traceback
+from sys import exc_info
 from gettext import gettext as _
 
 
@@ -63,6 +65,17 @@ class CommandError(Exception):
         self.exc_info = exc_info()
 
 
+    def __str__(self):
+        error = [
+            "%s, LINE %s" % (
+                self.source.id if self.source else "<unknown>",
+                self.token.lineno),
+            "Error ejecutando %s" % str(self.token)
+        ]
+        error.extend(traceback.format_exception(*self.exc_info))
+        return "\n".join(error)
+
+
 class Command(list):
 
     """Comando de la plantilla"""
@@ -96,15 +109,24 @@ class Literal(list):
 
     def run(self, glob, data):
         try:
-            for item in self:
-                yield PLACEHOLD.sub(data.replace, item.token.body)
+            # intento hacer el replace y el yield de una sola vez,
+            # con todas las lineas que haya en el literal
+            yield PLACEHOLD.sub(data.replace,
+                                "".join(item.body for item in self))
         except CommandError:
             raise
         except:
-            raise CommandError(None, item.token, glob, data)
+            # hay una excepcion. Para afinar, vamos linea por linea
+            # hasta encontrar la que falla.
+            for item in self:
+                try:
+                    yield PLACEHOLD.sub(data.replace, item.body)
+                except:
+                    raise CommandError(None, item, glob, data)
 
     def __str__(self):
         return _LITERAL_TEXT % {'linenum': len(self)}
 
     def __repr__(self):
         return str(self)
+

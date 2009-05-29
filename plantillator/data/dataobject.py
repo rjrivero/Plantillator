@@ -2,8 +2,16 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
+import itertools
+
 from data.datatype import DataType
 from data.dataset import DataSet
+
+
+# Todos los DataObjects que alguna vez tengan que ser identificados por un nombre
+# (dentro de un select, por ejemplo, o en una lista mostrada por una GUI), deben
+# tener al menos uno de estos atributos.
+NAMING_ATTRIBS = ("nombre", "descripcion", "detalles")
 
 
 class DataObject(dict):
@@ -72,3 +80,12 @@ class DataObject(dict):
     def replace(self, match):
         """evalua match.group("expr") usandose a si mismo como locals"""
         return str(eval(match.group('expr'), self))
+
+    def __str__(self):
+        """Identifica al objeto por su nombre o sus primeros atributos"""
+        tag = itertools.chain(
+                    (self.get(x, None) for x in NAMING_ATTRIBS),
+                    (self.get(x, None) for x in self._type.blocked))
+        tag = (str(item) for item in tag if item is not None)
+        return ", ".join(itertools.islice(tag, 0, 3))
+ 

@@ -17,46 +17,27 @@ try:
 except ImportError:
     import os.path
     import sys
-    script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-    sys.path.append(os.path.join(script_path, ".."))
+    sys.path.append(os.path.dirname(os.path.abspath(sys.argv[0])))
     from data.namedtuple import NamedTuple
 
 from data.pathfinder import PathFinder, FileSource
-from engine.cmdtree import CommandTree
-from tmpl.tmpltokenizer import TmplTokenizer
-from apps.tree import TreeCanvas, Tagger
+from apps.dataloader import DataLoader
+from apps.tree import TreeCanvas
 
 
-class TmplTagger(Tagger):
-
-    def name(self, item, name, hint):
-        return name or str(item) or " "
-
-    def icon(self, item):
-        if item.expandable:
-            return "python" if hasattr(item.data, "token") else "folder"
-        return "plusnode"
-
-    def selicon(self, item):
-        if item.expandable:
-            return "python" if hasattr(item.data, "token") else "openfolder"
-        return "minusnode"
-
-    def item(self, data, name=None, hint=None):
-        item = Tagger.item(self, data, name, hint)
-        item.editable = not item.expandable
-        return item
+_ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")
 
 
-class TmplNav(tk.Tk):
+class DataNav(tk.Tk):
 
-    def __init__(self, templates, geometry="800x600"):
+    def __init__(self, glob, data, geometry="800x600"):
         tk.Tk.__init__(self)
-        self.title("TemplateNav")
+        self.title("DataNav")
+        self.glob = glob
+        self.data = data
         self.hist = list()
         self.cursor = 0
         self.hlen = 20
-        self.templates = templates
         # split the window in two frames
         self.frames = NamedTuple("Frames", "", top=0, bottom=1)
         self.frames.top = tk.Frame(self, borderwidth=5)
@@ -74,7 +55,7 @@ class TmplNav(tk.Tk):
                                 command=self.clicked, padx=5)
         self.button.pack(side=tk.RIGHT)
         # lower frame: the data canvas
-        self.canvas = TreeCanvas(self.frames.bottom, TmplTagger())
+        self.canvas = TreeCanvas(self.frames.bottom)
         # set the geometry
         entry.focus()
         self.geometry(geometry)
@@ -86,17 +67,26 @@ class TmplNav(tk.Tk):
 
     def clicked(self, *skip):
         """Presenta los datos seleccionados"""
-        fname = self.entry.get()
-        if fname:
+        name, data = self.entry.get(), self.data
+        if not name:
+            name = "root"
+            self.cursor = 0
+        else:
             try:
-                source = FileSource(finder(fname), finder)
-            except:
-                pass
-            else:
-                if not source.id in self.templates:
-                    self.templates[source.id] = CommandTree(
-                        source, TmplTokenizer(source).tree())
-        self.canvas.show("root", self.templates)
+                match = _ASSIGNMENT.match(name)
+                if match:
+                    exec(name, self.glob, self.data)
+                    name = match.group("var")
+                data = eval(name, self.glob, self.data)
+                if name not in self.hist:
+                    self.cursor = 0
+                    self.hist.append(name)
+                    if len(self.hist) > self.hlen:
+                        self.hist.pop(0)
+            except Exception as details:
+                print "Exception: %s" % str(details)
+                return
+        self.canvas.show(name, data)
 
     def keyup(self, *skip):
         """Selecciona un elemento anterior en la historia"""
@@ -125,7 +115,7 @@ path = ['.']
 
 parser = OptionParser(usage=usage, version="%%prog %s"%VERSION)
 parser.add_option("-p", "--path", dest="path", metavar="PATH",
-        help="""Ruta donde buscar las plantillas.
+        help="""Ruta donde buscar los ficheros de datos.
 La ruta se especifica al estilo del sistema operativo, por ej.:
 C:\\ruta1;C:\\ruta2 (en windows)
 /ruta1:/ruta2 (en linux)""")
@@ -159,13 +149,14 @@ for name in args:
     else:
         inputfiles.append(name)
 
+
 finder = PathFinder(path)
-templates = dict()
+loader = DataLoader()
 try:
     for fname in inputfiles:
         source = FileSource(finder(fname), finder)
-        templates[source.id] = CommandTree(source, TmplTokenizer(source).tree())
-    TmplNav(templates, geometry).mainloop()
+        loader.load(source)
+    DataNav(loader.glob, loader.data, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))
