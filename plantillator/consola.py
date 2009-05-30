@@ -10,12 +10,11 @@ import re
 import glob # pa windows, que no expande nombres
 import code
 from operator import itemgetter
-
 from optparse import OptionParser
 from traceback import print_exc, format_exception_only
-from mycommands import CommandEngine
-from tmplparser import CommandError
-from plantillator import Plantillator
+
+from engine.base import ParseError, CommandError
+from apps.plantillator import Plantillator
 
 VERSION           = "0.2"
 OPTIONS_ERRNO     = -1
@@ -77,24 +76,11 @@ for name in args:
         inputfiles.append(name)
 
 # manejadores para los eventos definidos
-def select_handler(command, var, art, expr, data):
+def select_handler(opcode, command, glob, data):
     """Gestiona el comando 'select'"""
-    itemlist = []
-    for index, item in enumerate(expr):
-        # de los diccionarios, solo sacamos la clave primaria
-        rep = item
-        try:
-            key = item._type.pkey
-            rep = item[key]
-            details = set(("nombre", "descripcion", "detalles"))
-            details = details.difference(key)
-            for detail in details:
-                det = item.get(detail, None)
-                if det:
-                    rep = "%s, %s" % (rep, det)
-        except AttributeError:
-            pass
-        itemlist.append((rep, item))
+    var = command.var
+    art = command.art
+    itemlist = list((str(item), item) for item in command.pick)
     if len(itemlist) == 1:
         item = itemlist[0]
         print "** SE SELECCIONA %s = %s" % (var, item[0])
@@ -113,18 +99,18 @@ def select_handler(command, var, art, expr, data):
                 chosen = userdata
         data[var] = itemlist[chosen-1][1]
 
-
 def handle(item):
     """Gestiona los comandos lanzados por el proceso de rendering"""
     handlers = {
-            "select": select_handler,
+            "SELECT": select_handler,
     }
-    handler = handlers.get(item[0], None)
+    handler = handlers.get(item.opcode, None)
     if handler:
         handler(*item)
+    else:
+        print "NO SE RECONOCE COMANDO %s" % item.opcode
 
 # y cargo a PLANTILLATOR!
-engine = CommandEngine()
 plantillator = Plantillator()
 plantillator.path = path
 plantillator.outpath = options.outpath
@@ -132,19 +118,18 @@ plantillator.collapse = options.collapse
 plantillator.definitions = options.definitions or []
 plantillator.inputfiles = inputfiles
 try:
-    for item in plantillator.render(engine):
+    for item in plantillator.render():
         handle(item)
 
-except CommandError, detail:
+except (CommandError, ParseError) as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:
         print_exc(file=sys.stderr)
-        detail.data['block'] = detail.block
-        detail.data['data'] = detail.data
+        detail.data['error'] = detail
         code.interact("Consola de depuracion", local=detail.data)
     sys.exit(TRANSLATION_ERRNO)
-except Exception, detail:
+except Exception as detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))
     if options.debug:
