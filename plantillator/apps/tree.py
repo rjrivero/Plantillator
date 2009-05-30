@@ -33,6 +33,15 @@ class Tagger(object):
     def item(self, data, name=None, hint=None):
         return Item(self.name(data, name, hint), data, self)
 
+    def filter_dict(self, data):
+        """Itera sobre los elementos del dict, devolviendo clave y valor"""
+        return ((k, v) for k, v in data.iteritems()
+                       if ((not k.startswith("_")) and k != "up"))
+
+    def filter_list(self, data):
+        """Itera sobre los elementos de la lista/set, devolviendo indice y valor"""
+        return enumerate(sorted(data))
+
 
 class Item(TreeItem):
 
@@ -47,13 +56,7 @@ class Item(TreeItem):
         if isinstance(data, dict):
             self.GetSubList = self._dict
         elif hasattr(data, '__iter__'):
-            if hasattr(data, '__getitem__'):
-                # no ordenamos los elementos de una lista, porque si se
-                # elige una lista el orden es importante
-                # (por ejemplo: la secuencia de lineas de una plantilla)
-                self.GetSubList = self._list
-            else:
-                self.GetSubList = self._set
+            self.GetSubList = self._list
         else:
             self.GetSubList = lambda self: None
 
@@ -79,15 +82,11 @@ class Item(TreeItem):
 
     def _list(self):
         return list(self.tagger.item(x, hint="[%d]"%index)
-                      for index, x in enumerate(self.data))
-
-    def _set(self):
-        return sorted(self._list())
+                      for index, x in self.tagger.filter_list(self.data))
 
     def _dict(self):
         return sorted(self.tagger.item(x, name)
-                      for name, x in self.data.iteritems()
-                      if not name.startswith('_'))
+                      for name, x in self.tagger.filter_dict(self.data))
 
 
 class TreeCanvas(tk.Canvas):

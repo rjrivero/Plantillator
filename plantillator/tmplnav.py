@@ -56,6 +56,10 @@ class TmplTagger(Tagger):
         item.editable = not item.expandable
         return item
 
+    def filter_list(self, data):
+        """Evita que se ordenen las listas, porque fastidiaria los Literal"""
+        return enumerate(data)
+
 
 class TmplNav(tk.Tk):
 
@@ -108,8 +112,11 @@ class TmplNav(tk.Tk):
             self.canvas.node.children[0].expand()
         elif source:
             for node in self.canvas.node.children:
-                if node.item.data.source == source:
+                if node.item.data.source.id == source.id:
                     node.expand()
+        self.hist.append(self.entry.get())
+        if len(self.hist) > self.hlen:
+            self.hist.pop(0)
 
     def keyup(self, *skip):
         """Selecciona un elemento anterior en la historia"""
