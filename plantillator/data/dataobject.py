@@ -32,20 +32,12 @@ class DataObject(dict):
 
     @property
     def up(self):
-        """up siempre esta definido, evito el fallback"""
+        """Ancestro de este objeto en la jerarquia de objetos"""
+        # up siempre esta definido, evito el fallback
         return dict.__getitem__(self, "up")
 
-    def __hash__(self):
-        return hash(id(self))
-
-    def __eq__(self, other):
-        return self is other
-
-    def __cmp__(self, other):
-        return cmp(id(self), id(other))
-
-    def __iter__(self):
-        yield self
+    # Funciones que proporcionan la dualidad objeto (accesible por atributos) /
+    # / diccionario (accesible por indice). Integran tambien el fallback.
 
     def __getitem__(self, item):
         try:
@@ -68,10 +60,6 @@ class DataObject(dict):
         except KeyError:
             raise AttributeError, key
 
-    def _matches(self, kw):
-        """Comprueba si el atributo indicado cumple el criterio."""
-        return all(crit(self.get(key)) for key, crit in kw.iteritems())
-
     def get(self, item, defval=None):
         """Busca el atributo, devuelve "defval" si no lo encuentra"""
         try:
@@ -79,14 +67,9 @@ class DataObject(dict):
         except KeyError:
             return defval
 
-    def __call__(self, *arg, **kw):
-        """Busca los elementos de la lista que cumplan los criterios dados"""
-        crit = self._type.adapt(arg, kw)
-        return self if self._matches(crit) else DataSet(self._type)
-
-    def replace(self, match):
-        """evalua match.group("expr") usandose a si mismo como locals"""
-        return str(eval(match.group('expr'), self))
+    # Hay varias utilidades donde se intenta dar un nombre a un DataObject
+    # en funcion de algunos de sus valores, asi que he decidido que es mejor
+    # que haya un solo sitio donde se intente encontrar ese nombre.
 
     def __str__(self):
         """Identifica al objeto por su nombre o sus primeros atributos"""
@@ -96,3 +79,40 @@ class DataObject(dict):
         tag = (str(item) for item in tag if item is not None)
         return ", ".join(itertools.islice(tag, 0, 3))
  
+    # Modifico algunas funciones de bajo nivel para permitir que estos objetos
+    # puedan meterse en un set, algo que con un diccionario normal no puede hacerse:
+    #
+    # - Los objetos se comparan por identidad, no por valor
+    # - El hash es fijo
+
+    def __hash__(self):
+        return hash(id(self))
+
+    def __eq__(self, other):
+        return self is other
+
+    def __cmp__(self, other):
+        return cmp(id(self), id(other))
+
+    # Ahora modifico otro conjunto de propiedades del objeto, para hacerlo
+    # comportarse lo mas parecido a un ScopeSet de longitud 1:
+    #
+    # - Al iterar sobre ellos se devuelven a si mismos
+    # - Su longitud es siempre 1.
+    # - Soportan filtrado con la funcion __call__
+
+    def _matches(self, kw):
+        """Comprueba si el atributo indicado cumple el criterio."""
+        return all(crit(self.get(key)) for key, crit in kw.iteritems())
+
+    def __len__(self):
+        return 1
+
+    def __iter__(self):
+        yield self
+
+    def __call__(self, *arg, **kw):
+        """Busca los elementos de la lista que cumplan los criterios dados"""
+        crit = self._type.adapt(arg, kw)
+        return self if self._matches(crit) else DataSet(self._type)
+

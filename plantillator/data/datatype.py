@@ -6,7 +6,7 @@ import itertools
 import re
 from gettext import gettext as _
 
-from data.operations import DeferredAny, Deferrer
+from data.operations import Deferrer
 
 
 _FIELD_RE = re.compile(r"^[a-zA-Z][\w\d]*$")
@@ -43,8 +43,6 @@ class DataType(object):
         """
         if not hasattr(val, '__call__'):
             val = (Deferrer() == val)
-        if key in self.subtypes:
-            val = DeferredAny(val)
         return (key, val)
 
     def adapt(self, arg, kw):

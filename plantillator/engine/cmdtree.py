@@ -74,7 +74,8 @@ class CommandTree(list):
     _MACROS = [
         ('cualquiera de', 'cualquiera +'),
         ('cualquiera entre', 'cualquiera +'),
-        ('cualquiera menos', 'cualquiera -')
+        ('cualquiera menos', 'cualquiera -'),
+        ('cualquiera como', 'cualquiera *')
     ]
 
     def __init__(self, source, tokens):

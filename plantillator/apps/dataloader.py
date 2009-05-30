@@ -5,7 +5,7 @@
 from os.path import splitext
 
 import csvread.datasource
-from data.operations import Deferrer
+from data.operations import Deferrer, Filter
 from data.datatype import TypeTree
 from data.dataobject import DataObject
 from data.dataset import *
@@ -37,7 +37,12 @@ class DataLoader(object):
             "LISTA": asList,
             "RANGO": asRange,
             "GRUPO": asSet,
-            "cualquiera": Deferrer()
+            "cualquiera": Deferrer(),
+            "ninguno": None,
+            "ninguna": None,
+            "X": Deferrer(),
+            "x": Deferrer(),
+            "donde": Filter
         }
 
     def load(self, source):

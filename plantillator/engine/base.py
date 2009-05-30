@@ -109,11 +109,12 @@ class Literal(list):
     """Texto literal, con sustituciones"""
 
     def run(self, glob, data):
+        def replacefn(match):
+            return str(eval(match.group('expr'), glob, data))
         try:
             # intento hacer el replace y el yield de una sola vez,
             # con todas las lineas que haya en el literal
-            yield PLACEHOLD.sub(data.replace,
-                                "".join(item.body for item in self))
+            yield PLACEHOLD.sub(replacefn, "".join(item.body for item in self))
         except CommandError:
             raise
         except:
@@ -121,7 +122,7 @@ class Literal(list):
             # hasta encontrar la que falla.
             for item in self:
                 try:
-                    yield PLACEHOLD.sub(data.replace, item.body)
+                    yield PLACEHOLD.sub(replacefn, item.body)
                 except:
                     raise CommandError(None, item, glob, data)
 
