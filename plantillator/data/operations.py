@@ -6,6 +6,11 @@ import re
 import itertools
 
 
+def asIter(item):
+    """Se asegura de que un objeto es iterable"""
+    return item if hasattr(item, '__iter__') else (item,)
+
+
 class DeferredOp(object):
 
     """Operador pospuesto
@@ -81,11 +86,11 @@ class Deferrer(object):
 
     def __add__(self, arg):
         """Comprueba la pertenecia a una lista"""
-        return DeferredOp(lambda x, y: x in y, arg)
+        return DeferredOp(lambda x, y: x in asIter(y), arg)
 
     def __sub__(self, arg):
         """Comprueba la no pertenencia a una lista"""
-        return DeferredOp(lambda x, y: x not in y, arg)
+        return DeferredOp(lambda x, y: x not in asIter(y), arg)
 
 
 class Filter(object):

@@ -7,6 +7,7 @@ import itertools
 import functools
 from gettext import gettext as _
 
+from data.operations import asIter
 from data.namedtuple import NamedTuple
 from data.datatype import DataType
 from data.dataobject import DataObject
@@ -17,11 +18,6 @@ from engine.base import *
 _UNDEFINED_BLOCK = _("El bloque %(blockname)s no esta definido")
 _NOT_SELECTED = _("No se ha seleccionado un(a) %(var)s")
 _WRONG_PARAMS = _("La cadena %(params)s no es valida")
-
-
-def as_iterator(item):
-    """Se asegura de que un objeto es iterable"""
-    return item if hasattr(item, '__iter__') else (item,)
 
 
 YieldBlock = NamedTuple("YieldBlock",
@@ -102,7 +98,7 @@ class CommandFor(Command):
 
     def run(self, glob, data):
         try:
-            expr = as_iterator(eval(self.expr, glob, data))
+            expr = asIter(eval(self.expr, glob, data))
         except (AttributeError, KeyError):
             return
         forset = set()
@@ -209,7 +205,7 @@ class CommandSelect(Command):
         # de objetos de la que se puede elegir la variable. De esta forma,
         # si evaluar la expresion provoca algun error, sera capturado y tratado
         # como un CommandError
-        self.pick = list(as_iterator(eval(self.expr, glob, data)))
+        self.pick = list(asIter(eval(self.expr, glob, data)))
         yield YieldBlock("SELECT", self, glob, data)
         if data.get(self.var, None) is None:
             raise ValueError(_NOT_SELECTED % {'var': self.var})

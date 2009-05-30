@@ -5,7 +5,7 @@ import itertools
 import re
 from os import linesep
 
-from data.operations import Deferrer
+from data.operations import Deferrer, asIter
 
 
 def not_none(filter_me):
@@ -87,10 +87,6 @@ def asRange(varrange):
         for i in range(start, stop+1):
             rango.append(normalize("%s%d%s" % (pref, i, suff)))
     return BaseList(rango)
-
-
-def asIter(item):
-    return item if hasattr(item, "__iter__") else (item,)
 
 
 class DataSet(set):

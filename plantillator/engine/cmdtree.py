@@ -60,7 +60,7 @@ class CommandTree(list):
              CommandSelect),
         # Comando DEFINE
         # p.ej. "definir <blockname>"
-        (r'^(define|definir|bloque|funcion)\s+(?P<blockname>%(var)s)(\s+\((?P<params>%(var)s(\s*,\s*%(var)s)*)?\))?\s*$' % VARPATTERN,
+        (r'^(define|definir|bloque|funcion)\s+(?P<blockname>%(var)s)\s*(\((?P<params>%(var)s(\s*,\s*%(var)s)*)?\))?\s*$' % VARPATTERN,
              CommandDefine),
         # Comando RECALL
         (r'^(?P<blockname>%(var)s)(?P<params>\s*\(\s*(%(var)s(\*,\*%(var)s)*\s*)?\))?\s*$' % VARPATTERN,
