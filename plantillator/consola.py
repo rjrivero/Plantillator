@@ -107,6 +107,8 @@ def handle(item):
     handler = handlers.get(item.opcode, None)
     if handler:
         handler(*item)
+    else:
+        print "NO SE RECONOCE COMANDO %s" % item.opcode
 
 # y cargo a PLANTILLATOR!
 plantillator = Plantillator()

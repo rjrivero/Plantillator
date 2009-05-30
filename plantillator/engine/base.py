@@ -2,9 +2,9 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
 
-from sys import exc_info
 import re
 import traceback
+import os.path
 from sys import exc_info
 from gettext import gettext as _
 
@@ -68,11 +68,12 @@ class CommandError(Exception):
     def __str__(self):
         error = [
             "%s, LINE %s" % (
-                self.source.id if self.source else "<unknown>",
+                os.path.basename(self.source.id) if self.source else "<unknown>",
                 self.token.lineno),
-            "Error ejecutando %s" % str(self.token)
+            "Error ejecutando %s" % str(self.token),
+            "%s: %s" % (self.exc_info[0].__name__, str(self.exc_info[1]))
         ]
-        error.extend(traceback.format_exception(*self.exc_info))
+        # error.extend(traceback.format_exception(*self.exc_info))
         return "\n".join(error)
 
 

@@ -2,6 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
+import itertools
 import re
 from gettext import gettext as _
 
@@ -30,7 +31,8 @@ class DataType(object):
     def __init__(self, parent=None):
         # self.blocked antes era un set, pero lo he convertido en una
         # list para preservar el orden de los campos, que puede ser significativo
-        # para algunas aplicaciones.
+        # para algunas aplicaciones. Por ejemplo, esto permite que los filtros
+        # acepten argumentos posicionales (*arg) y no solo claves (**kw)
         self.up, self.blocked, self.subtypes = parent, list(), dict()
 
     def as_callable(self, key, val):
@@ -45,7 +47,7 @@ class DataType(object):
             val = DeferredAny(val)
         return (key, val)
 
-    def adapt(self, kw):
+    def adapt(self, arg, kw):
         """Normaliza criterios de busqueda
 
         Un criterio de busqueda es un conjunto de pares "atributo" =>
@@ -57,7 +59,8 @@ class DataType(object):
         argumentos que no son UnaryOperators, sino valores simples, listas,
         etc. Este metodo se encarga de adaptar esos parametros.
         """
-        return dict(self.as_callable(k, v) for k, v in kw.iteritems())
+        params = itertools.chain(zip(self.blocked, arg), kw.iteritems())
+        return dict(self.as_callable(k, v) for k, v in params)
 
     def add_field(self, field, block=True):
         """Incluye un campo, opcionalmente bloqueando la herencia"""

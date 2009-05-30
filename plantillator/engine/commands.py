@@ -126,7 +126,7 @@ class CommandSet(Command):
         assign = "%s = %s" % (self.var, self.expr)
         try:
             exec(assign, glob, data) 
-            return Command.run(glob, data)
+            return Command.run(self, glob, data)
         except (AttributeError, KeyError):
             pass
 
@@ -158,7 +158,7 @@ class CommandDefine(Command):
         return Command.run(self, glob, data)
 
     def run(self, glob, data):
-        self.run = lambda self, glob, data: tuple()
+        self.run = lambda glob, data: tuple()
         data.setdefault("_blocks", {})[self.blockname] = self
         return tuple()
 
@@ -201,9 +201,9 @@ class CommandSelect(Command):
     """
 
     def run(self, glob, data):
-        if self.var in data:
+        if data.get(self.var, None) is not None:
             return
-        elif not self.expr:
+        if not self.expr:
             raise ValueError, self.var
         # Antes de lanzar el yield, almacena en self.pick la lista
         # de objetos de la que se puede elegir la variable. De esta forma,
@@ -211,8 +211,8 @@ class CommandSelect(Command):
         # como un CommandError
         self.pick = list(as_iterator(eval(self.expr, glob, data)))
         yield YieldBlock("SELECT", self, glob, data)
-        if not self.var in data:
-            raise ValueError(_NOT_SELECTED % {'var': var})
+        if data.get(self.var, None) is None:
+            raise ValueError(_NOT_SELECTED % {'var': self.var})
 
 
 class CommandAppend(Command):

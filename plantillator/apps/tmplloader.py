@@ -38,6 +38,7 @@ class TmplLoader(dict):
             raise ParseError(source, Token(0, None, None), _UNKNOWN_ERROR)
 
     def run(self, tree, glob, data):
+        self.source = tree.source
         for block in tree.run(glob, data):
             if type(block) == str:
                 yield block
@@ -55,11 +56,11 @@ class TmplLoader(dict):
 
     def _include(self, block):
         source = self.source.resolve(block.command.path)
-        self.block.included = self.load(source)
+        block.command.included = self.load(source)
 
     def templates(self, glob, data):
         self.appended = dict()
-        for sourceid, cmdtree in self.iteritems():
+        for sourceid, cmdtree in self.copy().iteritems():
             yield (sourceid, cmdtree, glob, data)
         while self.appended:
             key, data = self.appended.popitem()

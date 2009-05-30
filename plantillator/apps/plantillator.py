@@ -108,7 +108,7 @@ class Plantillator(object):
         que no sea texto), lo lanza.
         """
         outcontext = self._outcontext(sourceid)
-        items = cmdtree.run(glob, data)
+        items = self.tmplloader.run(cmdtree, glob, data)
         try:
             while True:
                 with outcontext() as f:

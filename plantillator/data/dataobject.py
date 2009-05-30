@@ -26,7 +26,14 @@ class DataObject(dict):
     def __init__(self, mytype, data=None, fallback=None):
         """Inicializa el DataObject con los datos y fallback especificados"""
         dict.__init__(self, data or dict())
-        self._type, self._up = mytype, fallback
+        self._type = mytype
+        # hago "up" accesible a lo que se ejecute dentro de mi entorno
+        self['up'] = fallback
+
+    @property
+    def up(self):
+        """up siempre esta definido, evito el fallback"""
+        return dict.__getitem__(self, "up")
 
     def __hash__(self):
         return hash(id(self))
@@ -44,8 +51,8 @@ class DataObject(dict):
         try:
             return dict.__getitem__(self, item)
         except KeyError:
-            if self._up and item not in self._type.blocked:
-                return self._up[item]
+            if self.up and item not in self._type.blocked:
+                return self.up[item]
             return self.setdefault(item, DataSet(self._type.subtypes[item]))
 
     def __getattr__(self, attrib):
@@ -72,9 +79,9 @@ class DataObject(dict):
         except KeyError:
             return defval
 
-    def __call__(self, **kw):
+    def __call__(self, *arg, **kw):
         """Busca los elementos de la lista que cumplan los criterios dados"""
-        crit = self._type.adapt(kw)
+        crit = self._type.adapt(arg, kw)
         return self if self._matches(crit) else DataSet(self._type)
 
     def replace(self, match):

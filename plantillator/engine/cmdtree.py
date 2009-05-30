@@ -38,7 +38,7 @@ class CommandTree(list):
              ConditionNotExist),
         # comando IF EXIST
         # p.e. "si hay key en expr"
-        (r'^si (hay|existe) (?P<var>%(var)s) en\s+%(en)s\s+(?P<expr>.*)$' % VARPATTERN,
+        (r'^si (hay|existe) (?P<var>%(var)s)\s+%(en)s\s+(?P<expr>.*)$' % VARPATTERN,
              ConditionExist),
         (r'^si (?P<var>%(var)s) esta\s+%(en)s\s+(?P<expr>.*)$' % VARPATTERN,
              ConditionExist),
@@ -71,6 +71,12 @@ class CommandTree(list):
         (r'^(?P<var>[^=]+)\s*=\s*(?P<expr>.+)$' % VARPATTERN, CommandSet),
     )]
 
+    _MACROS = [
+        ('cualquiera de', 'cualquiera +'),
+        ('cualquiera entre', 'cualquiera +'),
+        ('cualquiera menos', 'cualquiera -')
+    ]
+
     def __init__(self, source, tokens):
         list.__init__(self)
         self.source = source
@@ -80,7 +86,10 @@ class CommandTree(list):
 
     def _check(self, token):
         for expr, cls in self._COMMANDS:
-            match = expr.match(token.head)
+            line = token.head
+            for pre, post in self._MACROS:
+                line = line.replace(pre, post)
+            match = expr.match(line)
             if match:
                 return cls(token, match)
         raise ParseError(self.source, token, _UNKNOWN_CMD % {

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
-from os import linesep
-from itertools import chain
+import itertools
 import re
+from os import linesep
 
 from data.operations import Deferrer
 
@@ -19,7 +19,7 @@ def BaseMaker(basetype):
 
         def __add__(self, other):
             """Concatena dos secuencias"""
-            return BaseSequence(itertools.chain(self, other))
+            return BaseSequence(itertools.chain(self, asIter(other)))
 
         def __call__(self, arg):
             """Devuelve el subconjunto de elementos que cumple el criterio"""
@@ -89,6 +89,10 @@ def asRange(varrange):
     return BaseList(rango)
 
 
+def asIter(item):
+    return item if hasattr(item, "__iter__") else (item,)
+
+
 class DataSet(set):
 
     """Lista de DataObjects con un DataType comun"""
@@ -98,9 +102,9 @@ class DataSet(set):
         set.__init__(self, data or tuple())
         self._type = mytype
 
-    def __call__(self, **kw):
+    def __call__(self, *arg, **kw):
         """Busca los elementos de la lista que cumplan los criterios dados"""
-        crit = self._type.adapt(kw)
+        crit = self._type.adapt(arg, kw)
         dset = DataSet(self._type, (x for x in self if x._matches(crit)))
         return dset if len(dset) != 1 else dset.pop()
 
@@ -108,7 +112,7 @@ class DataSet(set):
         """Concatena dos DataSets"""
         if self._type != other._type:
             raise TypeError, other._type
-        return DataSet(self._type, chain(self, other))
+        return DataSet(self._type, itertools.chain(self, other))
 
     def __getitem__(self, item):
         """Selecciona un item en la lista
@@ -122,13 +126,13 @@ class DataSet(set):
         items = not_none(x.get(item) for x in self)
         stype = self._type.subtypes.get(item, None)
         if stype is not None:
-            return DataSet(stype, chain(*tuple(items)))
+            return DataSet(stype, itertools.chain(*tuple(items)))
         return BaseSet(items)
 
     def __getattr__(self, attrib):
         return self[attrib]
 
     @property
-    def _up(self):
-        return DataSet(self._type.up, not_none(x._up for x in self))
+    def up(self):
+        return DataSet(self._type.up, not_none(x.up for x in self))
 
