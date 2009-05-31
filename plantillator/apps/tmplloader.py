@@ -15,7 +15,7 @@ _TOKENSOURCES = {
     'txt': tmpl.tmpltokenizer.TmplTokenizer
 }
 
-_DEFAULT_EXT = 'txt'
+_DEFAULT_EXT = 'txt'
 class TmplLoader(dict):
 
     def load(self, source):

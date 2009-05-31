@@ -188,7 +188,7 @@ class CommandInclude(Command):
         for block in self.included.run(glob, data):
             yield block
         # En la proxima ejecucion no hace falta volver a pasar por este tramite.
-        self.run = self.included.run
+        self.run = self.included.run
 
 class CommandSelect(Command):
     """Seleccion de variable

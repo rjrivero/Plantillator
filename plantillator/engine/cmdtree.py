@@ -63,7 +63,7 @@ class CommandTree(list):
         (r'^(define|definir|bloque|funcion)\s+(?P<blockname>%(var)s)\s*(\((?P<params>%(var)s(\s*,\s*%(var)s)*)?\))?\s*$' % VARPATTERN,
              CommandDefine),
         # Comando RECALL
-        (r'^(?P<blockname>%(var)s)(?P<params>\s*\(\s*(%(var)s(\*,\*%(var)s)*\s*)?\))?\s*$' % VARPATTERN,
+        (r'^(?P<blockname>%(var)s)(?P<params>\s*\(\s*(%(var)s(\s*,\s*%(var)s)*\s*)?\))?\s*$' % VARPATTERN,
              CommandRecall),
         # comando SET
         # ESTE COMANDO DEBE SER EL ULTIMO!
@@ -86,10 +86,10 @@ class CommandTree(list):
             last = self.build(self, token, last)
 
     def _check(self, token):
+        line = token.head
+        for pre, post in self._MACROS:
+            line = line.replace(pre, post)
         for expr, cls in self._COMMANDS:
-            line = token.head
-            for pre, post in self._MACROS:
-                line = line.replace(pre, post)
             match = expr.match(line)
             if match:
                 return cls(token, match)
