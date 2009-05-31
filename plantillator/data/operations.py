@@ -109,24 +109,27 @@ class Filter(object):
         self.arg = arg
         self.kw = kw
 
-    def __call__(self, deferred):
+    def filt(self, deferred):
         return deferred(*self.arg, **self.kw)
 
+    def __call__(self, deferred):
+        return len(self.filt(deferred)) == len(deferred)
+
     def __eq__(self, other):
-        return DeferredFilter(operator.eq, other, self)
+        return DeferredFilter(operator.eq, other, self.filt)
 
     def __ne__(self, other):
-        return DeferredFilter(operator.ne, other, self)
+        return DeferredFilter(operator.ne, other, self.filt)
 
     def __lt__(self, other):
-        return DeferredFilter(operator.lt, other, self)
+        return DeferredFilter(operator.lt, other, self.filt)
 
     def __le__(self, other):
-        return DeferredFilter(operator.le, other, self)
+        return DeferredFilter(operator.le, other, self.filt)
 
     def __gt__(self, other):
-        return DeferredFilter(operator.gt, other, self)
+        return DeferredFilter(operator.gt, other, self.filt)
 
     def __ge__(self, other):
-        return DeferredFilter(operator.ge, other, self)
+        return DeferredFilter(operator.ge, other, self.filt)
 

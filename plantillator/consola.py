@@ -20,8 +20,9 @@ VERSION           = "0.2"
 OPTIONS_ERRNO     = -1
 FILE_ERRNO        = -2
 DATA_ERRNO        = -3
-TRANSLATION_ERRNO = -4
-UNKNOWN_ERRNO     = -5
+PARSE_ERRNO       = -5
+TRANSLATION_ERRNO = -6
+UNKNOWN_ERRNO     = -7
 usage = """uso: %prog [opciones] fichero [fichero...]
 Aplica los patrones (.txt) a los ficheros de datos (.csv)"""
 
@@ -121,7 +122,7 @@ try:
     for item in plantillator.render():
         handle(item)
 
-except (CommandError, ParseError) as detail:
+except CommandError as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:
@@ -129,6 +130,12 @@ except (CommandError, ParseError) as detail:
         detail.data['error'] = detail
         code.interact("Consola de depuracion", local=detail.data)
     sys.exit(TRANSLATION_ERRNO)
+except ParseError as detail:
+    for msg in format_exception_only(sys.exc_type, sys.exc_value):
+        sys.stderr.write(str(msg))
+    if options.debug:
+        print_exc(file=sys.stderr)
+    sys.exit(PARSE_ERRNO)
 except Exception as detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

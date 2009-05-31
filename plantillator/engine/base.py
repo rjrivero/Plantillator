@@ -44,6 +44,17 @@ class ParseError(Exception):
         self.token  = token
         self.errmsg = errmsg
 
+    def __str__(self):
+        error = [
+            "%s, LINE %s" % (
+                os.path.basename(self.source.id) if self.source else "<>",
+                self.token.lineno),
+            "Error interpretando %s" % str(self.token),
+            self.errmsg
+        ]
+        # error.extend(traceback.format_exception(*self.exc_info))
+        return "\n".join(error)
+
 
 class CommandError(Exception):
 
@@ -68,7 +79,7 @@ class CommandError(Exception):
     def __str__(self):
         error = [
             "%s, LINE %s" % (
-                os.path.basename(self.source.id) if self.source else "<unknown>",
+                os.path.basename(self.source.id) if self.source else "<>",
                 self.token.lineno),
             "Error ejecutando %s" % str(self.token),
             "%s: %s" % (self.exc_info[0].__name__, str(self.exc_info[1]))
@@ -96,6 +107,9 @@ class Command(list):
                 raise
             except:
                 raise CommandError(None, item.token, glob, data)
+
+    def chainto(self, prev):
+        pass
 
     def __str__(self):
         return "{{%s%s}}" % (str(self.token), " ... " if len(self) else "")

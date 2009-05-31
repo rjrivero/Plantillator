@@ -42,6 +42,9 @@ class CommandTree(list):
              ConditionExist),
         (r'^si (?P<var>%(var)s) esta\s+%(en)s\s+(?P<expr>.*)$' % VARPATTERN,
              ConditionExist),
+        # Comando ELSE
+        # p.e. "si no"
+        (r'^si\s*no\s*$', CommandElse),
         # Comando IF NOT
         # p.e. "si no"
         (r'^si no\s+(?P<expr>.*)$', ConditionNot),
@@ -98,15 +101,20 @@ class CommandTree(list):
 
     def build(self, base, token, last):
         if not token.head:
-            if not last:
-                last = Literal()
-                base.append(last)
-            last.append(token)
-            return last
-        cmd, last = self._check(token), None
-        for token in token.body:
-            last = self.build(cmd, token, last)
+	    return self._chain(base, token, last)
+        cmd, inner = self._check(token), None
+        for nested in token.body:
+            inner = self.build(cmd, nested, inner)
+        cmd.chainto(last)
         base.append(cmd)
+        return cmd
+
+    def _chain(self, base, token, last):
+        if not isinstance(last, Literal):
+            last = Literal()
+            base.append(last)
+        last.append(token)
+        return last
 
     def run(self, glob, data):
         for item in self:
@@ -116,7 +124,7 @@ class CommandTree(list):
             except CommandError as details:
                 # en el caso de un CommandInclude, se puede levantar un
                 # CommandError con una fuente distinta a la de este cmdtree.
-                # por eso, solo machaco el campo source si no esta definido.
+                # Por eso, solo machaco el campo source si no esta definido.
                 details.source = details.source or self.source
                 raise details
             except:

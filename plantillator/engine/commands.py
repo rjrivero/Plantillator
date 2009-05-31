@@ -18,6 +18,7 @@ from engine.base import *
 _UNDEFINED_BLOCK = _("El bloque %(blockname)s no esta definido")
 _NOT_SELECTED = _("No se ha seleccionado un(a) %(var)s")
 _WRONG_PARAMS = _("La cadena %(params)s no es valida")
+_ELSE_WITHOUT_IF = _("\"si no\" desemparejado")
 
 
 YieldBlock = NamedTuple("YieldBlock",
@@ -39,9 +40,8 @@ class Condition(Command):
             return False
 
     def run(self, glob, data):
-        if self.match(glob, data):
-            return Command.run(self, glob, data)
-        return tuple()
+        self.matched = self.match(glob, data)
+        return Command.run(self, glob, data) if self.matched else tuple()
 
 
 class ConditionNot(Condition):
@@ -86,6 +86,22 @@ class ConditionNotExist(ConditionExist):
                 return True
         except (AttributeError, KeyError):
             return True
+
+
+class CommandElse(Command):
+    """Comando "else"
+    Concuerda si el "if" previo no lo ha hecho.
+    """
+
+    def run(self, glob, data):
+        if not self.prev.matched:
+            return Command.run(self, glob, data)
+        return tuple()
+
+    def chainto(self, prev):
+        if not isinstance(prev, Condition):
+            raise ParseError(None, self.token, _ELSE_WITHOUT_IF)
+        self.prev = prev
 
 
 class CommandFor(Command):

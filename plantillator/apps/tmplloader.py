@@ -6,6 +6,7 @@ from os.path import splitext
 from gettext import gettext as _
 
 import tmpl.tmpltokenizer
+from engine.base import ParseError, Token
 from engine.cmdtree import CommandTree
 
 
@@ -34,8 +35,6 @@ class TmplLoader(dict):
         except ParseError as details:
             details.source = source
             raise details
-        except:
-            raise ParseError(source, Token(0, None, None), _UNKNOWN_ERROR)
 
     def run(self, tree, glob, data):
         self.source = tree.source
