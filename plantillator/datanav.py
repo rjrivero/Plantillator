@@ -75,7 +75,7 @@ class DataNav(tk.Tk):
             try:
                 match = _ASSIGNMENT.match(name)
                 if match:
-                    exec(name, self.glob, self.data)
+                    exec name in self.data
                     name = match.group("var")
                 data = eval(name, self.glob, self.data)
                 if name not in self.hist:
@@ -156,6 +156,27 @@ try:
     for fname in inputfiles:
         source = FileSource(finder(fname), finder)
         loader.load(source)
+    # Cosas muy feas... no se por que, esto funciona:
+    #
+    # def test():
+    #     v = [1, 2, 3, 4, 5]
+    #     print(list(v.index(x) for x in (1, 2)))
+    #
+    # Pero esto no:
+    #
+    # def test():
+    #     v = [1, 2, 3, 4, 5]
+    #     exec "print(list(v.index(x) for x in (1, 2)))" in globals(), locals()
+    #
+    # El segundo ejemplo lanza un error de que "v no esta definido en globals",
+    # ni se molesta en cogerlo de locals.
+    #
+    # En resumen, usar exec con globals y locals da problemillas, asi que lo que
+    # he decidido de momento, al menos para el datanav, es:
+    #
+    # - pongo loader.glob como fallback de loader.data
+    # - ejecuto las cosas con "exec EXPR in loader.data"
+    loader.data["up"] = loader.glob
     DataNav(loader.glob, loader.data, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):

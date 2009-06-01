@@ -4,6 +4,7 @@
 
 import itertools
 
+from data.operations import asIter
 from data.datatype import DataType
 from data.dataset import DataSet
 
@@ -35,6 +36,11 @@ class DataObject(dict):
         """Ancestro de este objeto en la jerarquia de objetos"""
         # up siempre esta definido, evito el fallback
         return dict.__getitem__(self, "up")
+
+    def join(self, var, value):
+        var = self._type.extend(var, value)
+        self[var] = asIter(value)
+        return self
 
     # Funciones que proporcionan la dualidad objeto (accesible por atributos) /
     # / diccionario (accesible por indice). Integran tambien el fallback.
@@ -80,7 +86,7 @@ class DataObject(dict):
         return ", ".join(itertools.islice(tag, 0, 3))
  
     # Modifico algunas funciones de bajo nivel para permitir que estos objetos
-    # puedan meterse en un set, algo que con un diccionario normal no puede hacerse:
+    # puedan meterse en un set, algo que con un diccionario normal no se puede:
     #
     # - Los objetos se comparan por identidad, no por valor
     # - El hash es fijo
@@ -88,18 +94,15 @@ class DataObject(dict):
     def __hash__(self):
         return hash(id(self))
 
-    def __eq__(self, other):
-        return self is other
-
     def __cmp__(self, other):
         return cmp(id(self), id(other))
 
     # Ahora modifico otro conjunto de propiedades del objeto, para hacerlo
     # comportarse lo mas parecido a un ScopeSet de longitud 1:
     #
-    # - Al iterar sobre ellos se devuelven a si mismos
+    # - Al iterar sobre ellos se devuelven a si mismos.
     # - Su longitud es siempre 1.
-    # - Soportan filtrado con la funcion __call__
+    # - Soportan filtrado con la funcion __call__.
 
     def _matches(self, kw):
         """Comprueba si el atributo indicado cumple el criterio."""

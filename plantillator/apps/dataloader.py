@@ -6,9 +6,9 @@ from os.path import splitext
 
 import csvread.datasource
 from data.operations import Deferrer, Filter
-from data.datatype import TypeTree
+from data.base import *
 from data.dataobject import DataObject
-from data.dataset import *
+from data.datatype import TypeTree
 
 
 _DATASOURCES = {

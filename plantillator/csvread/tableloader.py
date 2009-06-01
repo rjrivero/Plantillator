@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
+
 import os.path
 import itertools
 
 from data.pathfinder import PathFinder, FileSource
-from data.dataset import normalize
+from data.base import normalize
 from csvread.datatokenizer import DataTokenizer
 
 

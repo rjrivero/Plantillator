@@ -2,6 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
+import copy
 import itertools
 import re
 from gettext import gettext as _
@@ -76,6 +77,16 @@ class DataType(object):
         if name is None:
             raise SyntaxError(_EMPTYNAME)
         return (name, self.subtypes.setdefault(name, DataType(self)))
+
+    def extend(self, name, value):
+        name = self.add_field(name)
+        if hasattr(value, '_type'):
+            if name is None:
+                raise SyntaxError(_EMPTYNAME)
+            subtype = copy.copy(value._type)
+            subtype.up = self
+            self.subtypes[name] = subtype
+        return name
 
 
 class TypeTree(object):

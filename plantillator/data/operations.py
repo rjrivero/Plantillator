@@ -1,14 +1,36 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
+
 import operator
 import re
 import itertools
 
 
+def BaseMaker(basetype):
+
+    class BaseSequence(basetype):
+
+        def __add__(self, other):
+            """Concatena dos secuencias"""
+            return BaseSequence(itertools.chain(self, asIter(other)))
+
+        def __call__(self, arg):
+            """Devuelve el subconjunto de elementos que cumple el criterio"""
+            if not hasattr(arg, '__call__'):
+                arg = (Deferrer() == arg)
+            return BaseSequence(x for x in self if arg(x))
+
+    return BaseSequence
+
+
+BaseList = BaseMaker(tuple)
+BaseSet = BaseMaker(frozenset)
+
+
 def asIter(item):
-    """Se asegura de que un objeto es iterable"""
-    return item if hasattr(item, '__iter__') else (item,)
+    """Se asegura de que el objeto es iterable"""
+    return item if hasattr(item, '__iter__') else BaseList((item,))
 
 
 class DeferredOp(object):
