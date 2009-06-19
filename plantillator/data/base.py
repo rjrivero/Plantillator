@@ -63,4 +63,6 @@ def asRange(varrange):
         suff = match.group('suff') or ''
         for i in range(start, stop+1):
             rango.append(normalize("%s%d%s" % (pref, i, suff)))
+    else:
+        rango = [normalize(str(varrange))]
     return BaseList(rango)

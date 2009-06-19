@@ -11,7 +11,7 @@ from engine.commands import *
 
 _RUNTIME_ERROR = _("Error ejecutando %(command)s")
 _ERROR_LOCATION = _("Origen %(fname)s, linea $(lineno)d")
-_UNKNOWN_COMMAND = _("Comando %(command)s desconocido")
+_UNKNOWN_CMD = _("Comando %(command)s desconocido")
 
 # nombres de variables permitidos
 VARPATTERN = {
@@ -66,7 +66,7 @@ class CommandTree(list):
         (r'^(define|definir|bloque|funcion)\s+(?P<blockname>%(var)s)\s*(\((?P<params>%(var)s(\s*,\s*%(var)s)*)?\))?\s*$' % VARPATTERN,
              CommandDefine),
         # Comando RECALL
-        (r'^(?P<blockname>%(var)s)(?P<params>\s*\(\s*(%(var)s(\s*,\s*%(var)s)*\s*)?\))?\s*$' % VARPATTERN,
+        (r'^(?P<blockname>%(var)s)\s*(?P<params>\(.*\))?\s*$' % VARPATTERN,
              CommandRecall),
         # comando SET
         # ESTE COMANDO DEBE SER EL ULTIMO!

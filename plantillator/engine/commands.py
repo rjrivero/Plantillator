@@ -182,6 +182,15 @@ class CommandRecall(Command):
     y cosas asi.
     """
 
+    def __init__(self, token, match):
+        Command.__init__(self, token, match)
+        # Me aseguro de que self.params evalua a una tupla.
+        # si el cuerpo de la llamada tiene un solo argumento, evaluarlo
+        # no devolveria una tupla y la ejecucion del comando fallaria.
+        if self.params:
+            self.params = self.params.strip()[1:-1].strip()
+            self.params = "(%s,)" % self.params if self.params else None
+
     def run(self, glob, data):
         try:
             block = data._blocks[self.blockname]
