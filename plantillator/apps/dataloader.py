@@ -63,7 +63,7 @@ class DataLoader(object):
         except (SyntaxError, ValueError) as details:
             raise LoadError(source, ds.lineno, details.message)
 
-    def evaluate(self, ext):
+    def evaluate(self, expr):
         return eval(expr, self.glob, self.data)
 
     def known(self, ext):

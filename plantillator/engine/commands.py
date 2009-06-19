@@ -222,7 +222,9 @@ class CommandSelect(Command):
     """
 
     def run(self, glob, data):
-        if data.get(self.var, None) is not None:
+        # Con este test comprobamos que el valor que seleccionamos
+        # esta definido y no es una lista vacia.
+        if len(data.get(self.var, tuple())) > 0:
             return
         if not self.expr:
             raise ValueError, self.var
