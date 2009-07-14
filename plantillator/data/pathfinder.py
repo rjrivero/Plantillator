@@ -31,6 +31,9 @@ class LineSource(object):
         """Devuelve una nueva fuente correspondiente al nombre dado"""
         raise NotImplementedError, "%s.resolve" % self.__class.__name__
 
+    def __str__(self):
+        return str(self.id)
+
 
 class FileSource(LineSource):
 
@@ -61,9 +64,6 @@ class StringSource(LineSource):
 
     def readlines(self, mode="r"):
         return self.lines
-
-    def __str__(self):
-        return self.id
 
 
 class PathFinder(list):

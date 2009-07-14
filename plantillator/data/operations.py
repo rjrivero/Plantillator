@@ -4,68 +4,11 @@
 
 import operator
 import re
-import itertools
-
-
-def BaseMaker(basetype):
-
-    class BaseSequence(basetype):
-
-        def __add__(self, other):
-            """Concatena dos secuencias"""
-            return BaseSequence(itertools.chain(self, asIter(other)))
-
-        def __call__(self, arg):
-            """Devuelve el subconjunto de elementos que cumple el criterio"""
-            if not hasattr(arg, '__call__'):
-                arg = (Deferrer() == arg)
-            return BaseSequence(x for x in self if arg(x))
-
-    return BaseSequence
-
-
-BaseList = BaseMaker(tuple)
-BaseSet = BaseMaker(frozenset)
 
 
 def asIter(item):
     """Se asegura de que el objeto es iterable"""
-    return item if hasattr(item, '__iter__') else BaseList((item,))
-
-
-class DeferredOp(object):
-
-    """Operador pospuesto
-
-    Pospone la evaluacion de un operador binario
-    """
-
-    def __init__(self, operator, operand):
-        self.operator = operator
-        self.operand  = operand
-
-    def __call__(self, deferred):
-        """Ejecuta la operacion diferida"""
-        if hasattr(deferred, '__iter__'):
-            deferred = len(deferred)
-        return self.operator(deferred, self.operand)
-
-
-class DeferredFilter(object):
-
-    """Operador pospuesto
-
-    Pospone la evaluacion de un operador binario sobre una lista filtrada
-    """
-
-    def __init__(self, operator, operand, filt):
-        self.filt = filt
-        self.operator = operator
-        self.operand  = operand
-
-    def __call__(self, deferred):
-        """Ejecuta la operacion diferida"""
-        return self.operator(len(self.filt(deferred)), self.operand)
+    return item if hasattr(item, '__iter__') else (item,)
 
 
 class Deferrer(object):
@@ -80,42 +23,53 @@ class Deferrer(object):
     el resultado de "<X> >= 5".
     """
 
-    def __eq__(self, other):
-        return DeferredOp(operator.eq, other)
-
-    def __ne__(self, other):
-        return DeferredOp(operator.ne, other)
-
-    def __lt__(self, other):
-        return DeferredOp(operator.lt, other)
-
-    def __le__(self, other):
-        return DeferredOp(operator.le, other)
-
-    def __gt__(self, other):
-        return DeferredOp(operator.gt, other)
-
-    def __ge__(self, other):
-        return DeferredOp(operator.ge, other)
+    def _defer(self, operator, operand):
+        """Devuelve una funcion f(x) == operator(x, operand)
+        Comprueba si x es una lista, y en ese caso, lo que compara es
+        la longitud de x (es decir, f(x) == operator(len(x), operand))
+        """
+        def evaluate(deferred):
+            if hasattr(deferred, '__iter__'):
+                deferred = len(deferred)
+            return operator(deferred, operand)
+        return evaluate
 
     def __call__(self, item):
         return bool(item)
 
+    def __eq__(self, other):
+        return self._defer(operator.eq, other)
+
+    def __ne__(self, other):
+        return self._defer(operator.ne, other)
+
+    def __lt__(self, other):
+        return self._defer(operator.lt, other)
+
+    def __le__(self, other):
+        return self._defer(operator.le, other)
+
+    def __gt__(self, other):
+        return self._defer(operator.gt, other)
+
+    def __ge__(self, other):
+        return self._defer(operator.ge, other)
+
     def __mul__(self, arg):
         """Comprueba la coincidencia con una exp. regular"""
-        return DeferredOp(lambda x, y: y.search(x) and True or False,
+        return self._defer(lambda x, y: y.search(x) and True or False,
                           re.compile(arg))
 
     def __add__(self, arg):
         """Comprueba la pertenecia a una lista"""
-        return DeferredOp(lambda x, y: x in asIter(y), arg)
+        return self._defer(lambda x, y: x in asIter(y), arg)
 
     def __sub__(self, arg):
         """Comprueba la no pertenencia a una lista"""
-        return DeferredOp(lambda x, y: x not in asIter(y), arg)
+        return self._defer(lambda x, y: x not in asIter(y), arg)
 
 
-class Filter(object):
+class Filter(Deferrer):
 
     """Factoria de operadores
 
@@ -124,34 +78,22 @@ class Filter(object):
 
     Por ejemplo, (MyOperator() >= 5) devuelve un operador
     pospuesto que, al ser aplicado sobre una variable X, devuelve
-    el resultado de "len(filter(<X>)) >= 5".
+    el resultado de "len(<X(*arg, **kw)>)) >= 5".
     """
 
     def __init__(self, *arg, **kw):
         self.arg = arg
         self.kw = kw
 
-    def filt(self, deferred):
-        return deferred(*self.arg, **self.kw)
+    def _defer(self, operator, operand):
+        """Devuelve una funcion f(x) == operator(len(x(*arg, **kw)), operand)
+        Es decir, filtra x, y luego compara la longitud de la lista filtrada
+        con el operand.
+        """
+        def evaluate(deferred):
+            deferred = deferred(*self.arg, **self.kw)
+            return operator(len(deferred), operand)
+        return evaluate
 
     def __call__(self, deferred):
-        return len(self.filt(deferred)) == len(deferred)
-
-    def __eq__(self, other):
-        return DeferredFilter(operator.eq, other, self.filt)
-
-    def __ne__(self, other):
-        return DeferredFilter(operator.ne, other, self.filt)
-
-    def __lt__(self, other):
-        return DeferredFilter(operator.lt, other, self.filt)
-
-    def __le__(self, other):
-        return DeferredFilter(operator.le, other, self.filt)
-
-    def __gt__(self, other):
-        return DeferredFilter(operator.gt, other, self.filt)
-
-    def __ge__(self, other):
-        return DeferredFilter(operator.ge, other, self.filt)
-
+        return len(deferred(*self.arg, **self.kw)) == len(deferred)

@@ -3,12 +3,28 @@
 
 import re
 
-from data.operations import BaseList, BaseSet
+from operations import Deferrer, asIter
 
 
-def not_none(filter_me):
-    """Devuelve los objetos de la lista que no son None"""
-    return (x for x in filter_me if x is not None)
+def BaseMaker(basetype):
+
+    class BaseSequence(basetype):
+
+        def __add__(self, other):
+            """Concatena dos secuencias"""
+            return BaseSequence(itertools.chain(self, asIter(other)))
+
+        def __call__(self, arg):
+            """Devuelve el subconjunto de elementos que cumple el criterio"""
+            if not hasattr(arg, '__call__'):
+                arg = (Deferrer() == arg)
+            return BaseSequence(x for x in self if arg(x))
+
+    return BaseSequence
+
+
+BaseList = BaseMaker(tuple)
+BaseSet  = BaseMaker(frozenset)
 
 
 def normalize(item):

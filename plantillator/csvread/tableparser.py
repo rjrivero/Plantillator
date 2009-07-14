@@ -2,131 +2,161 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
+import re
 from gettext import gettext as _
 
-from data.namedtuple import NamedTuple
-from data.datatype import DataType, TypeTree
+from data.dataobject import newDataSet
 
 
 _NOT_ENOUGH_INDEXES = _("No hay suficientes indices")
-_INDEX_NOT_FOUND = _("No se encuentra el indice")
-_ATTRIB_NOT_FOUND = _("El campo %(attrib)s no esta definido")
+_INDEX_ERROR = _("No se encuentra el indice '%(index)s'")
+_INVALID_PATH = _("La ruta '%(path)s' no existe")
+_INVALID_ATTRIB = _("El nombre de atributo '%(attrib)s' es incorrecto")
+_UNKNOWN_PREFIX = _("'%(prefix)s' no se corresponde con ningun ancestro")
+
+# valores validos para los nombres de propiedades
+_VALID_ATTRIB = re.compile(r'^[a-zA-Z]\w*$')
 
 
-TableFilter = NamedTuple("TableFilter",
-    """Definicion de un filtro
+class DataError(Exception):
 
-    In filtro indica:
-        - El nombre (relativo) del tipo de objeto que se filtra (name)
-        - El tipo de objeto que se filtra (dtype)
-        - Los campos de ese objeto que se utilizan en el filtro (fields)
-    """,
-    name=0, dtype=1, fields=2)
+    """Error de lectura de datos. Incluye source, id y mensaje"""
+
+    def __init__(self, source, itemid, errmsg):
+        self.source = source
+        self.itemid = itemid
+        self.errmsg = errmsg
+
+    def __str__(self):
+        error = [
+            "%s [ %s ]" % (str(self.source), str(self.itemid)),
+            self.errmsg
+        ]
+        # error.extend(traceback.format_exception(*self.exc_info))
+        return "\n".join(error)
 
 
-class TableParser(object):
+class ValidHeader(str):
+
+    """Cabecera "validada"
+
+    Derivacion de una cadena de texto que  simplemente comprueba
+    al construirse que el valor es un nombre de campo o filtro
+    valido.
+    """
+
+    def __new__(cls, data):
+        parts = [x.strip() or None for x in data.split(".")]
+        match = _VALID_ATTRIB.match
+        if (not 0 < len(parts) <= 2) or (not all(match(x) for x in parts)):
+            raise ValueError, _INVALID_ATTRIB % {'attrib': str(data)}
+        obj = str.__new__(cls, ".".join(parts))
+        obj.suffix = parts.pop()
+        obj.prefix = parts.pop() if parts else None
+        return obj
+
+
+class RowFilter(set):
+
+    def __init__(self, attr, headers):
+        """Construye un filtro segun la cabecera.
+
+        Construye un filtro que recibe un DataSet y filtra el atributo
+        "name", devolviendo un DataSet filtrado. El criterio de filtrado
+        lo da la cabecera "header": Los campos se comparan con
+        "name.XXX", y si coinciden, se retiran de la cabecera y se filtra
+         por el campo XXX del DataSet.
+        """
+        set.__init__(self)
+        self.attr = attr
+        for h in headers:
+            if h.prefix and attr.startswith(h.prefix):
+                self.add(h)
+                headers.remove(h)
+
+    def __call__(self, dset, item):
+        """Filtra el dset"""
+        dset = getattr(dset, self.attr)
+        if len(self):
+            try:
+                crit = dict((h.suffix, item.pop(h)) for h in self)
+            except KeyError:
+                raise SyntaxError, _NOT_ENOUGH_INDEXES
+            dset = dset(**crit)
+            if not dset:
+                raise SyntaxError, _INDEX_ERROR % {'index': str(crit)}
+        return dset
+
+
+class TableParser(list):
 
     """Analizador de tablas
 
-    Analiza una tabla. En la linea CSV que define cada elemento de la lista,
-    la primera columna debe ser un campo que indexe la lista "madre".
-    Por ejemplo:
+    Carga una tabla del CSV. Cada tabla tiene una ruta, unos filtros,
+    y unos datos:
 
-    principal; id; nombre
-             ; 1 ; elemento_1
-             ; 2 ; elemento_2
+     - La ruta define cual es el DataType de los datos (por ejemplo,
+       sedes.switches.vlans)
+     - Los filtros definen como determinar a que DataObject se le
+       agregan los datos (por ejemplo, filtrando por sedes.nombre,
+       switches.id, etc)
 
-    principal.anidada_1; principal.id; nombre
-                       ; 1           ; sub_elemento_1_1
-                       ; 1           ; sub_elemento_1_2
-                       ; 2           ; sub_elemento_2_1
+    El TableParser es una lista de pares (source, bloque). "source" es
+    el origen de datos del que procede el bloque. El "bloque" es una lista
+    de entradas (id, diccionario) con un atributo "headers" que lista todas
+    las claves de los diccionarios como ValidHeaders.
 
-    principal.anidada_2; principal.nombre; nombre
-                       ; elemento_1  ; sub_elemento_1_1
-                       ; elemento_1  ; sub_elemento_1_2
-                       ; elemento_2  ; sub_elemento_2_1
-
-    Las listas pueden anidarse tantos niveles como se desee.
+    :root - El DataObject raiz
+    :path - La lista de nombres de tipos anidados.
     """
 
-    def __init__(self, typetree):
-        """Inicializa el arbol"""
-        self.typetree = typetree
+    def __init__(self, root, path):
+        list.__init__(self)
+        current, attr = root._type, path.pop()
+        try:
+            for item in path:
+                current = current._Children[item]
+        except KeyError:
+            raise SyntaxError(_INVALID_PATH % {'path': ".".join(path)})
+        self.type = current._GetChild(attr, self)
+        self.path = path
+        self.attr = attr
 
-    def get_filters(self, datapath, header):
-        """Obtiene la secuencia de filtros indicada por la cabecera dada
+    def __call__(self, item, attrib):
+        if not len(self):
+            return newDataSet(item, attrib)
+        while self:
+            source, block = self.pop()
+            self._block(source, block)
+        return item[attrib]
 
-        Recibe una ruta hacia un objeto, en el mismo formato que
-        TypeTree.get_types. Asociada a esa ruta, recibe una lista de campos,
-        una cabecera, que identifica con que criterio se filtrara en cada
-        paso de la ruta.
-
-        Ademas, conforme va consumiendo campos de la cabecera, los
-        va eliminando (pop(0)). Asume que "header" es una lista.
-
-        Por ejemplo:
-            datapath: nodos.switches.puertos
-            header: ['nodo.nombre', 'switch.id', 'nombre', 'velocidad', 'modo']
-
-        Devolveria una secuencia:
-            filtros: [
-                ('nodos', [DataType<nodos>], ("nombre",)),
-                ('vlans', [DataType<nodos.vlans>], ("vlan",)),
-                ('puertos', [DataType<nodos.vlans.puertos>], (,))
-            ]
-        Y dejaria en header
-            ['nombre', 'velocidad', 'modo']
-        """
-        for name, dtype in self.typetree.get_types(datapath):
-            fields, dummy = [], DataType(dtype) # solo para normalizacion
-            while header:
-                parts = header[0].split(".")
-                if len(parts) == 2 and name.startswith(parts[0].strip()):
-                    field = dummy.add_field(parts[1])
-                    if field is None:
-                        raise SyntaxError, header[0]
-                    header.pop(0)
-                    fields.append(field)
-                else:
-                    break
-            yield TableFilter(name, dtype, fields)
-
-    def do_type(self, dtype, header):
-        """Actualiza el tipo con los campos presentes en la cabecera
-
-        Cada campo de la cabecera se incluye en el tipo de la manera adecuada,
-        es decir, normalizando el nombre, definiendolo como bloqueante o no
-        bloqueante, etc.
-
-        devuelve una lista de los campos convenientemente normalizados.
-        """
-        normalized = []
-        for item in (x.strip() for x in header):
-            if item.endswith("*"):
-                normalized.append(dtype.add_field(item[:-1], False))
-            else:
-                normalized.append(dtype.add_field(item, True))
-        return normalized
-              
-    def do_filter(self, dataset, filters, line):
-        """Aplica los filtros especificados a una linea
-
-        Los filtros son el valor devuelto por get_filter. "dataset"
-        es el objeto raiz, y line es la linea del CSV a procesar.
-
-        devuelve el dataset resultado de aplicar el filtro,
-        y lo que queda de la linea tras consumir los valores necesarios.
-        """
-        for name, dtype, fields in filters:
-            if len(fields) > len(line):
-                raise SyntaxError, _NOT_ENOUGH_INDEXES
-            crit = dict(zip(fields, line))
-            line = line[len(fields):]
+    def _block(self, source, block):
+        """Carga un bloque de datos"""
+        headers = block.headers[:]
+        filters = [RowFilter(x, headers) for x in self.path]
+        attfilt = RowFilter(self.attr, headers)
+        for h in (x for x in block.headers if x.prefix):
+            raise DataError(source, 'header', _UNKNOWN_PREFIX % {'prefix': h})           
+        for (itemid, item) in block:
             try:
-                dataset = getattr(dataset, name)(**crit)
-            except AttributeError as details:
-                raise SyntaxError, _ATTRIB_NOT_FOUND % {'attrib': str(details)}
-            else:
-                if not dataset:
-                    raise SyntaxError, _INDEX_NOT_FOUND
-        return (dataset, line)
+                self._item(filters, attfilt, item)
+            except SyntaxError as details:
+                raise DataError(source, itemid, str(details))
+
+    def _update(self, items, attfilt, data):
+        for item in attfilt(items, data):
+            item.update(data)
+
+    def _append(self, items, data):
+        for item in items:
+            getattr(item, self.attr).add(self.type(item, data))
+
+    def _item(self, filters, attfilt, item):
+        """Carga un elemento"""
+        current = self.root
+        for filt in filters:
+            current = filt(current, item)
+        if update:
+            self._update(current, attfilt, item)
+        else:
+            self._append(current, item)
