@@ -5,7 +5,7 @@
 import re
 from gettext import gettext as _
 
-from data.dataobject import newDataSet
+from data.dataset import DataSet
 
 
 _NOT_ENOUGH_INDEXES = _("No hay suficientes indices")
@@ -90,10 +90,11 @@ class RowFilter(set):
 
 class TableParser(list):
 
-    """Analizador de tablas
+    """Factoria de objetos
 
-    Carga una tabla del CSV. Cada tabla tiene una ruta, unos filtros,
-    y unos datos:
+    Esta factoria de objetos carga tablas completas de datos, obtenidas de
+    ficheros CSV o de cualquier otro medio. Cada tabla tiene una ruta, unos
+    filtros, y unos datos:
 
      - La ruta define cual es el DataType de los datos (por ejemplo,
        sedes.switches.vlans)
@@ -112,19 +113,17 @@ class TableParser(list):
 
     def __init__(self, root, path):
         list.__init__(self)
-        current, attr = root._type, path.pop()
-        try:
-            for item in path:
-                current = current._Children[item]
-        except KeyError:
-            raise SyntaxError(_INVALID_PATH % {'path': ".".join(path)})
-        self.type = current._GetChild(attr, self)
+        self.root = root
+        self.attr = path.pop()
         self.path = path
-        self.attr = attr
 
     def __call__(self, item, attrib):
+        """factoria de datos"""
+        # En teoria esto es redundante, porque
+        # item._type._Properties[attrib] == self. Pero por si acaso...
+        self._type = item._type._Properties[attrib]._type
         if not len(self):
-            return newDataSet(item, attrib)
+            return DataSet(self.type)
         while self:
             source, block = self.pop()
             self._block(source, block)
@@ -135,7 +134,7 @@ class TableParser(list):
         headers = block.headers[:]
         filters = [RowFilter(x, headers) for x in self.path]
         attfilt = RowFilter(self.attr, headers)
-        for h in (x for x in block.headers if x.prefix):
+        for h in (x for x in headers if x.prefix):
             raise DataError(source, 'header', _UNKNOWN_PREFIX % {'prefix': h})           
         for (itemid, item) in block:
             try:
@@ -144,19 +143,21 @@ class TableParser(list):
                 raise DataError(source, itemid, str(details))
 
     def _update(self, items, attfilt, data):
+        """Actualiza un grupo de datos"""
         for item in attfilt(items, data):
             item.update(data)
 
     def _append(self, items, data):
+        """Agrega datos a un grupo de items"""
         for item in items:
-            getattr(item, self.attr).add(self.type(item, data))
+            getattr(item, self.attr).add(self._type(item, data))
 
     def _item(self, filters, attfilt, item):
         """Carga un elemento"""
         current = self.root
         for filt in filters:
             current = filt(current, item)
-        if update:
+        if attfilt:
             self._update(current, attfilt, item)
         else:
             self._append(current, item)

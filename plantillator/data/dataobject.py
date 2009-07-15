@@ -2,24 +2,34 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-from itertools import islice
+from itertools import islice, chain, repeat
 
 from data.operations import Deferrer
 from data.dataset import DataSet
 
 
-def newDataSet(item, attrib):
-    return DataSet(item.__class__._Children[attrib])
+class _Properties(object):
 
- 
+    def __init__(self, cls, property_factory):
+        self.data = dict()
+        self.cls  = cls
+        self.factory = property_factory
+
+    def __getitem__(self, index):
+        try:
+            return self.data[index]
+        except KeyError:
+            return self.data.setdefault(index, self.factory(self.cls, index))
+
+
 class _DataObject(object):
 
     """Objeto cuyos atributos son accesibles como entradas de diccionario.
 
     Los DataObjects estan relacionados en forma de arbol. Cada nodo "hijo"
-    tiene un nodo "padre", y un nodo "padre" puede tener varios nodos "hijo",
-    agrupados en un set (DataSet). Todos los "hijos" agrupados en un set
-    deben ser del mismo tipo.
+    tiene un nodo "padre", y un nodo "padre" puede tener varios nodos "hijo".
+    Generalmente los nodos hijo de un mismo tipo se agrupan en un conjunto
+    (DataSet).
     """
 
     def __init__(self, up=None, data=None):
@@ -30,41 +40,24 @@ class _DataObject(object):
     # "Meta-funciones" que permiten agregar atributos a la clase.
 
     @classmethod
-    def _SubType(cls, attr):
-        """Crea un subtipo de este, pero sin enlazar en la jerarquia"""
-        return type(attr, (_DataObject,), {'_Parent': cls, '_Children': {}})
+    def _SubType(cls, attr, property_factory):
+        """Crea un subtipo de este"""
+        subtype = type(attr, (_DataObject,), {
+            '_Parent': cls,
+            '_Path': tuple(chain(cls._Path, (attr,)))
+        })
+        subtype._Properties = _Properties(subtype, property_factory)
+        return subtype
 
-    @classmethod
-    def _GetChild(cls, attr, lazy=newDataSet):
-        """Obtiene una subclase enlazada, y agrega el atributo.
-
-        Si no existe ninguna subclase, crea una nueva enlazada a esta por
-        los atributos de clase "_Parent" y "_Children". Ademas, agrega a
-        todos los objetos de la clase un atributo que, al ser accedido
-        por primera vez, devuelve un DataSet vacio de la clase hija.
-
-        Opcionalmente, es posible hacer que el atributo devuelva otro
-        valor utilizando la funcion "lazy". Si lazy !=None, la primera
-        vez que se acceda al atributo se invocara a la funcion lazy
-        pasandole como parametros:
-
-            - El objeto a cuyo atributo se esta intentando acceder.
-            - El nombre del atributo.
-
-        "lazy" debe devolver el valor del atributo solicitado. IMPORTANTE!:
-        la funcion "lazy" solo se usa al crear el atributo por primera vez,
-        si despues se vuelve a llamar a _GetChild con otra funcion, no se
-        sobreescribe.
-        """
+    def __getattr__(self, attr):
         try:
-            return cls._Children[attr]
-        except KeyError:
-            def prop(self):
-                lazyprop = lazy(self, attr)
-                setattr(cls, attr, lazyprop)
-                return lazyprop
-            setattr(cls, attr, property(prop))
-            return cls._Children.setdefault(attr, cls._SubType(attr))
+            prop = self._type._Properties[attr]
+        except KeyError as details:
+            raise AttributeError, details
+        else:
+            data = prop(self, attr)
+            setattr(self, attr, data)
+            return data
 
     # Atributos basicos del DataObject: "up" y "fb"
 
@@ -140,7 +133,10 @@ class _DataObject(object):
     def _type(self):
         return self.__class__
 
-    __add__ = DataSet.__add__
+    def __add__(self, other):
+        if self._type != other._type:
+            raise TypeError, other._type
+        return DataSet(self._type, chain(self, other))
 
     def __iter__(self):
         """Se devuelve a si mismo"""
@@ -154,18 +150,54 @@ class _DataObject(object):
         return self if self._matches(self._adapt(kw)) else DataSet(self._type)
 
 
-def RootType(name="DataObject"):
-    """Crea un nuevo tipo raiz (parent == None) derivado de _DataObject"""
-    return type(name, (_DataObject,), {'_Parent': None,'_Children': dict()})
+def RootType(type_factory, name="DataObject"):
+    """Crea un nuevo tipo raiz (_Parent == None) derivado de _DataObject
 
-DataObject = RootType()
+    type_factory es una factoria de propiedades para este tipo.
+    Una factoria de propiedades es un callable que acepta una
+    clase y un atributo, y devuelve una factoria de objetos.
+
+    Una factoria de objetos es un callable que acepta un objeto
+    y un atributo, y devuelve el valor del atributo solicitado.
+
+    NOTA IMPORTANTE: para mantener la semantica y la compatibilidad,
+    es importante que si una factoria de objetos devuelve ScopeSets,
+    tenga una propiedad "_type" con el tipo de ScopeSet devuelto.
+    """
+    roottype = type(name, (_DataObject,), {'_Parent': None, '_Path': tuple()})
+    roottype._Properties = _Properties(roottype, type_factory)
+    return roottype
+
+
+class GroupTree(dict):
+
+    """Arbol de Grupos
+
+    Factoria de propiedades que crea DataSets. Cada propiedad a la que se
+    accede genera un nuevo DataSet del subtipo adecuado, en principio vacio,
+    aunque se puede cambiar.
+    """
+
+    class DataFactory(object):
+        def __init__(self, subtype):
+            self._type = subtype
+        def __call__(self, item, attr):
+            return DataSet(self._type)
+    
+    def __init__(self, data=None):
+        dict.__init__(self, data or dict())
+
+    def __call__(self, cls, attr):
+        """Devuelve una factoria de objetos que crea DataSets vacios"""
+        return GroupTree.DataFactory(cls._SubType(attr, self[attr]))
 
 
 class Fallback(_DataObject):
 
     """Realiza fallback en la jerarquia de objetos
 
-    Implementa un mecanismo de fallback en la jerarquia de objetosObjeto que implementa el mecanismo de fallback de los DataObjects."""
+    Objeto que implementa el mecanismo de fallback de los DataObjects.
+    """
 
     def __init__(self, up, data=None, depth=None):
         _DataObject.__init__(self, up, data)

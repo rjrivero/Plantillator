@@ -16,10 +16,11 @@ from data.dataset import *
 class TestDataObject(TestCase):
 
     def setUp(self):
-        self.data = DataObject()
+        self.root = RootType(GroupTree())
+        self.data = self.root()
 
     def test_construct_empty(self):
-        data = DataObject()
+        data = self.root()
         self.failUnless(self.data.up is None)
 
     def test_construct_data(self):
@@ -27,12 +28,12 @@ class TestDataObject(TestCase):
             'a': 5,
             'b': 10
         }
-        data = DataObject(None, initial)
+        data = self.root(None, initial)
         self.failUnless(data.a == 5)
         self.failUnless(data.b == 10)
 
     def test_up(self):
-        derived = DataObject(self.data)
+        derived = self.root(self.data)
         self.failUnless(derived.up == self.data)
 
     def test_attrib(self):
@@ -48,12 +49,12 @@ class TestDataObject(TestCase):
         self.failUnless(self.data.x == 15)
 
     def test_nofallback(self):
-        derived = DataObject(self.data)
+        derived = self.root(self.data)
         self.data.x = 5
         self.assertRaises(AttributeError, getattr, derived, "x")
 
     def test_fallback(self):
-        derived = DataObject(self.data)
+        derived = self.root(self.data)
         self.data.x = 5
         self.failUnless(derived.fb.x == 5)
 
@@ -76,7 +77,7 @@ class TestDataObject(TestCase):
         self.failUnless(self.data.y == 5)
 
     def test_type(self):
-        self.failUnless(self.data._type == DataObject)
+        self.failUnless(self.data._type == self.root)
 
     def test_len_empty(self):
         self.failUnless(len(self.data) == 1)
@@ -146,32 +147,37 @@ class TestDataObject(TestCase):
 class TestDataType(TestCase):
 
     def setUp(self):
-        self.root = RootType()
+        self.tree = GroupTree({'x': GroupTree()})
+        self.root = RootType(self.tree)
         self.data = self.root()
 
     def test_construct(self):
         self.failUnless(self.root._Parent is None)
-        self.failIf(self.root._Children)
 
-    def test_new_child_binding(self):
-        child = self.root._GetChild("x")
-        self.failUnless("x" in self.root._Children)
+    def test_property_single(self):
+        data = self.root()
+        data.x.add(data.x._type(data, {'y': 10}))
+        self.failUnless(data.x(y=10))
 
-    def test_new_child_parent(self):
-        child = self.root._GetChild("x")
-        self.failUnless(child._Parent == self.root)
+    def test_property_double(self):
+        data1 = self.root()
+        data2 = self.root()
+        data1.x.add(data1.x._type(data1, {'y': 10}))
+        data2.x.add(data2.x._type(data2, {'y': 20}))
+        self.failUnless(data1.x(y=10))
+        self.failIf(data1.x(y=20))
 
     def test_new_child_dataset(self):
-        child = self.root._GetChild("x")
         self.failUnless(isinstance(self.data.x, DataSet))
-        self.failUnless(self.data.x._type == child)
+        self.failUnless(self.data.x._type._Parent == self.root)
         self.failIf(self.data.x)
 
 
 class TestFallback(TestCase):
 
     def setUp(self):
-        self.data = DataObject()
+        self.root = RootType(GroupTree())
+        self.data = self.root()
         self.fb = self.data.fb
 
     def test_set(self):
@@ -190,7 +196,7 @@ class TestFallback(TestCase):
 
     def test_call_deep(self):
         self.data.x = 5
-        subitem = DataObject(self.data)
+        subitem = self.root(self.data)
         self.failUnless(self.data(x=5) == self.data)
         self.failIf(subitem(x=5))
         self.failUnless(self.fb(x=5) == self.fb)

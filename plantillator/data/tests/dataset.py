@@ -18,7 +18,7 @@ from data.dataset import *
 class TestDataSet(TestCase):
 
     def setUp(self):
-        self.root = RootType()
+        self.root = RootType(GroupTree({'subtype': GroupTree()}))
         self.data = self.root()
         self.dset = DataSet(self.root)
         self.dset.add(self.data)
@@ -33,7 +33,7 @@ class TestDataSet(TestCase):
         self.failUnless(self.data in dset)
 
     def test_add_fail(self):
-        subtype = self.root._GetChild("subtype")
+        subtype = self.root._Properties["subtype"]._type
         other = DataSet(subtype)
         self.assertRaises(TypeError, operator.add, self.dset, other)
 
@@ -45,14 +45,14 @@ class TestDataSet(TestCase):
         self.failUnless(self.data in combined)
 
     def test_up_empty(self):
-        subtype = self.root._GetChild("subtype")
+        subtype = self.root._Properties["subtype"]._type
         dset = DataSet(subtype)
         self.failUnless(isinstance(dset.up, DataSet))
         self.failUnless(dset.up._type == self.root)
         self.failIf(dset.up)
 
     def test_up(self):
-        subtype = self.root._GetChild("subtype")
+        subtype = self.root._Properties["subtype"]._type
         subitem = subtype(self.data)
         self.data.subtype.add(subitem)
         dset = DataSet(subtype, subitem)
@@ -69,12 +69,12 @@ class TestDataSet(TestCase):
         self.failUnless(len(self.dset.y) == 0)
 
     def test_subitem(self):
-        subtype  = self.root._GetChild("subtype")
-        subitem1 = subtype(self.data)
-        subitem2 = subtype(self.data)
+        subtype = self.root._Properties["subtype"]._type
         data1 = self.root()
         data2 = self.root()
-        data1.subtype.add(subitem1)
+        subitem1 = subtype(data1)
+        subitem2 = subtype(data2)
+	data1.subtype.add(subitem1)
         data2.subtype.add(subitem2)
         dset = DataSet(self.root, (data1, data2))
         self.failUnless(len(dset.subtype) == 2)

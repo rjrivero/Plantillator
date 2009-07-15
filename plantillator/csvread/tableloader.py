@@ -8,12 +8,40 @@ import itertools
 from data.pathfinder import PathFinder, FileSource
 from data.base import normalize
 from csvread.datatokenizer import DataTokenizer
+from csvread.tableparser import TableParser, ValidHeader
 
 
 DATA_COMMENT = "!"
 
 
-class TableLoader(object):
+class Block(object):
+
+    """Bloque de datos"""
+
+    def __init__(self, headers, lines):
+        self.headers = [ValidHeader(x) for x in headers]
+        self.lines   = lines
+
+    def __iter__(self):
+        for (lineno, line) in self.lines:
+            line = (normalize(x) for x in line)
+            data = dict((x, y) for (x, y) in zip(self.headers, line)
+                        if x is not None and y is not None)
+            yield (lineno, data)
+
+
+class ParserDict(dict):
+
+    """Factoria de propiedades"""
+
+    def __call__(self, cls, attr):
+        attr = ValidHeader(attr)
+        parser = self[".".join(cls._Path, (attr,))]
+        parser._type = cls._SubType(attr, self)
+        return parser
+
+            
+class TableLoader(ParserDict):
     """Cargador de ficheros de datos
 
     Un fichero de datos es basicamente una forma mas resumida de definir
@@ -23,27 +51,35 @@ class TableLoader(object):
     con una ruta, y un conjunto de valores.
     """
 
-    def read(self, source):
-        """Carga un fichero de datos
+    def __init__(self, root):
+        ParserDict.__init__(self)
+        self.root  = root
 
-        Devuelve un diccionario de tablas. Los indices del diccionario
-        son los nombres de la tabla (ejemplo: nodo.switches.interfaces).
-        Los valores son listas de bloques, donde cada bloque es un conjunto
-        de lineas consecutivas debajo de un mismo encabezado.
-        """
+    def read(self, source):
+        """Actualiza el ParserDict con los datos de la fuente."""
         tokenizer = DataTokenizer(source, DATA_COMMENT)
-        title, lines, tables = None, [], dict()
-        for line in tokenizer.tokens():
-            body = list(normalize(field) for field in line)
-            head = body.pop(0)
+        path, title, lines = None, None, []
+        for (self.lineno, line) in tokenizer.tokens():
+            head = line.pop(0)
             if head:
-                if title is not None:
-                    tables.setdefault(title, []).append(lines)
-                title, lines = head, []
-            lines.append((tokenizer.lineno, body))
-        if title is not None:
-            tables.setdefault(title, []).append(lines)
+                head = (ValidHeader(x) for x in line.pop(0).split("."))
+                if path and title and lines:
+                    self._update(source, path, title, lines)
+                path, title, lines = head, line, []
+            elif line:
+                lines.append((tokenizer.lineno, line))
+        if path and title and lines:
+            self._update(source, path, title, lines)
         return tables
+
+    def _update(self, source, path, title, lines):
+        """Agrega un bloque de datos al ParserDict"""
+        label = ".".join(path)
+        try:
+            parser = self[label]
+        except KeyError:
+            parser = self.setdefault(label, TableParser(path, self.root))
+        parser.append((source, Block(title, lines)))
 
 
 if __name__ == "__main__":

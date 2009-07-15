@@ -48,8 +48,8 @@ class DataSet(set):
         """
         items = not_none(x.get(attrib) for x in self)
         try:
-            return DataSet(self._type._Children[attrib])._chain(items)
-        except KeyError:
+            return DataSet(self._type._Properties[attrib]._type)._chain(items)
+        except (KeyError, AttributeError):
             return BaseSet(items)
 
     def __getattr__(self, attrib):
