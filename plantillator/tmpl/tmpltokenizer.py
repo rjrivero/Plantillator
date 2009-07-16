@@ -5,7 +5,6 @@
 import re
 from gettext import gettext as _
 
-from data.namedtuple import NamedTuple
 from engine.base import *
 
 

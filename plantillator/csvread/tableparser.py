@@ -15,7 +15,7 @@ _INVALID_ATTRIB = _("El nombre de atributo '%(attrib)s' es incorrecto")
 _UNKNOWN_PREFIX = _("'%(prefix)s' no se corresponde con ningun ancestro")
 
 # valores validos para los nombres de propiedades
-_VALID_ATTRIB = re.compile(r'^[a-zA-Z]\w*$')
+VALID_ATTRIB = re.compile(r'^[a-zA-Z]\w*$')
 
 
 class DataError(Exception):
@@ -47,7 +47,7 @@ class ValidHeader(str):
 
     def __new__(cls, data):
         parts = [x.strip() or None for x in data.split(".")]
-        match = _VALID_ATTRIB.match
+        match = VALID_ATTRIB.match
         if (not 0 < len(parts) <= 2) or (not all(match(x) for x in parts)):
             raise ValueError, _INVALID_ATTRIB % {'attrib': str(data)}
         obj = str.__new__(cls, ".".join(parts))
@@ -123,7 +123,7 @@ class TableParser(list):
         # item._type._Properties[attrib] == self. Pero por si acaso...
         self._type = item._type._Properties[attrib]._type
         if not len(self):
-            return DataSet(self.type)
+            return DataSet(self._type)
         while self:
             source, block = self.pop()
             self._block(source, block)

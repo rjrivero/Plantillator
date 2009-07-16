@@ -4,89 +4,59 @@
 
 from gettext import gettext as _
 
-from data.pathfinder import PathFinder, FileSource
-from data.datatype import TypeTree
-from data.dataobject import DataObject
-from data.dataset import DataSet
-from csvread.tableloader import TableLoader
-from csvread.tableparser import TableParser
+from csvread.tableloader import TableLoader, Block
+from csvread.tableparser import *
+
+
+_INVALID_VARNAME = _("El nombre %(varname)s no es valido")
 
 
 class DataSource(TableLoader):
 
     """Carga e interpreta ficheros de datos"""
 
-    _HOOKS = (
-        "DEPENDENCIAS", "VARIABLES"
-    )
-
-    def __init__(self, typetree, dataobject):
+    def __init__(self):
         TableLoader.__init__(self)
-        self.lineno = 0
-        self.dataobject = dataobject
-        self.dataset = DataSet(typetree.root, [dataobject])
-        self.parser = TableParser(typetree)
+
+    _HOOKS = {
+        'variables':    "_variables",
+        'dependencias': "_dependencias"
+    }
 
     def read(self, source):
         """Carga un fichero de datos, actualiza el diccionario.
 
         Devuelve una lista con las dependencias del fichero.
         """
-        tables = TableLoader.read(self, source)
-        self.dependencies = list()
-        for datapath, blocks in tables.iteritems():
-            if datapath.upper() in self._HOOKS:
-                hook = getattr(self, "onHook_%s" % datapath.upper())
+        TableLoader.read(self, source)
+        self.dependencies, remove = list(), list()
+        for path, parser in self.iteritems():
+            try:
+                hook = getattr(self, self._HOOKS[path.lower()])
+                remove.append(path)
+            except (KeyError, AttributeError):
+                pass
             else:
-                hook = None
-            for block in blocks:
-                self.lineno, header = block.pop(0)
-                filters = list(self.parser.get_filters(datapath, header))
-                last = filters.pop()
-                if hook is None:
-                    header = self.parser.do_type(last.dtype, header)
-                    for self.lineno, line in block:
-                        self.addrow(filters, last, header, line)
-                else:
-                    for self.lineno, line in block:
-                        hook(line)                    
+                self.lineno = "N/A"
+                for source, block in parser:
+                    try:
+                        hook(source, block)
+                    except (IndexError, TypeError) as details:
+                        raise DataError(source, self.lineno, details)
+        for path in remove:
+            del(self[path])
         return self.dependencies
 
-    def onHook_DEPENDENCIAS(self, line):
-        self.dependencies.append(line[0])
+    def _variables(self, source, block):
+        nombre, valor = block.headers[0], block.headers[1]
+        for self.lineno, item in block:
+            varname = item[nombre]
+            if not varname or not VALID_ATTRIB.match(str(varname)):
+                raise DataError(source, self.lineno,
+                         _INVALID_VARNAME % {'varname': str(varname)})
+            self.data[varname] = item[valor]
 
-    def onHook_VARIABLES(self, line):
-        try:
-            self.dataobject[line[0]] = line[1]
-        except KeyError:
-            raise SyntaxError, line[0]
-
-    def addrow(self, filters, last, header, line):
-        """inserta una linea del CSV en los datos."""
-        base, line = self.parser.do_filter(self.dataset, filters, line)
-        if not last.fields:
-            vals = dict((x, y) for (x, y) in zip(header, line)
-                if x is not None and y is not None)
-            for item in base:
-                getattr(item, last.name).add(DataObject(last.dtype, vals, item))
-        else:
-            fields = dict(zip(last.fields, line))
-            values = dict((x, y) for (x, y) in zip(header, line[len(fields):])
-                if x is not None and y is not None)
-            for item in getattr(base, last.name)(**fields):
-                item.update(values)
-
-
-if __name__ == "__main__":
-    import sys
-    import pprint
-    finder = PathFinder()
-    ttree = TypeTree()
-    dataobject = DataObject(ttree.root)
-    loader = DataSource(ttree, dataobject)
-    for f in sys.argv[1:]:
-        source = FileSource(finder(f), finder)
-        loader.read(source)
-        #print(ttree)
-        print(dataobject)
-
+    def _dependencias(self, source, block):
+        nombre = block.headers[0]
+        for self.lineno, item in block:
+            self.dependencies.append(item[nombre])

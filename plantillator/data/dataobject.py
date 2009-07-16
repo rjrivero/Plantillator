@@ -21,6 +21,10 @@ class _Properties(object):
         except KeyError:
             return self.data.setdefault(index, self.factory(self.cls, index))
 
+    def __len__(self):
+        """Permite comprobar cuantas propiedades hay cargadas actualmente"""
+        return len(self.data)
+
 
 class _DataObject(object):
 

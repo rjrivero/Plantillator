@@ -58,7 +58,7 @@ class StringSource(LineSource):
 
     """Wrapper sobre un string"""
 
-    def __init__(self, id, stream):
+    def __init__(self, desc, stream):
         LineSource.__init__(self, desc)
         self.lines = stream.split("\n")
 

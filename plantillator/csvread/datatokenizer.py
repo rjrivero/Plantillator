@@ -30,8 +30,7 @@ class DataTokenizer(object):
         reader = csv.reader(self.source.readlines("rb"), delimiter=delim)
         for record in (self._norm(item) for item in reader):
             if record:
-                self.lineno = reader.line_num
-                yield record
+                yield (reader.line_num, record)
 
     def _norm(self, record):
         if not record or record[0].startswith(self.comment):
