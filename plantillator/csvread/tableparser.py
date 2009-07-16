@@ -107,13 +107,13 @@ class TableParser(list):
     de entradas (id, diccionario) con un atributo "headers" que lista todas
     las claves de los diccionarios como ValidHeaders.
 
-    :root - El DataObject raiz
+    :data - El DataObject raiz
     :path - La lista de nombres de tipos anidados.
     """
 
-    def __init__(self, root, path):
+    def __init__(self, data, path):
         list.__init__(self)
-        self.root = root
+        self.data = data
         self.attr = path.pop()
         self.path = path
 
@@ -154,7 +154,7 @@ class TableParser(list):
 
     def _item(self, filters, attfilt, item):
         """Carga un elemento"""
-        current = self.root
+        current = self.data
         for filt in filters:
             current = filt(current, item)
         if attfilt:

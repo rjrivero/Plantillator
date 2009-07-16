@@ -13,14 +13,13 @@ from traceback import print_exc, format_exception_only
 from optparse import OptionParser
 
 try:
-    from data.namedtuple import NamedTuple
+    from data.pathfinder import PathFinder, FileSource
 except ImportError:
     import os.path
     import sys
     sys.path.append(os.path.dirname(os.path.abspath(sys.argv[0])))
-    from data.namedtuple import NamedTuple
+    from data.pathfinder import PathFinder, FileSource
 
-from data.pathfinder import PathFinder, FileSource
 from apps.dataloader import DataLoader
 from apps.tree import TreeCanvas
 
@@ -29,6 +28,12 @@ _ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")
 
 
 class DataNav(tk.Tk):
+
+
+    class Frames(object):
+        def __init__(self, top=None, bottom=None):
+            self.top = top
+            self.bottom = bottom
 
     def __init__(self, glob, data, geometry="800x600"):
         tk.Tk.__init__(self)
@@ -39,7 +44,7 @@ class DataNav(tk.Tk):
         self.cursor = 0
         self.hlen = 20
         # split the window in two frames
-        self.frames = NamedTuple("Frames", "", top=0, bottom=1)
+        self.frames = DataNav.Frames()
         self.frames.top = tk.Frame(self, borderwidth=5)
         self.frames.top.pack(side=tk.TOP, fill=tk.X)
         self.frames.bottom = tk.Frame(self)
@@ -176,8 +181,8 @@ try:
     #
     # - pongo loader.glob como fallback de loader.data
     # - ejecuto las cosas con "exec EXPR in loader.data"
-    loader.data["up"] = loader.glob
-    DataNav(loader.glob, loader.data, geometry).mainloop()
+    loader.data._up = loader.glob
+    DataNav(loader.glob, loader.data.fb, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

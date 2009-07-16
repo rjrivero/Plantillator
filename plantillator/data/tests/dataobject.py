@@ -143,6 +143,9 @@ class TestDataObject(TestCase):
         self.failUnless(result._type == self.data._type)        
         self.failIf(result)
 
+    def test_invalid_attrib(self):
+        self.assertRaises(AttributeError, getattr, self.data, "_test")
+
 
 class TestDataType(TestCase):
 
@@ -171,6 +174,19 @@ class TestDataType(TestCase):
         self.failUnless(isinstance(self.data.x, DataSet))
         self.failUnless(self.data.x._type._Parent == self.root)
         self.failIf(self.data.x)
+
+    def test_eval(self):
+        data = self.root()
+        data.x.add(data.x._type(data, {'x': 10, 'y': 5}))
+        data["item"] = data.x(x=10)
+        self.assertRaises(AttributeError, eval, "item.fail", {}, data)
+
+    def test_exec(self):
+        data = self.root()
+        data.x.add(data.x._type(data, {'x': 10, 'y': 5}))
+        data["item"] = data.x(x=10)
+        exec "test = item.fail" in {}, data
+
 
 
 class TestFallback(TestCase):

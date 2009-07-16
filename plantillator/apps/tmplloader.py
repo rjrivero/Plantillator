@@ -17,6 +17,8 @@ _TOKENSOURCES = {
 }
 
 _DEFAULT_EXT = 'txt'
+
+
 class TmplLoader(dict):
 
     def load(self, source):

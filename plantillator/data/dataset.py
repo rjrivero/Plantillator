@@ -12,6 +12,10 @@ def not_none(filter_me):
     return (x for x in filter_me if x is not None)
 
 
+# Atributos bloqueados (no se toman de los DataObjects)
+_BLOCKED_ATTRIBS = set(('fb', 'iteritems'))
+
+
 class DataSet(set):
 
     """Lista de DataObjects"""
@@ -46,6 +50,8 @@ class DataSet(set):
         Si el atributo seleccionado es una sublista, en lugar de un set
         se devuelve un DataSet con todos los elementos encadenados.
         """
+        if attrib in _BLOCKED_ATTRIBS:
+            raise AttributeError, attrib
         items = not_none(x.get(attrib) for x in self)
         try:
             return DataSet(self._type._Properties[attrib]._type)._chain(items)
@@ -59,3 +65,4 @@ class DataSet(set):
     def up(self):
         data = not_none(x._up for x in self)
         return DataSet(self._type._Parent, data)
+

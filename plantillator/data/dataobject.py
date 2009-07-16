@@ -56,7 +56,7 @@ class _DataObject(object):
     def __getattr__(self, attr):
         try:
             prop = self._type._Properties[attr]
-        except KeyError as details:
+        except (KeyError, ValueError) as details:
             raise AttributeError, details
         else:
             data = prop(self, attr)
@@ -97,6 +97,11 @@ class _DataObject(object):
 
     def update(self, data):
         self.__dict__.update(data)
+
+    def iteritems(self):
+        for (k, v) in self.__dict__.iteritems():
+            if not k.startswith('_') and k not in ('up', 'fb'):
+                yield (k, v)
 
     def __getitem__(self, item):
         try:

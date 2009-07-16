@@ -23,12 +23,12 @@ class DataSource(TableLoader):
         'dependencias': "_dependencias"
     }
 
-    def read(self, source):
+    def read(self, source, data):
         """Carga un fichero de datos, actualiza el diccionario.
 
         Devuelve una lista con las dependencias del fichero.
         """
-        TableLoader.read(self, source)
+        TableLoader.read(self, source, data)
         self.dependencies, remove = list(), list()
         for path, parser in self.iteritems():
             try:

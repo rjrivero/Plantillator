@@ -128,7 +128,7 @@ except CommandError as detail:
     if options.debug:
         print_exc(file=sys.stderr)
         detail.data['error'] = detail
-        code.interact("Consola de depuracion", local=detail.data)
+        code.interact("Consola de depuracion", local={'data':detail.data})
     sys.exit(TRANSLATION_ERRNO)
 except ParseError as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):

@@ -31,12 +31,15 @@ class Block(object):
 
 class ParserDict(dict):
 
-    """Factoria de propiedades"""
+    """Factoria de propiedades
+
+    Diccionario path -> parser. Para cada ruta conocida, determina
+    el parser (factoria de objetos) que carga los datos de esa ruta.
+    Todas las propiedades son ScopeSets.
+    """
 
     def __init__(self):
         dict.__init__(self)
-        self.root = RootType(self)
-        self.data = self.root()
 
     def __call__(self, cls, attr):
         attr = ValidHeader(attr)
@@ -55,10 +58,11 @@ class TableLoader(ParserDict):
     con una ruta, y un conjunto de valores.
     """
 
-    def read(self, source):
+    def read(self, source, data):
         """Actualiza el ParserDict con los datos de la fuente."""
         try:
             self.lineno = "N/A"
+            self.data   = data
             self._doread(source)
         except (SyntaxError, ValueError) as details:
             raise DataError(source, self.lineno, details)
@@ -87,4 +91,3 @@ class TableLoader(ParserDict):
         except KeyError:
             parser = self.setdefault(label, TableParser(self.data, path))
         parser.append((source, Block(title, lines)))
-

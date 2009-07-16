@@ -4,33 +4,35 @@
 
 from os.path import splitext
 
-import csvread.datasource
 from data.operations import Deferrer, Filter
 from data.base import *
-from data.dataobject import DataObject
-from data.datatype import TypeTree
+from data.dataobject import RootType
+from csvread.datasource import DataSource
+from csvread.tableparser import DataError
 
 
-_DATASOURCES = {
-    'csv': csvread.datasource.DataSource
-}
+class PropertyFactory(dict):
 
-_DEFAULT_EXT = 'csv'
+    def __init__(self, data=None):
+        dict.__init__(self, data or {})
+        self._active = None
+
+    def select(self, ext):
+        self._active = self[ext.lower()]
+        return self._active
+
+    def __call__(self, cls, attr):
+        return self._active(cls, attr)
 
 
-class LoadError(Exception):
-
-    def __init__(self, source, lineno, *args):
-        Exception.__init__(self, *args)
-        self.source = source
-        self.lineno = lineno
+DATA_SOURCES = PropertyFactory({
+    'csv': DataSource()
+    })
 
 
 class DataLoader(object):
 
     def __init__(self):
-        self.tree = TypeTree()
-        self.data = DataObject(self.tree.root)
         self.hist = set()
         self.glob = {
             "__builtins__": __builtins__,
@@ -44,6 +46,8 @@ class DataLoader(object):
             "x": Deferrer(),
             "donde": Filter
         }
+        self.root = RootType(DATA_SOURCES)
+        self.data = self.root()
 
     def load(self, source):
         sources = [source]
@@ -54,18 +58,15 @@ class DataLoader(object):
                 self.hist.add(source.id)
 
     def _resolve(self, source):
-        ext = splitext(source.id)[-1].lower()
-        if not ext in _DATASOURCES:
-            ext = _DEFAULT_EXT
-        ds = _DATASOURCES[ext](self.tree, self.data)
         try:
-            return list(source.resolve(item) for item in ds.read(source))
+            parser = DATA_SOURCES.select(splitext(source.id)[-1][1:])
+            deps = parser.read(source, self.data)
+            return list(source.resolve(item) for item in deps)
         except (SyntaxError, ValueError) as details:
-            raise LoadError(source, ds.lineno, details.message)
+            raise DataError(source, "N/A", details.message)
 
     def evaluate(self, expr):
         return eval(expr, self.glob, self.data)
 
     def known(self, ext):
-        return ext.lower() in _DATASOURCES
-
+        return ext.lower() in DATA_SOURCES

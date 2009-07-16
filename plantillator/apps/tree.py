@@ -2,10 +2,11 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-from data.dataobject import NAMING_ATTRIBS
-
 import Tkinter as tk
 from idlelib.TreeWidget import TreeItem, TreeNode
+
+
+_NAMING_ATTRIBS = ['id', 'nombre', 'descripcion']
 
 
 class Tagger(object):
@@ -16,8 +17,8 @@ class Tagger(object):
         item ha salido de un diccionario, el indice si el item ha salido de
         una lista)
         """
-        if not name and isinstance(data, dict):
-            return str(data)
+        if not name and hasattr(data, 'iteritems'):
+            return ", ".join(str(data.get(x,"")) for x in _NAMING_ATTRIBS)
         elif not hasattr(data, "__iter__"):
             return "%s = %s" % (name, str(data)) if name else str(data)
         return name or hint or "<>"
@@ -53,7 +54,7 @@ class Item(TreeItem):
         # check properties
         self.expandable = (data is not None and hasattr(data, '__iter__'))
         self.editable = False
-        if isinstance(data, dict):
+        if hasattr(data, 'iteritems'):
             self.GetSubList = self._dict
         elif hasattr(data, '__iter__'):
             self.GetSubList = self._list

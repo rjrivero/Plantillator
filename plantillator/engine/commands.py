@@ -8,9 +8,7 @@ import functools
 from gettext import gettext as _
 
 from data.operations import asIter
-from data.namedtuple import NamedTuple
-from data.datatype import DataType
-from data.dataobject import DataObject
+from data.dataobject import Fallback
 from engine.base import *
 
 
@@ -21,11 +19,30 @@ _WRONG_PARAMS = _("La cadena %(params)s no es valida")
 _ELSE_WITHOUT_IF = _("\"si no\" desemparejado")
 
 
-YieldBlock = NamedTuple("YieldBlock",
+class YieldBlock(tuple):
+
     """Bloque que es lanzado por un comando para indicar que necesita
     informacion o procesamiento adicional para traducir un patron
-    """,
-    opcode=0, command=1, glob=2, data=3)
+    """
+
+    def __new__(cls, *args):
+        return tuple.__new__(cls, args)
+
+    @property
+    def opcode(self):
+        return self[0]
+
+    @property
+    def command(self):
+        return self[1]
+
+    @property
+    def glob(self):
+        return self[2]
+
+    @property
+    def data(self):
+        return self[3]
 
 
 class Condition(Command):
@@ -36,7 +53,7 @@ class Condition(Command):
     def match(self, glob, data):
         try:
             return bool(eval(self.expr, glob, data)) if self.expr else True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return False
 
     def run(self, glob, data):
@@ -53,7 +70,7 @@ class ConditionNot(Condition):
     def match(self, glob, data):
         try:
             return not bool(eval(self.expr, glob, data)) if self.expr else True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return True
 
 
@@ -68,7 +85,7 @@ class ConditionExist(Condition):
             expr = eval(self.expr, glob, data)
             if (self.var in expr):
                 return True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return False
         
 
@@ -84,7 +101,7 @@ class ConditionNotExist(ConditionExist):
             expr = eval(self.expr, glob, data)
             if not (self.var in expr):
                 return True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return True
 
 
@@ -136,11 +153,8 @@ class CommandSet(Command):
 
     def run(self, glob, data):
         assign = "%s = %s" % (self.var, self.expr)
-        try:
-            exec(assign, glob, data) 
-            return Command.run(self, glob, data)
-        except (AttributeError, KeyError):
-            pass
+        exec assign in glob, data
+        return Command.run(self, glob, data)
 
 
 class CommandDefine(Command):
@@ -156,9 +170,8 @@ class CommandDefine(Command):
             self.params = tuple(x.strip() for x in self.params.split(","))
         else:
             self.params = tuple()
-        self.fake_type = DataType(None)
         for item in self.params:
-            if item != self.fake_type.add_field(item):
+            if not item.isalnum():
                 raise ParseError(None, token,
                                  _WRONG_PARAMS % {'params': str(self.params)})
 
@@ -166,7 +179,7 @@ class CommandDefine(Command):
         if len(params) != len(self.params):
             raise ValueError(params)
         vals = dict(zip(self.params, params))
-        data = DataObject(self.fake_type, vals, data)
+        data = Fallback(data, vals, 2)
         return Command.run(self, glob, data)
 
     def run(self, glob, data):

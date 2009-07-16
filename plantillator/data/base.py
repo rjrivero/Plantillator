@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
+
 import re
+from itertools import chain
 
 from operations import Deferrer, asIter
 
@@ -12,7 +14,7 @@ def BaseMaker(basetype):
 
         def __add__(self, other):
             """Concatena dos secuencias"""
-            return BaseSequence(itertools.chain(self, asIter(other)))
+            return BaseSequence(chain(self, asIter(other)))
 
         def __call__(self, arg):
             """Devuelve el subconjunto de elementos que cumple el criterio"""
