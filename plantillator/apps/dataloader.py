@@ -4,11 +4,11 @@
 
 from os.path import splitext
 
-from data.operations import Deferrer, Filter
-from data.base import *
-from data.dataobject import RootType
-from csvread.datasource import DataSource
-from csvread.tableparser import DataError
+from ..data.operations import Deferrer, Filter
+from ..data.base import *
+from ..data.dataobject import RootType
+from ..csvread.datasource import DataSource
+from ..csvread.tableparser import DataError
 
 
 class PropertyFactory(dict):
@@ -70,3 +70,4 @@ class DataLoader(object):
 
     def known(self, ext):
         return ext.lower() in DATA_SOURCES
+

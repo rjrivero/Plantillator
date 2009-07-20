@@ -5,16 +5,15 @@
 from unittest import TestCase, main
 
 try:
-    from csvread.tableloader import *
+    from plantillator.csvread.loader import *
 except ImportError:
     import sys
-    sys.path.append("..")
-    sys.path.append("../..")
-    from csvread.tableloader import *
-from csvread.tableparser import *
-from data.dataobject import *
-from data.dataset import *
-from data.pathfinder import *
+    sys.path.append("../../..")
+    from plantillator.csvread.loader import *
+from plantillator.csvread.parser import *
+from plantillator.data.dataobject import *
+from plantillator.data.dataset import *
+from plantillator.data.pathfinder import *
 
 
 class TestBlock(TestCase):
@@ -83,8 +82,8 @@ class TestTableLoader(TestCase):
            ,      10, 20,
            ,      test, me""")
         self.loader.read(source, self.data)
-        self.failUnless(self.data.simple(x=10).y == 20)
-        self.failUnless(self.data.simple(x="test").y == "me")
+        self.failUnless(+self.data.simple(x=10).y == 20)
+        self.failUnless(+self.data.simple(x="test").y == "me")
 
     def test_simple_lazy(self):
         source = StringSource("test", 
@@ -102,8 +101,8 @@ class TestTableLoader(TestCase):
            ,      10,  , 20,
            ,      test, me, """)
         self.loader.read(source, self.data)
-        self.assertRaises(AttributeError, getattr, self.data.simple(x=10), "y")
-        self.assertRaises(AttributeError, getattr, self.data.simple(x="test"), "z")
+        self.assertRaises(AttributeError, getattr, +self.data.simple(x=10), "y")
+        self.assertRaises(AttributeError, getattr, +self.data.simple(x="test"), "z")
 
     def test_simple_concat(self):
         source = StringSource("test", 
@@ -112,8 +111,8 @@ class TestTableLoader(TestCase):
            ,        ,   ,
            ,      a, b""")
         self.loader.read(source, self.data)
-        self.failUnless(self.data.simple(x=100).y == 150)
-        self.failUnless(self.data.simple(x="a").y == "b")
+        self.failUnless(+self.data.simple(x=100).y == 150)
+        self.failUnless(+self.data.simple(x="a").y == "b")
 
     def test_double_empty(self):
         source = StringSource("test", 
@@ -132,9 +131,9 @@ class TestTableLoader(TestCase):
            double, a, b, c
            ,       10, , 5""")
         self.loader.read(source, self.data)
-        self.failUnless(self.data.simple(x=10).y == 20)
-        self.failUnless(self.data.simple(x="test").y == "me")
-        self.failUnless(self.data.double(a=10).c == 5)
+        self.failUnless(+self.data.simple(x=10).y == 20)
+        self.failUnless(+self.data.simple(x="test").y == "me")
+        self.failUnless(+self.data.double(a=10).c == 5)
  
     def test_nested_data(self):
         source = StringSource("test", 
@@ -145,8 +144,8 @@ class TestTableLoader(TestCase):
            ,             10,       1, 2
            ,             test,     1, 5  """)
         self.loader.read(source, self.data)
-        self.failUnless(self.data.parent(x=10).child(b=1).c == 2)
-        self.failUnless(self.data.parent(x="test").child(b=1).c == 5)
+        self.failUnless(+self.data.parent(x=10).child(b=1).c == 2)
+        self.failUnless(+self.data.parent(x="test").child(b=1).c == 5)
 
     def test_nested_norepeat(self):
         source = StringSource("test", 
@@ -190,3 +189,4 @@ class TestTableLoader(TestCase):
 
 if __name__ == "__main__":
     main()
+

@@ -4,7 +4,7 @@
 
 from itertools import chain
 
-from data.base import BaseSet
+from .base import BaseSet, Deferrer
 
 
 def not_none(filter_me):
@@ -23,19 +23,21 @@ class DataSet(set):
 
     def __call__(self, **kw):
         """Busca los elementos de la lista que cumplan los criterios dados"""
-        crit = self._type._adapt(kw)
-        data = DataSet(self._type, (x for x in self if x._matches(crit)))
-        return data if len(data) != 1 else data.pop()
+        d = Deferrer()
+        crit = dict((k, (v if hasattr(v, '__call__') else (d == v)))
+                    for k, v in kw.iteritems())
+        return self._type._NewSet(x for x in self if x._matches(crit))
 
     def __add__(self, other):
         """Concatena dos DataSets"""
         if self._type != other._type:
             raise TypeError(other._type)
-        return DataSet(self._type, chain(self, other))
+        return self._type._NewSet(self, other)
 
-    def _chain(self, itemlist):
-        self.update(chain(*tuple(itemlist)))
-        return self
+    def __pos__(self):
+        if len(self) == 1:
+            return self.copy().pop()
+        raise IndexError(0)
 
     def __getitem__(self, attrib):
         """Selecciona un item en la lista
@@ -50,7 +52,7 @@ class DataSet(set):
             raise AttributeError, attrib
         items = not_none(x.get(attrib) for x in self)
         try:
-            return DataSet(self._type._Properties[attrib]._type)._chain(items)
+            return self._type._Properties[attrib]._type._NewSet(*tuple(items))
         except (KeyError, AttributeError):
             return BaseSet(items)
 
@@ -60,5 +62,5 @@ class DataSet(set):
     @property
     def up(self):
         data = not_none(x._up for x in self)
-        return DataSet(self._type._Parent, data)
+        return self._type._Parent._NewSet(data)
 

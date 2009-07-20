@@ -5,14 +5,13 @@
 from unittest import TestCase, main
 
 try:
-    from csvread.tableparser import *
+    from plantillator.csvread.parser import *
 except ImportError:
     import sys
-    sys.path.append("..")
-    sys.path.append("../..")
-    from csvread.tableparser import *
-from data.dataobject import *
-from data.dataset import *
+    sys.path.append("../../..")
+    from plantillator.csvread.parser import *
+from plantillator.data.dataobject import *
+from plantillator.data.dataset import *
 
 
 class TestValidHeader(TestCase):
@@ -91,7 +90,7 @@ class TestRowFilter(TestCase):
 
     def test_single_match(self):
         result = self.filt(self.dset, {'test.a': 10, 'test.d': 5})
-        self.failUnless(result == self.subi2)
+        self.failUnless(+result == self.subi2)
 
     def test_single_remove_indexes(self):
         data = {'test.a': 10, 'test.d': 5, 'x': 10}
@@ -225,12 +224,12 @@ class TestTableParserCallAppend(TestCase):
         self.pars.append(("source", Block(head, data)))
         self.pars(self.data.test(a=1), "nested")
         nested1 = self.data.test(a=1).nested
-        nested2 = self.data.test(a=2).nested()
+        nested2 = +self.data.test(a=2).nested
         self.failUnless(len(nested1) == 2)
-        self.failUnless(len(nested2) == 1)
+        #self.failUnless(len(nested2) == 1)
         self.failUnless(nested2.x == 8 and nested2.y == 4)
-        self.failUnless(nested1(x=2).y == 5)
-        self.failUnless(nested1(x=5).y == 0)
+        self.failUnless(+nested1(x=2).y == 5)
+        self.failUnless(+nested1(x=5).y == 0)
 
 
 if __name__ == "__main__":

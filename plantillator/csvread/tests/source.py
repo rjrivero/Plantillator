@@ -5,16 +5,15 @@
 from unittest import TestCase, main
 
 try:
-    from csvread.datasource import *
+    from plantillator.csvread.source import *
 except ImportError:
     import sys
-    sys.path.append("..")
-    sys.path.append("../..")
-    from csvread.datasource import *
-from csvread.tableparser import *
-from data.dataobject import *
-from data.dataset import *
-from data.pathfinder import *
+    sys.path.append("../../..")
+    from plantillator.csvread.source import *
+from plantillator.csvread.parser import *
+from plantillator.data.dataobject import *
+from plantillator.data.dataset import *
+from plantillator.data.pathfinder import *
 
 
 class TestDataSource(TestCase):

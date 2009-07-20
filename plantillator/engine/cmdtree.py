@@ -5,8 +5,8 @@
 import re
 from gettext import gettext as _
 
-from engine.base import *
-from engine.commands import *
+from .base import *
+from .commands import *
 
 
 _RUNTIME_ERROR = _("Error ejecutando %(command)s")
@@ -101,7 +101,7 @@ class CommandTree(list):
 
     def build(self, base, token, last):
         if not token.head:
-	    return self._chain(base, token, last)
+            return self._chain(base, token, last)
         cmd, inner = self._check(token), None
         for nested in token.body:
             inner = self.build(cmd, nested, inner)

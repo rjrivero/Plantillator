@@ -20,33 +20,33 @@ class TestDataSet(TestCase):
     def setUp(self):
         self.root = RootType(GroupTree({'subtype': GroupTree()}))
         self.data = self.root()
-        self.dset = DataSet(self.root)
+        self.dset = self.root._NewSet()
         self.dset.add(self.data)
 
     def test_construct(self):
-        dset = DataSet(self.root)
+        dset = self.root._NewSet()
         self.failUnless(dset._type == self.root)
         self.failIf(dset)
 
     def test_construct_data(self):
-        dset = DataSet(self.root, self.data)
+        dset = self.root._NewSet(self.data)
         self.failUnless(self.data in dset)
 
     def test_add_fail(self):
         subtype = self.root._Properties["subtype"]._type
-        other = DataSet(subtype)
+        other = subtype._NewSet()
         self.assertRaises(TypeError, operator.add, self.dset, other)
 
     def test_add(self):
         other_data = self.root()
-        combined = self.dset + DataSet(self.root, other_data)
+        combined = self.dset + self.root._NewSet(other_data)
         self.failUnless(len(combined) == 2)
         self.failUnless(other_data in combined)
         self.failUnless(self.data in combined)
 
     def test_up_empty(self):
         subtype = self.root._Properties["subtype"]._type
-        dset = DataSet(subtype)
+        dset = subtype._NewSet()
         self.failUnless(isinstance(dset.up, DataSet))
         self.failUnless(dset.up._type == self.root)
         self.failIf(dset.up)
@@ -55,7 +55,7 @@ class TestDataSet(TestCase):
         subtype = self.root._Properties["subtype"]._type
         subitem = subtype(self.data)
         self.data.subtype.add(subitem)
-        dset = DataSet(subtype, subitem)
+        dset = subtype._NewSet(subitem)
         self.failUnless(len(dset.up) == 1)
         self.failUnless(self.data in dset.up)
 
@@ -74,12 +74,22 @@ class TestDataSet(TestCase):
         data2 = self.root()
         subitem1 = subtype(data1)
         subitem2 = subtype(data2)
-	data1.subtype.add(subitem1)
+        data1.subtype.add(subitem1)
         data2.subtype.add(subitem2)
-        dset = DataSet(self.root, (data1, data2))
+        dset = self.root._NewSet(data1, data2)
         self.failUnless(len(dset.subtype) == 2)
         self.failUnless(subitem1 in dset.subtype)
         self.failUnless(subitem2 in dset.subtype)
+
+    def test_subfield(self):
+        data1 = self.root()
+        data2 = self.root()
+        data1.x = 50
+        data2.x = 10
+        dset = self.root._NewSet(data1, data2)
+        self.failUnless(len(dset.x) == 2)
+        self.failUnless(50 in dset.x)
+        self.failUnless(10 in dset.x)
 
     def test_call(self):
         data2 = self.root()
@@ -96,13 +106,13 @@ class TestDataSet(TestCase):
         self.failUnless(data2 in result2)
         self.failUnless(data3 in result3)
 
-    def test_call_unpack(self):
-        self.data.x = 10
-        self.failUnless(self.dset(x=10) == self.data)
+    #def test_call_unpack(self):
+    #    self.data.x = 10
+    #    self.failUnless(self.dset(x=10) == self.data)
 
     def test_call_True(self):
         crit = lambda x: True
-        self.failUnless(self.dset(x=crit) == self.data)
+        self.failUnless(+self.dset(x=crit) == self.data)
 
     def test_call_False(self):
         crit = lambda x: False

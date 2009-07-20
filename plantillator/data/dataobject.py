@@ -4,26 +4,22 @@
 
 from itertools import islice, chain, repeat
 
-from data.operations import Deferrer
-from data.dataset import DataSet
+from .base import Deferrer, asIter
+from .dataset import DataSet
 
 
-class _Properties(object):
+class _Properties(dict):
 
     def __init__(self, cls, property_factory):
-        self.data = dict()
+        dict.__init__(self)
         self.cls  = cls
         self.factory = property_factory
 
     def __getitem__(self, index):
         try:
-            return self.data[index]
+            return dict.__getitem__(self, index)
         except KeyError:
-            return self.data.setdefault(index, self.factory(self.cls, index))
-
-    def __len__(self):
-        """Permite comprobar cuantas propiedades hay cargadas actualmente"""
-        return len(self.data)
+            return self.setdefault(index, self.factory(self.cls, index))
 
 
 class _DataObject(object):
@@ -37,6 +33,7 @@ class _DataObject(object):
     """
 
     def __init__(self, up=None, data=None):
+        super(_DataObject, self).__init__()
         self._up = up
         if data:
             self.update(data)
@@ -53,11 +50,20 @@ class _DataObject(object):
         subtype._Properties = _Properties(subtype, property_factory)
         return subtype
 
+    @classmethod
+    def _NewSet(cls, *sets):
+        sets = tuple(asIter(x) for x in sets)
+        return DataSet(cls, chain(*sets))
+
+    @property
+    def _type(self):
+        return self.__class__
+
     def __getattr__(self, attr):
         try:
             prop = self._type._Properties[attr]
         except (KeyError, ValueError) as details:
-            raise AttributeError, details
+            raise AttributeError(attr)
         else:
             data = prop(self, attr)
             setattr(self, attr, data)
@@ -98,14 +104,25 @@ class _DataObject(object):
     def update(self, data):
         self.__dict__.update(data)
 
+    def __contains__(self, attrib):
+        """Comprueba que exista el atributo"""
+        try:
+            getattr(self, attrib)
+            return True
+        except:
+            return False
+        
     def iteritems(self):
         for (k, v) in self.__dict__.iteritems():
             if not k.startswith('_') and k not in ('up', 'fb'):
                 yield (k, v)
-
+        
     def __getitem__(self, item):
         try:
             return getattr(self, item)
+        except TypeError as details:
+            print "INTENTADO ACCEDER A %s" % repr(item)
+            raise
         except AttributeError as details:
             raise KeyError, details
 
@@ -114,49 +131,14 @@ class _DataObject(object):
 
     # Herramientas para filtrado
 
-    @classmethod
-    def _adapt(cls, kw):
-        """Normaliza criterios de busqueda
-
-        Un criterio de busqueda es un conjunto de pares "atributo" =>
-        "UnaryOperator". Un objeto cumple el criterio si todos los atributos
-        existen y su valor cumple el criterio especificado por el
-        UnaryOperator correspondiente.
-
-        Para dar facilidades al usuario, las funciones __call__ aceptan
-        argumentos que no son UnaryOperators, sino valores simples, listas,
-        etc. Este metodo se encarga de adaptar esos parametros.
-        """
-        d = Deferrer()
-        return dict((k, v if hasattr(v, '__call__') else (d == v))
-                    for k, v in kw.iteritems())
-
     def _matches(self, kw):
         """Comprueba si el atributo indicado cumple el criterio."""
         return all(crit(self.get(key)) for key, crit in kw.iteritems())
 
-    # Funciones que "mimetizan" el comportamiento de un DataSet de
-    # longitud unitaria.
-
-    @property
-    def _type(self):
-        return self.__class__
-
     def __add__(self, other):
         if self._type != other._type:
             raise TypeError, other._type
-        return DataSet(self._type, chain(self, other))
-
-    def __iter__(self):
-        """Se devuelve a si mismo"""
-        yield self
-
-    def __len__(self):
-        """Devuelve longitud 1"""
-        return 1
-
-    def __call__(self, **kw):
-        return self if self._matches(self._adapt(kw)) else DataSet(self._type)
+        return self._type._NewSet(self, other)
 
 
 def RootType(type_factory, name="DataObject"):
@@ -191,7 +173,7 @@ class GroupTree(dict):
         def __init__(self, subtype):
             self._type = subtype
         def __call__(self, item, attr):
-            return DataSet(self._type)
+            return self._type._NewSet()
     
     def __init__(self, data=None):
         dict.__init__(self, data or dict())
@@ -227,4 +209,5 @@ class Fallback(_DataObject):
                     return getattr(ancestor, attr)
                 except AttributeError:
                     pass
-            raise
+            raise AttributeError(attr)
+

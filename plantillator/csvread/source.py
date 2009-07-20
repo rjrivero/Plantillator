@@ -4,8 +4,9 @@
 
 from gettext import gettext as _
 
-from csvread.tableloader import TableLoader, Block
-from csvread.tableparser import *
+from ..data.base import DataError
+from .loader import TableLoader, Block
+from .parser import *
 
 
 _INVALID_VARNAME = _("El nombre %(varname)s no es valido")
@@ -60,3 +61,4 @@ class DataSource(TableLoader):
         nombre = block.headers[0]
         for self.lineno, item in block:
             self.dependencies.append(item[nombre])
+

@@ -1,0 +1,6 @@
+{{si no hay color en +beverages(color="white")
+ la bebida white no tiene color
+}}
+{{si no hay olor en +beverages(color="white")
+ la bebida white no tiene olor
+}}

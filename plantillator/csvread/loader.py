@@ -4,10 +4,10 @@
 
 from itertools import chain
 
-from data.base import normalize
-from data.dataobject import RootType
-from csvread.datatokenizer import DataTokenizer
-from csvread.tableparser import TableParser, ValidHeader, DataError
+from ..data.base import normalize, DataError
+from ..data.dataobject import RootType
+from .tokenizer import Tokenizer
+from .parser import TableParser, ValidHeader, DataError
 
 
 DATA_COMMENT = "!"
@@ -69,7 +69,7 @@ class TableLoader(ParserDict):
 
     def _doread(self, source):
         """Realiza el procesamiento, no filtra excepciones"""
-        tokenizer = DataTokenizer(source, DATA_COMMENT)
+        tokenizer = Tokenizer(source, DATA_COMMENT)
         path, title, lines = None, None, []
         for (self.lineno, line) in tokenizer.tokens():
             head = line.pop(0).strip() or None
@@ -91,3 +91,4 @@ class TableLoader(ParserDict):
         except KeyError:
             parser = self.setdefault(label, TableParser(self.data, path))
         parser.append((source, Block(title, lines)))
+

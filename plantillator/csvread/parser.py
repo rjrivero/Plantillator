@@ -5,7 +5,8 @@
 import re
 from gettext import gettext as _
 
-from data.dataset import DataSet
+from ..data.base import DataError, asIter
+from ..data.dataset import DataSet
 
 
 _NOT_ENOUGH_INDEXES = _("No hay suficientes indices")
@@ -16,24 +17,6 @@ _UNKNOWN_PREFIX = _("'%(prefix)s' no se corresponde con ningun ancestro")
 
 # valores validos para los nombres de propiedades
 VALID_ATTRIB = re.compile(r'^[a-zA-Z]\w*$')
-
-
-class DataError(Exception):
-
-    """Error de lectura de datos. Incluye source, id y mensaje"""
-
-    def __init__(self, source, itemid, errmsg):
-        self.source = source
-        self.itemid = itemid
-        self.errmsg = errmsg
-
-    def __str__(self):
-        error = [
-            "%s [ %s ]" % (str(self.source), str(self.itemid)),
-            self.errmsg
-        ]
-        # error.extend(traceback.format_exception(*self.exc_info))
-        return "\n".join(error)
 
 
 class ValidHeader(str):
@@ -123,7 +106,7 @@ class TableParser(list):
         # item._type._Properties[attrib] == self. Pero por si acaso...
         self._type = item._type._Properties[attrib]._type
         if not len(self):
-            return DataSet(self._type)
+            return self._type._NewSet()
         while self:
             source, block = self.pop()
             self._block(source, block)
@@ -149,7 +132,7 @@ class TableParser(list):
 
     def _append(self, items, data):
         """Agrega datos a un grupo de items"""
-        for item in items:
+        for item in asIter(items):
             getattr(item, self.attr).add(self._type(item, data))
 
     def _item(self, filters, attfilt, item):
@@ -160,4 +143,5 @@ class TableParser(list):
         if attfilt:
             self._update(current, attfilt, item)
         else:
-            self._append(current, item)
+            self._append(asIter(current), item)
+

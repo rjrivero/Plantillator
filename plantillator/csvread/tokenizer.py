@@ -5,7 +5,7 @@
 import csv
 
 
-class DataTokenizer(object):
+class Tokenizer(object):
 
     """Tokenizer de fichero de datos
 

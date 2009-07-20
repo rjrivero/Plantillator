@@ -5,11 +5,12 @@
 import re
 import itertools
 import functools
+from collections import namedtuple
 from gettext import gettext as _
 
-from data.operations import asIter
-from data.dataobject import Fallback
-from engine.base import *
+from ..data.base import asIter
+from ..data.dataobject import Fallback
+from .base import *
 
 
 # cadenas de error
@@ -19,30 +20,7 @@ _WRONG_PARAMS = _("La cadena %(params)s no es valida")
 _ELSE_WITHOUT_IF = _("\"si no\" desemparejado")
 
 
-class YieldBlock(tuple):
-
-    """Bloque que es lanzado por un comando para indicar que necesita
-    informacion o procesamiento adicional para traducir un patron
-    """
-
-    def __new__(cls, *args):
-        return tuple.__new__(cls, args)
-
-    @property
-    def opcode(self):
-        return self[0]
-
-    @property
-    def command(self):
-        return self[1]
-
-    @property
-    def glob(self):
-        return self[2]
-
-    @property
-    def data(self):
-        return self[3]
+YieldBlock = namedtuple("YieldBlock", "opcode, command, glob, data")
 
 
 class Condition(Command):

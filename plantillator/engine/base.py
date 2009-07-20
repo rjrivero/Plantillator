@@ -8,6 +8,8 @@ import os.path
 from sys import exc_info
 from gettext import gettext as _
 
+from ..data.base import normalize
+
 
 # marcadores de parametros a reemplazar
 PLACEHOLD = re.compile(r'\?(?P<expr>[^\?]+)\?')
@@ -52,7 +54,7 @@ class ParseError(Exception):
             "Error interpretando %s" % str(self.token),
             self.errmsg
         ]
-        # error.extend(traceback.format_exception(*self.exc_info))
+        #error.extend(traceback.format_exception(*self.exc_info))
         return "\n".join(error)
 
 
@@ -75,7 +77,6 @@ class CommandError(Exception):
         self.data   = data
         self.exc_info = exc_info()
 
-
     def __str__(self):
         error = [
             "%s, LINE %s" % (
@@ -84,7 +85,7 @@ class CommandError(Exception):
             "Error ejecutando %s" % str(self.token),
             "%s: %s" % (self.exc_info[0].__name__, str(self.exc_info[1]))
         ]
-        # error.extend(traceback.format_exception(*self.exc_info))
+        error.extend(traceback.format_exception(*self.exc_info))
         return "\n".join(error)
 
 
@@ -95,7 +96,7 @@ class Command(list):
     def __init__(self, token, match):
         list.__init__(self)
         for key, val in match.groupdict().iteritems():
-            setattr(self, key, val.strip() or None if val else None)
+            setattr(self, key, normalize(val) if val else None)
         self.token = token
 
     def run(self, glob, data):

@@ -1,0 +1,6 @@
+{{si hay color en +beverages(color="white")
+ la bebida white tiene color ?+beverages(color="white").color?
+}}
+{{si hay olor en +beverages(color="white")
+ la bebida white tiene color ?+beverages(color="white").olor?
+}}
