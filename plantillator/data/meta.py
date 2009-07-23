@@ -8,9 +8,9 @@ from plantillator.data.dataobject import _DataObject
 from plantillator.data.dataset import DataSet
 
 
-def Relation(model):
+def Relation(model, *arg, **kw):
     """Marca los campos que son foreign keys"""
-    fk = models.ForeignKey(model)
+    fk = models.ForeignKey(model, *arg, **kw)
     fk._type = model
     return fk
 
@@ -59,17 +59,24 @@ def add_dataobject(cls, name, bases, d, data):
     interna del _DataObject. Esperemos que no cambie mucho...
     """
     # obtengo el tipo "padre"
-    name = name.lower()
+    try:
+        doname = d['Meta'].dataobject
+    except (KeyError, AttributeError):
+        doname = name.lower()
     try:
         parent = d['_up']._type
     except (KeyError, AttributeError):
         parent = data._type
         setattr(cls, '_up', None)
+    # Por la estructura de la base de datos, puede haber modelos con
+    # nombres duplicados (ej: sedes.vlans.switches, sedes.switches).
+    # Como esto no lo soporta django, defino una nueva clave en la clase
+    # Meta que se puede usar para configurar el nombre del modelo.
     # veo si el objeto ya esta modificado, o lo modifico.
     try:
-        return parent._Properties[name]._type
+        return parent._Properties[doname]._type
     except (AttributeError, KeyError):
-        parent._Properties[name] = SetBuilder(cls)
+        parent._Properties[doname] = SetBuilder(cls)
         for key, val in _DataObject.__dict__.iteritems():
             if not key.startswith('__') or key.startswith('__get'):
                 setattr(cls, key, val)
