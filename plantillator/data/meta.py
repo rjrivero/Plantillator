@@ -60,23 +60,20 @@ def add_dataobject(cls, name, bases, d, data):
     """
     # obtengo el tipo "padre"
     try:
-        doname = d['Meta'].dataobject
-    except (KeyError, AttributeError):
-        doname = name.lower()
-    try:
         parent = d['_up']._type
     except (KeyError, AttributeError):
         parent = data._type
         setattr(cls, '_up', None)
     # Por la estructura de la base de datos, puede haber modelos con
     # nombres duplicados (ej: sedes.vlans.switches, sedes.switches).
-    # Como esto no lo soporta django, defino una nueva clave en la clase
-    # Meta que se puede usar para configurar el nombre del modelo.
-    # veo si el objeto ya esta modificado, o lo modifico.
+    # Como esto no lo soporta django, lo que hago es partir el nombre de la
+    # clase en trozos separados por "_", y quedarme como nombre para el
+    # atributo solo con la ultima parte.
+    name = name.split("_").pop().lower()
     try:
-        return parent._Properties[doname]._type
+        return parent._Properties[name]._type
     except (AttributeError, KeyError):
-        parent._Properties[doname] = SetBuilder(cls)
+        parent._Properties[name] = SetBuilder(cls)
         for key, val in _DataObject.__dict__.iteritems():
             if not key.startswith('__') or key.startswith('__get'):
                 setattr(cls, key, val)
@@ -116,10 +113,8 @@ class SetBuilder(object):
         self._type = model
 
     def __call__(self, obj, attr):
-        try:
-            pkey = obj.id
-        except AttributeError:
-            return DataSet(self._type, self._type.objects.all())           
-        else:
+        if self._type._up:
             return DataSet(self._type, self._type.objects.filter(_up=pkey))
+        else:
+            return DataSet(self._type, self._type.objects.all())           
 
