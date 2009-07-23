@@ -51,7 +51,7 @@ class TestDataObject(TestCase):
     def test_nofallback(self):
         derived = self.root(self.data)
         self.data.x = 5
-        self.assertRaises(AttributeError, getattr, derived, "x")
+        self.failUnless(derived.x is None)
 
     def test_fallback(self):
         derived = self.root(self.data)
@@ -79,6 +79,9 @@ class TestDataObject(TestCase):
     def test_type(self):
         self.failUnless(self.data._type == self.root)
 
+    def test_magicattr_fail(self):
+        self.assertRaises(AttributeError, getattr, self.data, '__iter__')
+
     #def test_len_empty(self):
     #    self.failUnless(len(self.data) == 1)
 
@@ -97,7 +100,7 @@ class TestDataObject(TestCase):
     #    self.failUnless(count == 1)
 
     def test_invalid_attrib(self):
-        self.assertRaises(AttributeError, getattr, self.data, "_test")
+        self.failUnless(self.data._test is None)
 
     def test_contains(self):
         self.data.x = 5
@@ -140,19 +143,14 @@ class TestDataType(TestCase):
         data = self.root()
         data.x.add(data.x._type(data, {'x': 10, 'y': 5}))
         data["item"] = +data.x(x=10)
-        self.assertRaises(AttributeError, eval, "item.fail", {}, data)
+        self.failUnless(eval("item.fail", {}, data) is None)
 
     def test_exec(self):
         data = self.root()
         data.x.add(data.x._type(data, {'x': 10, 'y': 5}))
         data["item"] = +data.x(x=10)
-        try:
-            exec "test = item.fail" in {}, data
-            self.failIf(True)
-        except AttributeError:
-            pass
-        except:
-            self.failIf(True)
+        exec "test = item.fail" in {}, data
+        self.failUnless(data.test is None)
 
 
 class TestFallback(TestCase):
@@ -164,7 +162,7 @@ class TestFallback(TestCase):
 
     def test_set(self):
         self.fb.x = 5
-        self.assertRaises(AttributeError, getattr, self.data, "x")
+        self.failUnless(self.data.x is None)
         self.failUnless(self.fb.x == 5)
 
     def test_get(self):

@@ -60,10 +60,17 @@ class _DataObject(object):
         return self.__class__
 
     def __getattr__(self, attr):
+        if attr.startswith('__'):
+            # Levanto error en los atributos inexistentes que empiecen
+            # por '__'. Esto es para evitar side-effects indeseados, como
+            # que se intente iterar sobre el objeto usando '__iter__',
+            # imprimir usando __str__ ... y se llegue a un atributo None
+            raise AttributeError, attr
         try:
             prop = self._type._Properties[attr]
-        except (KeyError, ValueError) as details:
-            raise AttributeError(attr)
+        except (KeyError, ValueError, AttributeError) as details:
+            setattr(self, attr, None)
+            return None # para ser consistente con backends en base de datos.
         else:
             data = prop(self, attr)
             setattr(self, attr, data)
@@ -89,42 +96,30 @@ class _DataObject(object):
 
     def get(self, item, defval=None):
         """Busca el atributo, devuelve "defval" si no lo encuentra"""
-        try:
-            return getattr(self, item)
-        except AttributeError:
-            return defval
+        retval = getattr(self, item)
+        return retval if retval is not None else defval
 
     def setdefault(self, attrib, value):
-        try:
-            return getattr(self, attrib)
-        except AttributeError:
+        retval = getattr(self, attrib)
+        if retval is None:
             setattr(self, attrib, value)
-            return value
+            retval = value
+        return retval
 
     def update(self, data):
         self.__dict__.update(data)
 
     def __contains__(self, attrib):
         """Comprueba que exista el atributo"""
-        try:
-            getattr(self, attrib)
-            return True
-        except:
-            return False
+        return (getattr(self, attrib) is not None)
         
     def iteritems(self):
         for (k, v) in self.__dict__.iteritems():
             if not k.startswith('_') and k not in ('up', 'fb'):
                 yield (k, v)
-        
+
     def __getitem__(self, item):
-        try:
-            return getattr(self, item)
-        except TypeError as details:
-            print "INTENTADO ACCEDER A %s" % repr(item)
-            raise
-        except AttributeError as details:
-            raise KeyError, details
+        return getattr(self, item)
 
     def __setitem__(self, name, value):
         setattr(self, name, value)
@@ -194,20 +189,17 @@ class Fallback(_DataObject):
         _DataObject.__init__(self, up, data)
         self._depth = depth
 
+    def __getattr__(self, attr):
+        """Busca el atributo en este objeto y sus ancestros"""
+        retval = _DataObject.__getattr__(self, attr)
+        if retval is None:
+            for ancestor in islice(self._ancestors(), 0, self._depth):
+                retval = getattr(ancestor, attr)
+                if retval is not None:
+                    break
+        return retval
+
     def _ancestors(self):
         while self._up:
             self = self._up
             yield self
-
-    def __getattr__(self, attr):
-        """Busca el atributo en este objeto y sus ancestros"""
-        try:
-            return _DataObject.__getattr__(self, attr)
-        except AttributeError:
-            for ancestor in islice(self._ancestors(), 0, self._depth):
-                try:
-                    return getattr(ancestor, attr)
-                except AttributeError:
-                    pass
-            raise AttributeError(attr)
-
