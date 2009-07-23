@@ -55,17 +55,17 @@ class ConditionNot(Condition):
 class ConditionExist(Condition):
     """Comprobacion de variable
     Concuerda si una variable esta definida en la lista que
-    (se espera que) devuelva la evaluzacion de una expresion.
+    (se espera que) devuelva la evaluacion de una expresion.
     """
 
     def match(self, glob, data):
         try:
             expr = eval(self.expr, glob, data)
-            if (self.var in expr):
+            if exp[self.var] is not None:
                 return True
         except (AttributeError, KeyError, NameError):
             return False
-        
+
 
 class ConditionNotExist(ConditionExist):
     """Comprobacion de no existencia de variable
@@ -77,7 +77,7 @@ class ConditionNotExist(ConditionExist):
     def match(self, glob, data):
         try:
             expr = eval(self.expr, glob, data)
-            if not (self.var in expr):
+            if expr[self.var] is None:
                 return True
         except (AttributeError, KeyError, NameError):
             return True
