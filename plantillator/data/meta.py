@@ -63,7 +63,7 @@ def add_dataobject(cls, name, bases, d, data):
         parent = d['_up']._type
     except (KeyError, AttributeError):
         parent = data._type
-        setattr(cls, '_up', None)
+        #setattr(cls, '_up', None)
     # Por la estructura de la base de datos, puede haber modelos con
     # nombres duplicados (ej: sedes.vlans.switches, sedes.switches).
     # Como esto no lo soporta django, lo que hago es partir el nombre de la
@@ -87,17 +87,18 @@ def add_dynamic(cls, name, bases, d, data):
     for key, val in d.iteritems():
         if hasattr(val, '_Dynamic'):
             def fget(self):
-                val = getattr(self, name)
+                val = getattr(self, key)
                 return val if val is not None else func(self, data)
             def fset(self, val):
-                setattr(self, name, val)
-            setattr(cls, name[1:], property(fget, fset))
+                setattr(self, key, val)
+            setattr(cls, key[1:], property(fget, fset))
 
 
-def extend(cls, name, bases, d, data):
+def new(metaclass, cls, name, bases, d, data):
     """Cuerpo de la metaclase que debe crearse para cada aplicacion"""
-    add_dataobject(cls, name, bases, d, data)
+    cls = metaclass.__new__(cls, name, bases, d)
     add_dynamic(cls, name, bases, d, data)
+    add_dataobject(cls, name, bases, d, data)
     return cls
 
 
@@ -113,8 +114,8 @@ class SetBuilder(object):
         self._type = model
 
     def __call__(self, obj, attr):
-        if self._type._up:
-            return DataSet(self._type, self._type.objects.filter(_up=pkey))
+        if obj.pk is not None:
+            return DataSet(self._type, self._type.objects.filter(_up=obj.pk))
         else:
             return DataSet(self._type, self._type.objects.all())           
 
