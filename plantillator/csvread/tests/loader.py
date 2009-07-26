@@ -101,8 +101,8 @@ class TestTableLoader(TestCase):
            ,      10,  , 20,
            ,      test, me, """)
         self.loader.read(source, self.data)
-        self.failUnless((+self.data.simple(x=10)).y is None)
-        self.failUnless((+self.data.simple(x="test")).z is None)
+        self.assertRaises(AttributeError, getattr, +self.data.simple(x=10), 'y')
+        self.assertRaises(AttributeError, getattr, +self.data.simple(x="test"), 'z')
 
     def test_simple_concat(self):
         source = StringSource("test", 

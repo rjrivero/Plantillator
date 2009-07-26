@@ -6,7 +6,6 @@ import re
 from gettext import gettext as _
 
 from ..data.base import DataError, asIter
-from ..data.dataset import DataSet
 
 
 _NOT_ENOUGH_INDEXES = _("No hay suficientes indices")

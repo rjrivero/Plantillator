@@ -60,17 +60,31 @@ class _DataObject(object):
         return self.__class__
 
     def __getattr__(self, attr):
-        if attr.startswith('__'):
-            # Levanto error en los atributos inexistentes que empiecen
-            # por '__'. Esto es para evitar side-effects indeseados, como
-            # que se intente iterar sobre el objeto usando '__iter__',
-            # imprimir usando __str__ ... y se llegue a un atributo None
-            raise AttributeError, attr
+        """Intenta crear el atributo solicitado usando _Properties
+        Si no puede, lanza AttributeError
+        """
+        # Hay un problema porque, cuando el backend es una base de datos,
+        # es posible que un atributo tenga el valor "None".
+        # He probado a devolver "None" cuando un atributo no existe, por
+        # consistencia,y da muchos problemas:
+        # - muchas funciones internas empiezan a funcionar mal, porque
+        #   obtienen valor None para '__iter__', '__str__', etc.
+        # - Django tambien funciona mal, porque los campos ForeignKey
+        #   buscan un atributo _X_cache, y al ser None no consultan a la bd.
+        #
+        # En consecuencia:
+        # - Esta funcion lanzara AttributeError cuando se accede a un atributo
+        #   inexistente.
+        # - Para mantener consistencia con backend base de datos,
+        #   - get(x, defval) devolvera defval si el valor es None.
+        #   - los Fallbacks tomaran los valores None como inexistentes. Si no
+        #     encuentran un valor valido, lanzaran AttributeError.
+        #   - en el engine, "Si existe" / "Si no existe" tomara los valores
+        #     None como no existentes.
         try:
             prop = self._type._Properties[attr]
         except (KeyError, ValueError, AttributeError) as details:
-            setattr(self, attr, None)
-            return None # para ser consistente con backends en base de datos.
+            raise AttributeError(attr)
         else:
             data = prop(self, attr)
             setattr(self, attr, data)
@@ -95,12 +109,19 @@ class _DataObject(object):
     # Funciones que proporcionan la dualidad objeto / diccionario.
 
     def get(self, item, defval=None):
-        """Busca el atributo, devuelve "defval" si no lo encuentra"""
-        retval = getattr(self, item)
-        return retval if retval is not None else defval
+        """Busca el atributo, devuelve "defval" si no existe o es None"""
+        try:
+            retval = getattr(self, item)
+        except AttributeError:
+            return defval
+        else:
+            return retval if retval is not None else defval
 
     def setdefault(self, attrib, value):
-        retval = getattr(self, attrib)
+        try:
+            retval = getattr(self, attrib)
+        except AttributeError:
+            retval = None
         if retval is None:
             setattr(self, attrib, value)
             retval = value
@@ -111,7 +132,7 @@ class _DataObject(object):
 
     def __contains__(self, attrib):
         """Comprueba que exista el atributo"""
-        return (getattr(self, attrib) is not None)
+        return (self.get(attrib) is not None)
         
     def iteritems(self):
         for (k, v) in self.__dict__.iteritems():
@@ -191,15 +212,17 @@ class Fallback(_DataObject):
 
     def __getattr__(self, attr):
         """Busca el atributo en este objeto y sus ancestros"""
-        retval = _DataObject.__getattr__(self, attr)
-        if retval is None:
+        try:
+            return _DataObject.__getattr__(self, attr)
+        except AttributeError:
             for ancestor in islice(self._ancestors(), 0, self._depth):
-                retval = getattr(ancestor, attr)
+                retval = ancestor.get(attr)
                 if retval is not None:
-                    break
-        return retval
+                    return retval
+            raise
 
     def _ancestors(self):
         while self._up:
             self = self._up
             yield self
+

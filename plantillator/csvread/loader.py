@@ -5,7 +5,6 @@
 from itertools import chain
 
 from ..data.base import normalize, DataError
-from ..data.dataobject import RootType
 from .tokenizer import Tokenizer
 from .parser import TableParser, ValidHeader, DataError
 

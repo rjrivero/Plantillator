@@ -61,7 +61,7 @@ class ConditionExist(Condition):
     def match(self, glob, data):
         try:
             expr = eval(self.expr, glob, data)
-            if exp[self.var] is not None:
+            if expr[self.var] is not None:
                 return True
         except (AttributeError, KeyError, NameError):
             return False

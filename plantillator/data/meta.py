@@ -84,6 +84,7 @@ def add_dataobject(cls, name, bases, d, data):
 
 def add_dynamic(cls, name, bases, d, data):
     """Agrega los campos dinamicos a la clase"""
+    fieldset = list()
     for key, val in d.iteritems():
         if hasattr(val, '_Dynamic'):
             def fget(self):
@@ -91,7 +92,12 @@ def add_dynamic(cls, name, bases, d, data):
                 return val if val is not None else func(self, data)
             def fset(self, val):
                 setattr(self, key, val)
-            setattr(cls, key[1:], property(fget, fset))
+            key = key[1:]
+            setattr(cls, key, property(fget, fset))
+            fieldset.append((key, val))
+        elif not key.startswith('_'):
+            fieldset.append((key, val))
+    setattr(cls, '_FieldSet', fieldset)
 
 
 def new(metaclass, cls, name, bases, d, data):
@@ -114,8 +120,10 @@ class SetBuilder(object):
         self._type = model
 
     def __call__(self, obj, attr):
-        if obj.pk is not None:
-            return DataSet(self._type, self._type.objects.filter(_up=obj.pk))
-        else:
+        try:
+            pk = obj.pk
+        except AttributeError:
             return DataSet(self._type, self._type.objects.all())           
+        return DataSet(self._type, self._type.objects.filter(_up=pk))
+
 
