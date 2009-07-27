@@ -57,6 +57,9 @@ class TableLoader(ParserDict):
     con una ruta, y un conjunto de valores.
     """
 
+    def __init__(self):
+        dict.__init__(self)
+
     def read(self, source, data):
         """Actualiza el ParserDict con los datos de la fuente."""
         try:

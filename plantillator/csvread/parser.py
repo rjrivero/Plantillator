@@ -57,7 +57,7 @@ class RowFilter(set):
                 headers.remove(h)
 
     def __call__(self, dset, item):
-        """Filtra el dset"""
+        """Filtra el dataset"""
         dset = getattr(dset, self.attr)
         if len(self):
             try:
