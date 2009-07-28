@@ -100,12 +100,10 @@ class TableParser(list):
         self.path = path
 
     def __call__(self, item, attrib):
-        """factoria de datos"""
-        # En teoria esto es redundante, porque
-        # item._type._Properties[attrib] == self. Pero por si acaso...
-        self._type = item._type._Properties[attrib]._type
+        """Carga el atributo solicitado "attrib" del item"""
+        self._type = item._type._DOMD.children[attrib]
         if not len(self):
-            return self._type._NewSet()
+            return self._type._DOMD.new_set()
         while self:
             source, block = self.pop()
             self._block(source, block)

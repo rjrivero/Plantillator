@@ -4,18 +4,19 @@
 from unittest import TestCase, main
 
 try:
-    from data.dataobject import DataType, MetaData, Fallback
+    from data.dataobject import *
 except ImportError:
     import sys
     sys.path.append("..")
     sys.path.append("../..")
-    from data.dataobject import DataType, MetaData, Fallback
+    from data.dataobject import *
+from data.dataset import *
 
 
 class TestDataObject(TestCase):
 
     def setUp(self):
-        self.root = DataType(object)
+        self.root = RootType(GroupTree())
         self.data = self.root()
 
     def test_construct_empty(self):
@@ -81,6 +82,23 @@ class TestDataObject(TestCase):
     def test_magicattr_fail(self):
         self.assertRaises(AttributeError, getattr, self.data, '__iter__')
 
+    #def test_len_empty(self):
+    #    self.failUnless(len(self.data) == 1)
+
+    #def test_len_full(self):
+    #    self.data.x = 100
+    #    self.failUnless(len(self.data) == 1)
+
+    #def test_iter_is_self(self):
+    #    for item in self.data:
+    #        self.failUnless(item == self.data)
+
+    #def test_iter_once(self):
+    #    count = 0
+    #    for item in self.data:
+    #        count = count + 1
+    #    self.failUnless(count == 1)
+
     def test_invalid_attrib(self):
         self.assertRaises(AttributeError, getattr, self.data, '_test')
 
@@ -92,41 +110,50 @@ class TestDataObject(TestCase):
         self.data.x = 5
         self.failIf("y" in self.data)
 
-    def test_iteritems(self):
-        self.root._DOMD = MetaData("test", None, None, ('x', 'y', 'z'))
-        self.data.x = 1
-        self.data.z = 2
-        self.data.unknown = 10
-        items = self.data.iteritems()
-        self.failUnless(items.next() == ('x', 1))
-        self.failUnless(items.next() == ('z', 2))
-        self.assertRaises(StopIteration, items.next)
 
-    def test_eval_fail(self):
-        self.data.item = self.root()
-        self.assertRaises(AttributeError, eval, "item.fail", {}, self.data)
+class TestDataType(TestCase):
 
-    def test_eval_ok(self):
-        self.data.item = self.root()
-        self.data.item.ok = True
-        self.failUnless(eval("item.ok", {}, self.data) is True)
+    def setUp(self):
+        self.tree = GroupTree({'x': GroupTree()})
+        self.root = RootType(self.tree)
+        self.data = self.root()
 
-    def test_exec_fail(self):
-        self.data.item = self.root()
+    def test_construct(self):
+        self.failUnless(self.root._Parent is None)
+
+    def test_property_single(self):
+        data = self.root()
+        data.x.add(data.x._type(data, {'y': 10}))
+        self.failUnless(+data.x(y=10))
+
+    def test_property_double(self):
+        data1 = self.root()
+        data2 = self.root()
+        data1.x.add(data1.x._type(data1, {'y': 10}))
+        data2.x.add(data2.x._type(data2, {'y': 20}))
+        self.failUnless(+data1.x(y=10))
+        self.failIf(data1.x(y=20))
+
+    def test_new_child_dataset(self):
+        self.failUnless(isinstance(self.data.x, DataSet))
+        self.failUnless(self.data.x._type._Parent == self.root)
+        self.failIf(self.data.x)
+
+    def test_eval(self):
+        data = self.root()
+        data.x.add(data.x._type(data, {'x': 10, 'y': 5}))
+        data["item"] = +data.x(x=10)
+        self.assertRaises(AttributeError, eval, "item.fail", {}, data)
+
+    def test_exec(self):
+        data = self.root()
+        data.x.add(data.x._type(data, {'x': 10, 'y': 5}))
+        data["item"] = +data.x(x=10)
         try:
-            exec "test = item.fail" in {}, self.data
+            exec "test = item.fail" in {}, data
             self.failIf(True)
         except AttributeError:
             pass
-        except:
-            self.failIf(True)
-
-    def test_exec_ok(self):
-        self.data.item = self.root()
-        self.data.item.ok = True
-        try:
-            exec "test = item.ok" in {}, self.data
-            self.failUnless(self.data.test is True)
         except:
             self.failIf(True)
 
@@ -134,7 +161,7 @@ class TestDataObject(TestCase):
 class TestFallback(TestCase):
 
     def setUp(self):
-        self.root = DataType(object)
+        self.root = RootType(GroupTree())
         self.data = self.root()
         self.fb = self.data.fb
 
@@ -146,6 +173,18 @@ class TestFallback(TestCase):
     def test_get(self):
         self.data.x = 10
         self.failUnless(self.fb.x == 10)
+
+    #def test_call(self):
+    #    self.data.x = 10
+    #    self.failUnless(+self.data(x=10) == self.data)
+    #    self.failUnless(+self.fb(x=10) == self.fb)
+
+    #def test_call_deep(self):
+    #    self.data.x = 5
+    #    subitem = self.root(self.data)
+    #    self.failUnless(+self.data(x=5) == self.data)
+    #    self.failIf(subitem(x=5))
+    #    self.failUnless(+self.fb(x=5) == self.fb)
 
     def test_contains(self):
         self.data.x = 5
@@ -160,6 +199,7 @@ class TestFallback(TestCase):
     def test_not_contains(self):
         self.data.x = 5
         self.failIf("y" in self.data.fb)
+
 
 
 if __name__ == "__main__":

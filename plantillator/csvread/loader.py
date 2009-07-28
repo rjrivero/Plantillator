@@ -27,27 +27,8 @@ class Block(object):
                         if x is not None and y is not None)
             yield (lineno, data)
 
-
-class ParserDict(dict):
-
-    """Factoria de propiedades
-
-    Diccionario path -> parser. Para cada ruta conocida, determina
-    el parser (factoria de objetos) que carga los datos de esa ruta.
-    Todas las propiedades son ScopeSets.
-    """
-
-    def __init__(self):
-        dict.__init__(self)
-
-    def __call__(self, cls, attr):
-        attr = ValidHeader(attr)
-        parser = self[".".join(chain(cls._Path, (attr,)))]
-        parser._type = cls._SubType(attr, self)
-        return parser
-
             
-class TableLoader(ParserDict):
+class TableLoader(dict):
     """Cargador de ficheros de datos
 
     Un fichero de datos es basicamente una forma mas resumida de definir
@@ -55,6 +36,12 @@ class TableLoader(ParserDict):
 
     todos los objetos de un fichero de datos son diccionarios
     con una ruta, y un conjunto de valores.
+
+    Este objeto carga y almacena, por cada ruta, un parser capaz de
+    cargar los datos correspondientes a esa ruta.
+
+    Las claves del diccionario son los paths serializados, con sus
+    componentes separados por un ".".
     """
 
     def __init__(self):

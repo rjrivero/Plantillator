@@ -16,9 +16,6 @@ class DataSource(TableLoader):
 
     """Carga e interpreta ficheros de datos"""
 
-    def __init__(self):
-        TableLoader.__init__(self)
-
     _HOOKS = {
         'variables':    "_variables",
         'dependencias': "_dependencias"

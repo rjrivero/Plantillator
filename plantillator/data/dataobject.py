@@ -5,7 +5,7 @@
 from itertools import islice
 
 
-def DataObject(base):
+def DataType(base):
 
     """Devuelve un tipo derivado de "base" que se comporta como un dict.
 
@@ -71,9 +71,10 @@ def DataObject(base):
             return (self.get(attrib) is not None)
         
         def iteritems(self):
-            for (k, v) in self.__dict__.iteritems():
-                if not k.startswith('_') and k not in ('up', 'fb'):
-                    yield (k, v)
+            for key in (str(x) for x in self._type._DOMD.attribs):
+                value = self.get(key)
+                if value is not None:
+                    yield (key, value)
 
         def __getitem__(self, item):
             return getattr(self, item)
@@ -90,7 +91,29 @@ def DataObject(base):
     return _DataObject
 
 
-class Fallback(DataObject(object)):
+class MetaData(object):
+
+    """MetaDatos relacionados con una clase de DataObject
+
+    name: label de la clase (string)
+    parent: clase padre, en la jerarquia (DataObject.__class__)
+    children: clases hijo en la jerarquia (dict(string, DataObject.__class__))
+    attribs: atributos (list(string))
+
+    Por convencion, las clases derivadas de DataObject(...) deben tener un
+    atributo _DOMD (DataObject MetaData) de este tipo.
+    """
+
+    def __init__(self, cls, name, parent=None):
+        self.name     = name
+        self.parent   = parent
+        self.children = dict()
+        self.attribs  = list()
+        # por convencion, el tipo siempre se llama _type.
+        self._type    = cls
+
+
+class Fallback(DataType(object)):
 
     """Realiza fallback en la jerarquia de objetos
 
@@ -101,19 +124,18 @@ class Fallback(DataObject(object)):
         super(Fallback, self).__init__(up, data)
         self._depth = depth
 
+    def _resolve(self, attr):
+        self = self._up
+        while self:
+            yield self.get(attr)
+            self = self._up
+
     def __getattr__(self, attr):
         """Busca el atributo en este objeto y sus ancestros"""
-        try:
-            return super(Fallback, self).__getattr__(self, attr)
-        except AttributeError:
-            for ancestor in islice(self._ancestors(), 0, self._depth):
-                retval = ancestor.get(attr)
-                if retval is not None:
-                    return retval
-            raise
-
-    def _ancestors(self):
-        while self._up:
-            self = self._up
-            yield self
+        if attr.startswith('__'):
+            raise AttributeError(attr)
+        for value in islice(self._resolve(attr), 0, self._depth):
+            if value is not None:
+                return value
+        raise AttributeError(attr)
 
