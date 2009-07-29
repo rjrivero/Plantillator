@@ -4,14 +4,8 @@
 
 from itertools import chain
 
-from ..data.base import BaseSet, Deferrer
 from ..data.dataobject import DataType, MetaData
 from .source import DataSource
-
-
-def not_none(filter_me):
-    """Devuelve los objetos de la lista que no son None"""
-    return (x for x in filter_me if x is not None)
 
 
 class CSVMetaData(MetaData):
@@ -34,7 +28,7 @@ class CSVMetaData(MetaData):
         # me asigno directamente el parser que va a leer mis datos.
         self.parser = None
         if self.path:
-            # si no existe el path, se lanza un error. Util para
+            # si no existe el path, se lanza un KeyError. Util para
             # evitar que se creen subtipos que no se pueden leer.
             self.parser = CSVMetaData.Source[self.path]
 
@@ -50,10 +44,6 @@ class CSVMetaData(MetaData):
     def new_set(self, cls, *sets):
         sets = tuple(asIter(x) for x in sets)
         return DataSet(self._type, chain(*sets))
-
-    def parser(self, attr):
-        path = attr if not self.path else ".".join((self.path, attr))
-        return CSVMetaData[path]
 
 
 class CSVObject(DataType(object)):
@@ -109,60 +99,3 @@ def RootType():
     root = type("RootType", (CSVObject,), dict())
     setattr(root, '_DOMD', CSVMetaData(root))
     return root
-
-
-class CSVSet(set):
-
-    """Lista de CSVObjects"""
-
-    def __init__(self, _type, data=None):
-        """Crea una lista vacia"""
-        set.__init__(self, data or tuple())
-        self._type = _type
-
-    def __call__(self, **kw):
-        """Busca los elementos de la lista que cumplan los criterios dados"""
-        d = Deferrer()
-        crit = dict((k, (v if hasattr(v, '__call__') else (d == v)))
-                    for k, v in kw.iteritems())
-        return self._type._DOMD.new_set(x for x in self if x._matches(crit))
-
-    def __add__(self, other):
-        """Concatena dos DataSets"""
-        if self._type != other._type:
-            raise TypeError(other._type)
-        return self._type._DOMD.new_set(self, other)
-
-    def __pos__(self):
-        if len(self) == 1:
-            return self.copy().pop()
-        raise IndexError(0)
-
-    def __getitem__(self, attrib):
-        """Selecciona un item en la lista
-
-        Devuelve un set con los distintos valores del atributo seleccionado
-        en cada uno de los elementos de la lista.
-
-        Si el atributo seleccionado es una sublista, en lugar de un set
-        se devuelve un DataSet con todos los elementos encadenados.
-        """
-        if attrib.startswith('__'):
-            raise KeyError, attrib
-        items = not_none(x.get(attrib) for x in self)
-        try:
-            return self._type._DOMD.subtype(attrib)._DOMD.new_set(*tuple(items))
-        except KeyError:
-            return BaseSet(items)
-
-    def __getattr__(self, attrib):
-        try:
-            return self[attrib]
-        except KeyError as details:
-            raise AttributeError(details)
-
-    @property
-    def up(self):
-        data = not_none(x._up for x in self)
-        return self._type._DOMD.parent._DOMD.new_set(data)
-

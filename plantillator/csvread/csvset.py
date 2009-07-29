@@ -4,7 +4,7 @@
 
 from itertools import chain
 
-from .base import BaseSet, Deferrer
+from ..data.base import BaseSet, Deferrer
 
 
 def not_none(filter_me):
@@ -12,9 +12,9 @@ def not_none(filter_me):
     return (x for x in filter_me if x is not None)
 
 
-class DataSet(set):
+class CSVSet(set):
 
-    """Lista de DataObjects"""
+    """Lista de CSVObjects"""
 
     def __init__(self, _type, data=None):
         """Crea una lista vacia"""
@@ -26,13 +26,13 @@ class DataSet(set):
         d = Deferrer()
         crit = dict((k, (v if hasattr(v, '__call__') else (d == v)))
                     for k, v in kw.iteritems())
-        return self._type._NewSet(x for x in self if x._matches(crit))
+        return self._type._DOMD.new_set(x for x in self if x._matches(crit))
 
     def __add__(self, other):
         """Concatena dos DataSets"""
         if self._type != other._type:
             raise TypeError(other._type)
-        return self._type._NewSet(self, other)
+        return self._type._DOMD.new_set(self, other)
 
     def __pos__(self):
         if len(self) == 1:
@@ -48,19 +48,21 @@ class DataSet(set):
         Si el atributo seleccionado es una sublista, en lugar de un set
         se devuelve un DataSet con todos los elementos encadenados.
         """
-        if attrib in self._type.__dict__:
-            raise AttributeError, attrib
+        if attrib.startswith('__'):
+            raise KeyError, attrib
         items = not_none(x.get(attrib) for x in self)
         try:
-            return self._type._Properties[attrib]._type._NewSet(*tuple(items))
-        except (KeyError, AttributeError):
+            return self._type._DOMD.subtype(attrib)._DOMD.new_set(*tuple(items))
+        except KeyError:
             return BaseSet(items)
 
     def __getattr__(self, attrib):
-        return self[attrib]
+        try:
+            return self[attrib]
+        except KeyError as details:
+            raise AttributeError(details)
 
     @property
     def up(self):
         data = not_none(x._up for x in self)
-        return self._type._Parent._NewSet(data)
-
+        return self._type._DOMD.parent._DOMD.new_set(data)
