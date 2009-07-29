@@ -11,8 +11,8 @@ except ImportError:
     sys.path.append("../../..")
     from plantillator.csvread.loader import *
 from plantillator.csvread.parser import *
-from plantillator.data.dataobject import *
-from plantillator.data.dataset import *
+from plantillator.csvread.csvdata import *
+from plantillator.csvread.csvset import *
 from plantillator.data.pathfinder import *
 
 
@@ -91,9 +91,9 @@ class TestTableLoader(TestCase):
            ,      10, 20,
            ,      test, me""")
         self.loader.read(source, self.data)
-        self.failUnless(len(self.data._type._Properties) == 0)
+        self.failUnless(len(self.data._type._DOMD.children) == 0)
         dummy = self.data.simple
-        self.failUnless(len(self.data._type._Properties) == 1)
+        self.failUnless(len(self.data._type._DOMD.children) == 1)
 
     def test_simple_missing(self):
         source = StringSource("test", 
@@ -168,14 +168,14 @@ class TestTableLoader(TestCase):
            super.sub2, super.x, m, n
            ,            10,     5, 7""")
         self.loader.read(source, self.data)
-        self.failUnless(len(self.data._type._Properties) == 0)
+        self.failUnless(len(self.data._type._DOMD.children) == 0)
         dummy = self.data.super
-        self.failUnless(len(self.data._type._Properties) == 1)
-        self.failUnless(len(self.data.super._type._Properties) == 0)
+        self.failUnless(len(self.data._type._DOMD.children) == 1)
+        self.failUnless(len(self.data.super._type._DOMD.children) == 0)
         dummy = self.data.super.sub
-        self.failUnless(len(self.data.super._type._Properties) == 1)
+        self.failUnless(len(self.data.super._type._DOMD.children) == 1)
         dummy = self.data.super.sub2
-        self.failUnless(len(self.data.super._type._Properties) == 2)
+        self.failUnless(len(self.data.super._type._DOMD.children) == 2)
 
     def test_nested_except(self):
         source = StringSource("test", 

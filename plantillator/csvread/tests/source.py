@@ -11,8 +11,8 @@ except ImportError:
     sys.path.append("../../..")
     from plantillator.csvread.source import *
 from plantillator.csvread.parser import *
-from plantillator.data.dataobject import *
-from plantillator.data.dataset import *
+from plantillator.csvread.csvdata import *
+from plantillator.csvread.csvset import *
 from plantillator.data.pathfinder import *
 
 
@@ -77,3 +77,4 @@ class TestDataSource(TestCase):
     
 if __name__ == "__main__":
     main()
+

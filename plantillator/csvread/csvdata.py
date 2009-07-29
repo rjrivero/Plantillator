@@ -4,7 +4,9 @@
 
 from itertools import chain
 
+from ..data.base import asIter
 from ..data.dataobject import DataType, MetaData
+from .csvset import CSVSet
 from .source import DataSource
 
 
@@ -12,10 +14,16 @@ class CSVMetaData(MetaData):
 
     """Metadatos correspondientes a un DataObject leido de CSV"""
 
-    Source = DataSource()
+    def __init__(self, cls, loader, name='', parent=None):
+        """Inicia el objeto
 
-    def __init__(self, cls, name, parent=None):
+        cls: Clase a la que se le adjuntan estos MetaDatos.
+        loader: TableLoader que se usa para resolver referencias a atributos
+        name: label de la clase.
+        parent: clase padre de cls en la jerarquia
+        """
         MetaData.__init__(self, cls, name, parent)
+        self.summary = ('id', 'nombre', 'descripcion')
         if not parent:
             # objeto raiz. No tiene path.
             self.path = None
@@ -27,23 +35,25 @@ class CSVMetaData(MetaData):
             self.path = ".".join((parent._DOMD.path, name))
         # me asigno directamente el parser que va a leer mis datos.
         self.parser = None
+        self.loader = loader
         if self.path:
-            # si no existe el path, se lanza un KeyError. Util para
+            # si no existe el atributo, se lanza un KeyError. Util para
             # evitar que se creen subtipos que no se pueden leer.
-            self.parser = CSVMetaData.Source[self.path]
+            self.parser = loader[self.path]
 
     def subtype(self, attr):
         """Crea un subtipo de este"""
         try:
-            return self.children(attr)
+            return self.children[attr]
         except KeyError:
             stype = type(attr, (CSVObject,), dict())
-            setattr(stype, '_DOMD', CSVMetaData(subt, attr, self._type)
+            smeta = CSVMetaData(stype, self.loader, attr, self._type)
+            setattr(stype, '_DOMD', smeta)
             return self.children.setdefault(attr, stype)
 
-    def new_set(self, cls, *sets):
+    def new_set(self, *sets):
         sets = tuple(asIter(x) for x in sets)
-        return DataSet(self._type, chain(*sets))
+        return CSVSet(self._type, chain(*sets))
 
 
 class CSVObject(DataType(object)):
@@ -70,7 +80,7 @@ class CSVObject(DataType(object)):
         #   buscan un atributo _X_cache, y al ser None no consultan a la bd.
         #
         # En consecuencia:
-        # - Esta funcion lanzara AttributeError cuando se accede a un atributo
+        # - Esta funcion lanzara AttributeError cuando se acceda a un atributo
         #   inexistente.
         # - Para mantener consistencia con backend base de datos,
         #   - get(x, defval) devolvera defval si el valor es None.
@@ -93,9 +103,14 @@ class CSVObject(DataType(object)):
             raise TypeError(other._type)
         return self._DOMD.new_set(self, other)
 
+    def __str__(self):
+        return ", ".join(str(k) for k in self._type._DOMD.summary
+                         if k is not None)
 
-def RootType():
-    """Crea un nuevo tipo raiz (_Parent == None) derivado de CSVObject"""
+
+def RootType(loader):
+    """Crea un nuevo tipo raiz (parent == None) derivado de CSVObject"""
     root = type("RootType", (CSVObject,), dict())
-    setattr(root, '_DOMD', CSVMetaData(root))
+    setattr(root, '_DOMD', CSVMetaData(root, loader))
     return root
+

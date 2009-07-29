@@ -101,7 +101,7 @@ class TableParser(list):
 
     def __call__(self, item, attrib):
         """Carga el atributo solicitado "attrib" del item"""
-        self._type = item._type._DOMD.children[attrib]
+        self._type = item._type._DOMD.subtype(attrib)
         if not len(self):
             return self._type._DOMD.new_set()
         while self:
@@ -111,6 +111,7 @@ class TableParser(list):
 
     def _block(self, source, block):
         """Carga un bloque de datos"""
+        self._type._DOMD.attribs.update(block.headers)
         headers = block.headers[:]
         filters = [RowFilter(x, headers) for x in self.path]
         attfilt = RowFilter(self.attr, headers)

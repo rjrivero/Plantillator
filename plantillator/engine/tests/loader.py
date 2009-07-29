@@ -12,16 +12,15 @@ except ImportError:
     sys.path.append("../../..")
     from plantillator.data.base import *
 from plantillator.data.pathfinder import *
-from plantillator.data.dataobject import *
-from plantillator.data.dataset import *
+from plantillator.csvread.csvdata import RootType, CSVMetaData
 from plantillator.csvread.source import DataSource
 from plantillator.engine.loader import Loader
 
 
-MenuSource = DataSource()
-MenuType   = RootType(MenuSource)
+MenuLoader = DataSource()
+MenuType   = RootType(MenuLoader)
 Menu       = MenuType()
-MenuSource.read(StringSource("menu",
+MenuLoader.read(StringSource("menu",
 """
 beverages, color,  alcohol
          , white , no

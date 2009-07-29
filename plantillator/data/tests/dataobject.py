@@ -16,6 +16,7 @@ class TestDataObject(TestCase):
 
     def setUp(self):
         self.root = DataType(object)
+        self.root._DOMD = MetaData(self.root)
         self.data = self.root()
 
     def test_construct_empty(self):
@@ -93,7 +94,7 @@ class TestDataObject(TestCase):
         self.failIf("y" in self.data)
 
     def test_iteritems(self):
-        self.root._DOMD = MetaData("test", None, None, ('x', 'y', 'z'))
+        self.root._DOMD.attribs.update(('x', 'y', 'z'))
         self.data.x = 1
         self.data.z = 2
         self.data.unknown = 10

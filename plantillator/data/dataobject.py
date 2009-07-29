@@ -98,17 +98,20 @@ class MetaData(object):
     name: label de la clase (string)
     parent: clase padre, en la jerarquia (DataObject.__class__)
     children: clases hijo en la jerarquia (dict(string, DataObject.__class__))
-    attribs: atributos (list(string))
+    attribs: conjunto de atributos (list(string))
+    summary: lista ordenada de atributos que puede usarse como
+             "sumario" o descripcion abreviada de un objeto
 
     Por convencion, las clases derivadas de DataObject(...) deben tener un
     atributo _DOMD (DataObject MetaData) de este tipo.
     """
 
-    def __init__(self, cls, name, parent=None):
+    def __init__(self, cls, name='', parent=None):
         self.name     = name
         self.parent   = parent
         self.children = dict()
-        self.attribs  = list()
+        self.attribs  = set()
+        self.summary  = list()
         # por convencion, el tipo siempre se llama _type.
         self._type    = cls
 

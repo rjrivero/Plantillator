@@ -10,8 +10,9 @@ except ImportError:
     import sys
     sys.path.append("../../..")
     from plantillator.csvread.parser import *
-from plantillator.data.dataobject import *
-from plantillator.data.dataset import *
+from plantillator.data.pathfinder import StringSource
+from plantillator.csvread.csvdata import *
+from plantillator.csvread.csvset import *
 
 
 class TestValidHeader(TestCase):
@@ -68,46 +69,48 @@ class TestRowFilterConstruct(TestCase):
 class TestRowFilter(TestCase):
 
     def setUp(self):
-        self.root = RootType(GroupTree({'test': GroupTree()}))
-        self.dset = DataSet(self.root)
-        subtype = self.root._Properties['test']._type
-        self.data1, self.data2 = self.root(), self.root()
-        self.subi1, self.subi2 = subtype(self.data1), subtype(self.data2)
-        self.data1.test.add(self.subi1)
-        self.data2.test.add(self.subi2)
-        self.dset.update((self.data1, self.data2))
+        source = StringSource("test", 
+        """test, a , d
+               , 5 , 10
+           test, a,  d
+               , 10, 5
+           """)
+        self.loader = DataSource()
+        self.root = RootType(self.loader)
+        self.data = self.root()
+        self.loader.read(source, self.data)
         head = [ValidHeader(x) for x in ("test.a", "b", "c", "test.d")]
         self.filt = RowFilter("test", head)
-        self.subi1.a, self.subi1.d = 5, 10
-        self.subi2.a, self.subi2.d = 10, 5
+        self.subi1 = +self.data.test(a=5, d=10)
+        self.subi2 = +self.data.test(a=10, d=5)
 
     def test_not_indexes(self):
-        self.assertRaises(SyntaxError, self.filt, self.dset, {'test.a':5})
+        self.assertRaises(SyntaxError, self.filt, self.data, {'test.a':5})
 
     def test_index_error(self):
-        self.assertRaises(SyntaxError, self.filt, self.dset,
+        self.assertRaises(SyntaxError, self.filt, self.data,
                           {'test.a': 20, 'test.d': 30})
 
     def test_single_match(self):
-        result = self.filt(self.dset, {'test.a': 10, 'test.d': 5})
+        result = self.filt(self.data, {'test.a': 10, 'test.d': 5})
         self.failUnless(+result == self.subi2)
 
     def test_single_remove_indexes(self):
         data = {'test.a': 10, 'test.d': 5, 'x': 10}
-        result = self.filt(self.dset, data)
+        result = self.filt(self.data, data)
         self.failUnless(len(data) == 1)
         self.failUnless(data['x'] == 10)
 
     def test_double_match(self):
         match  = lambda x: True
-        result = self.filt(self.dset, {'test.a': match, 'test.d': match})
+        result = self.filt(self.data, {'test.a': match, 'test.d': match})
         self.failUnless(self.subi1 in result)
         self.failUnless(self.subi2 in result)
         self.failUnless(len(result) == 2)
 
     def test_no_crit(self):
         header = [ValidHeader(x) for x in ("a", "b", "c", "d")]
-        result = RowFilter("test", header)(self.dset, {'a':10})
+        result = RowFilter("test", header)(self.data, {'a':10})
         self.failUnless(self.subi1 in result)
         self.failUnless(self.subi2 in result)
         self.failUnless(len(result) == 2)
@@ -116,10 +119,7 @@ class TestRowFilter(TestCase):
 class TestTableParserConstruct(TestCase):
 
     def setUp(self):
-        self.root = RootType(GroupTree(
-            {'test': GroupTree(
-                {'nested': GroupTree()})
-            }))
+        self.root = RootType(DataSource())
         self.data = self.root()
 
     def test_plain(self):
@@ -132,7 +132,6 @@ class TestTableParserConstruct(TestCase):
     #    self.assertRaises(SyntaxError, TableParser, self.data, path)
         
     def test_deep_ok(self):
-        test = self.root._Properties["test"]._type
         path = [ValidHeader(x) for x in ("test", "nested")]
         pars = TableParser(self.data, path)
         self.failUnless(pars.path == ["test"])
@@ -150,31 +149,29 @@ class Block(object):
 class TestTableParserCallPlain(TestCase):
 
     def setUp(self):
-        self.root = RootType(GroupTree({'test': GroupTree()}))
+        self.loader = DataSource()
+        self.root = RootType(self.loader)
         self.data = self.root()
-        self.pars = TableParser(self.data, [ValidHeader("test")])
+        self.parser = TableParser(self.data, [ValidHeader("test")])
+        self.loader["test"] = self.parser
 
     def test_call_empty(self):
-        dset = self.pars(self.data, "test")
-        self.failUnless(dset._type == self.root._Properties["test"]._type)
+        dset = self.parser(self.data, "test")
+        self.failUnless(dset._type == self.root._DOMD.children["test"])
         self.failIf(dset)
 
     def test_nested_fail(self):
         data = [{'a': 10, 'b': 2, 'c':3, 'e':10}]
         head = [ValidHeader(x) for x in ('a', 'b', 'fail.nested')]
-        self.pars.append(("source", Block(head, data)))
-        self.assertRaises(DataError, self.pars, self.data, "test")
-
-    #def test_path_fail(self):
-    #    self.path = [ValidHeader(x) for x in ("fail", "nested")]
-    #    self.assertRaises(SyntaxError, TableParser, self.data, self.path)
+        self.parser.append(("source", Block(head, data)))
+        self.assertRaises(DataError, self.parser, self.data, "test")
 
     def test_does_empty(self):
         data = [{'a': 5, 'b': 3}]
         head = [ValidHeader(x) for x in ('a', 'b', 'c')]
-        self.pars.append(("source", Block(head, data)))
-        self.pars(self.data, "test")
-        self.failIf(self.pars)
+        self.parser.append(("source", Block(head, data)))
+        self.parser(self.data, "test")
+        self.failIf(self.parser)
 
     def test_plain(self):
         data = [
@@ -183,8 +180,8 @@ class TestTableParserCallPlain(TestCase):
            {'a': 20, 'c': 200, 'j': 2}
         ]
         head = [ValidHeader(x) for x in ('a', 'b', 'c')]
-        self.pars.append(("source", Block(head, data)))
-        self.pars(self.data, "test")
+        self.parser.append(("source", Block(head, data)))
+        self.parser(self.data, "test")
         self.failUnless(len(self.data.test) == 3)
         dmap = dict((d['a'], d) for d in data)
         for item in self.data.test:
@@ -196,35 +193,51 @@ class TestTableParserCallPlain(TestCase):
 class TestTableParserCallAppend(TestCase):
 
     def setUp(self):
-        self.root = RootType(GroupTree(
-            {'test': GroupTree(
-                {'nested': GroupTree()})
-            }))
+        self.loader = DataSource()
+        self.root = RootType(self.loader)
         self.data = self.root()
+        source = StringSource("test", 
+        """test, a , d
+               , 5 , 10
+               , 10, 5
+               , 15, 15 
+           """)
+        self.loader.read(source, self.data)
         self.path = [ValidHeader(x) for x in ("test", "nested")]
-        self.subt = self.root._Properties["test"]._type
-        self.pars = TableParser(self.data, self.path)
-        self.data.test.add(self.subt(self.data, {'a':1}))
-        self.data.test.add(self.subt(self.data, {'a':2}))
+        self.parser = TableParser(self.data, self.path)
+        data = [
+           {'test.a': 5, 'x': 2, 'y': 5},
+           {'test.a': 5, 'x': 5, 'y': 0},
+           {'test.a': 10, 'x': 8, 'y': 4}
+        ]
+        self.head = [ValidHeader(x) for x in ('test.a', 'x', 'y')]
+        self.parser.append(("source", Block(self.head, data)))
+        self.loader["test.nested"] = self.parser
 
-    def test_nested_missing(self):
+    def test_not_add_subtype_in_attribs(self):
+        testtype = self.data.test(a=5)._type
+        self.failIf('nested' in testtype._DOMD.attribs)
+
+    def test_not_add_attribs_before_parsing(self):
+        testtype = self.root._DOMD.subtype('test')
+        nesttype = testtype._DOMD.subtype('nested')
+        self.failIf('x' in nesttype._DOMD.attribs)
+        self.failIf('y' in nesttype._DOMD.attribs)
+
+    def test_add_attribs_after_parsing(self):
+        subtype = self.data.test(a=5).nested._type
+        self.failUnless('x' in subtype._DOMD.attribs)
+        self.failUnless('y' in subtype._DOMD.attribs)
+        
+    def test_nested_missing_key(self):
         data = [{'x': 10, 'y': 2, 'z':10}]
-        head = [ValidHeader(x) for x in ('x', 'y', 'test.a')]
-        self.pars.append(("source", Block(head, data)))
-        item = self.data.test(a=1)
-        self.assertRaises(DataError, self.pars, item, "nested")
+        self.parser.append(("source", Block(self.head, data)))
+        item = self.data.test(a=15)
+        self.assertRaises(DataError, self.parser, item, "nested")
 
     def test_nested(self):
-        data = [
-           {'test.a': 1, 'x': 2, 'y': 5},
-           {'test.a': 1, 'x': 5, 'y': 0},
-           {'test.a': 2, 'x': 8, 'y': 4}
-        ]
-        head = [ValidHeader(x) for x in ('test.a', 'x', 'y')]
-        self.pars.append(("source", Block(head, data)))
-        self.pars(self.data.test(a=1), "nested")
-        nested1 = self.data.test(a=1).nested
-        nested2 = +self.data.test(a=2).nested
+        nested1 = self.data.test(a=5).nested
+        nested2 = +self.data.test(a=10).nested
         self.failUnless(len(nested1) == 2)
         #self.failUnless(len(nested2) == 1)
         self.failUnless(nested2.x == 8 and nested2.y == 4)
@@ -234,3 +247,4 @@ class TestTableParserCallAppend(TestCase):
 
 if __name__ == "__main__":
     main()
+

@@ -6,33 +6,13 @@ from os.path import splitext
 
 from ..data.operations import Deferrer, Filter
 from ..data.base import *
-from ..data.dataobject import RootType
-from ..csvread.datasource import DataSource
+from ..csvread.csvdata import RootType
 from ..csvread.tableparser import DataError
-
-
-class PropertyFactory(dict):
-
-    def __init__(self, data=None):
-        dict.__init__(self, data or {})
-        self._active = None
-
-    def select(self, ext):
-        self._active = self[ext.lower()]
-        return self._active
-
-    def __call__(self, cls, attr):
-        return self._active(cls, attr)
-
-
-DATA_SOURCES = PropertyFactory({
-    'csv': DataSource()
-    })
 
 
 class DataLoader(object):
 
-    def __init__(self):
+    def __init__(self, loader):
         self.hist = set()
         self.glob = {
             "__builtins__": __builtins__,
@@ -46,7 +26,8 @@ class DataLoader(object):
             "x": Deferrer(),
             "donde": Filter
         }
-        self.root = RootType(DATA_SOURCES)
+        self.loader = loader
+        self.root = RootType(self.loader)
         self.data = self.root()
 
     def load(self, source):
@@ -59,15 +40,11 @@ class DataLoader(object):
 
     def _resolve(self, source):
         try:
-            parser = DATA_SOURCES.select(splitext(source.id)[-1][1:])
-            deps = parser.read(source, self.data)
+            deps = self.loader.read(source, self.data)
             return list(source.resolve(item) for item in deps)
         except (SyntaxError, ValueError) as details:
             raise DataError(source, "N/A", details.message)
 
     def evaluate(self, expr):
         return eval(expr, self.glob, self.data)
-
-    def known(self, ext):
-        return ext.lower() in DATA_SOURCES
 

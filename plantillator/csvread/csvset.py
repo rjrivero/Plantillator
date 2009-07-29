@@ -39,7 +39,7 @@ class CSVSet(set):
             return self.copy().pop()
         raise IndexError(0)
 
-    def __getitem__(self, attrib):
+    def __getitem__(self, attr):
         """Selecciona un item en la lista
 
         Devuelve un set con los distintos valores del atributo seleccionado
@@ -48,17 +48,17 @@ class CSVSet(set):
         Si el atributo seleccionado es una sublista, en lugar de un set
         se devuelve un DataSet con todos los elementos encadenados.
         """
-        if attrib.startswith('__'):
-            raise KeyError, attrib
-        items = not_none(x.get(attrib) for x in self)
+        if attr.startswith('__'):
+            raise KeyError(attr)
+        items = not_none(x.get(attr) for x in self)
         try:
-            return self._type._DOMD.subtype(attrib)._DOMD.new_set(*tuple(items))
+            return self._type._DOMD.subtype(attr)._DOMD.new_set(*tuple(items))
         except KeyError:
             return BaseSet(items)
 
-    def __getattr__(self, attrib):
+    def __getattr__(self, attr):
         try:
-            return self[attrib]
+            return self[attr]
         except KeyError as details:
             raise AttributeError(details)
 
@@ -66,3 +66,4 @@ class CSVSet(set):
     def up(self):
         data = not_none(x._up for x in self)
         return self._type._DOMD.parent._DOMD.new_set(data)
+

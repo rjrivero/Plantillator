@@ -9,6 +9,7 @@ import sys
 from contextlib import contextmanager
 
 from ..data.pathfinder import PathFinder, FileSource
+from ..csvread.source import DataSource
 from ..engine.loader import Loader as TmplLoader
 from ..engine.cmdtree import VARPATTERN
 from .dataloader import DataLoader
@@ -31,7 +32,7 @@ class Plantillator(object):
 
     def __init__(self):
         self.__dict__.update(self.OPTIONS)
-        self.dataloader = DataLoader()
+        self.dataloader = DataLoader(DataSource())
         self.tmplloader = TmplLoader()
 
     def render(self):
