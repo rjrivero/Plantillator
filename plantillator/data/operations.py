@@ -21,6 +21,12 @@ def BaseMaker(basetype):
                 arg = (Deferrer() == arg)
             return BaseSequence(x for x in self if arg(x))
 
+        def __pos__(self):
+            """Para compatibilidad con la siguiente version del plantillator"""
+            if len(self) == 1:
+                return list(self).pop()
+            raise IndexError(0)
+
     return BaseSequence
 
 

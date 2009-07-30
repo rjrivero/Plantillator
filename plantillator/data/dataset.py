@@ -51,3 +51,8 @@ class DataSet(set):
     @property
     def up(self):
         return DataSet(self._type.up, not_none(x.up for x in self))
+
+    def __pos__(self):
+        """Para compatibilidad con la siguiente version del plantillator"""
+        raise IndexError(0)
+

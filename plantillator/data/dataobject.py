@@ -119,3 +119,7 @@ class DataObject(dict):
         crit = self._type.adapt(arg, kw)
         return self if self._matches(crit) else DataSet(self._type)
 
+    def __pos__(self):
+        """Para compatibilidad con la siguiente version del plantillator"""
+        return self
+
