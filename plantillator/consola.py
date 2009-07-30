@@ -49,6 +49,9 @@ parser.add_option("-D", "--define",
 parser.add_option("-d", "--debug",
         action="store_true", dest="debug", default=False,
         help="Vuelca los mensajes de debug en stderr")
+parser.add_option("-l", "--loop",
+        action="store_true", dest="loop", default=False,
+        help="Itera sobre todos los posibles valores de los 'utiliza'")
 
 (options, args) = parser.parse_args()
 if len(args) < 2:
@@ -100,16 +103,44 @@ def select_handler(opcode, command, glob, data):
                 chosen = userdata
         data[var] = itemlist[chosen-1][1]
 
+
+# manejador para el caso de loop
+
+WASTED, PICKS = dict(), list()
+
+def loop_select(opcode, command, glob, data):
+    """Gestiona el comando 'select' en un bucle"""
+    global WASTED, PICKS
+    var = command.var
+    # busco un elemento que no este totalmente usado.
+    hit, hitcount = False, 0
+    for current in sorted(command.pick):
+        if str(current) not in WASTED:
+            hitcount += 1
+            hit = current
+            # recorro toda la lista porque en cada iteracion puede estar
+            # ordenada de una forma distinta, si no la recorro no me entero
+            # de si todos los elementos estan wasted o no.
+    if hit:
+        print "AUTO-SELECCIONADO ELEMENTO %s" % str(hit)
+        data[var] = hit
+        PICKS.append((hitcount, str(hit)))
+    # si he agotado la lista, marco como usado el elemento
+    # que se haya seleccionado en el ultimo select anterior a este.
+
+
 def handle(item):
     """Gestiona los comandos lanzados por el proceso de rendering"""
+    global options
     handlers = {
-            "SELECT": select_handler,
+            "SELECT": select_handler if not options.loop else loop_select,
     }
     handler = handlers.get(item.opcode, None)
     if handler:
         handler(*item)
     else:
         print "NO SE RECONOCE COMANDO %s" % item.opcode
+
 
 # y cargo a PLANTILLATOR!
 plantillator = Plantillator()
@@ -119,8 +150,23 @@ plantillator.collapse = options.collapse
 plantillator.definitions = options.definitions or []
 plantillator.inputfiles = inputfiles
 try:
-    for item in plantillator.render():
-        handle(item)
+    if not options.loop:
+        for item in plantillator.render():
+            handle(item)
+    else:
+        overwrite = True
+        while True:
+            PICKS = list()
+            for item in plantillator.render(overwrite):
+                handle(item)
+            overwrite = False
+            hitcount, hitstr = PICKS.pop()
+            WASTED[hitstr] = True
+            while hitcount <= 1 and PICKS:
+                hitcount, hitstr = PICKS.pop()
+                WASTED[hitstr] = True
+            if hitcount <= 1:
+                break
 
 except CommandError as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):

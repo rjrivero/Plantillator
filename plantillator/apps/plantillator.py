@@ -28,19 +28,21 @@ class Plantillator(object):
 
     def __init__(self):
         self.__dict__.update(self.OPTIONS)
+
+    def render(self, overwrite=True):
         self.dataloader = DataLoader()
         self.tmplloader = TmplLoader()
-
-    def render(self):
         data, tmpl = self._classify()
         self._loaddata(data)
         self._addobjects()
         self._loadtmpl(tmpl)
         if self.collapse:
             # borro el fichero de salida combinado
-            if os.path.isfile(self.outpath):
+            if os.path.isfile(self.outpath) and overwrite:
                 os.unlink(self.outpath)
         glob, data = self.dataloader.glob, self.dataloader.data
+        # para poder ejecutarlo mas de una vez, no utilizo "data"
+        # directamente, sino un "Fallback" suyo
         for tmpldata in self.tmplloader.templates(glob, data):
             for block in self._renderfile(*tmpldata):
                 yield block
