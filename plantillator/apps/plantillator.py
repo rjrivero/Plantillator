@@ -32,17 +32,17 @@ class Plantillator(object):
 
     def __init__(self):
         self.__dict__.update(self.OPTIONS)
+
+    def render(self, overwrite=True):
         self.dataloader = DataLoader(DataSource())
         self.tmplloader = TmplLoader()
-
-    def render(self):
         data, tmpl = self._classify()
         self._loaddata(data)
         self._addobjects()
         self._loadtmpl(tmpl)
         if self.collapse:
             # borro el fichero de salida combinado
-            if os.path.isfile(self.outpath):
+            if os.path.isfile(self.outpath) and overwrite:
                 os.unlink(self.outpath)
         glob, data = self.dataloader.glob, self.dataloader.data
         for tree in self.tmplloader:
@@ -125,4 +125,3 @@ class Plantillator(object):
                 yield item
         except StopIteration:
             pass
-
