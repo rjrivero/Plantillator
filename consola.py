@@ -13,8 +13,8 @@ from operator import itemgetter
 from optparse import OptionParser
 from traceback import print_exc, format_exception_only
 
-from engine.base import ParseError, CommandError
-from apps.plantillator import Plantillator
+from plantillator.engine.base import ParseError, CommandError
+from plantillator.apps.plantillator import Plantillator
 
 VERSION           = "0.2"
 OPTIONS_ERRNO     = -1

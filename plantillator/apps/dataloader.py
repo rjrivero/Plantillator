@@ -4,10 +4,9 @@
 
 from os.path import splitext
 
-from ..data.operations import Deferrer, Filter
 from ..data.base import *
 from ..csvread.csvdata import RootType
-from ..csvread.tableparser import DataError
+from ..csvread.parser import DataError
 
 
 class DataLoader(object):

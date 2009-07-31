@@ -13,38 +13,65 @@ from traceback import print_exc, format_exception_only
 from optparse import OptionParser
 
 try:
-    from data.pathfinder import PathFinder, FileSource
+    from plantillator.data.namedtuple import NamedTuple
 except ImportError:
     import os.path
     import sys
-    sys.path.append(os.path.dirname(os.path.abspath(sys.argv[0])))
-    from data.pathfinder import PathFinder, FileSource
+    sys.path.append(".")
+    from plantillator.data.namedtuple import NamedTuple
 
-from apps.dataloader import DataLoader
-from apps.tree import TreeCanvas
-
-
-_ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")
-
-
-class DataNav(tk.Tk):
+from plantillator.data.pathfinder import PathFinder, FileSource
+from plantillator.engine.cmdtree import CommandTree
+from plantillator.engine.base import Literal
+from plantillator.apps.tmplloader import TmplLoader
+from plantillator.apps.tree import TreeCanvas, Tagger
 
 
-    class Frames(object):
-        def __init__(self, top=None, bottom=None):
-            self.top = top
-            self.bottom = bottom
+class TmplTagger(Tagger):
 
-    def __init__(self, glob, data, geometry="800x600"):
+    def name(self, data, name, hint):
+        if isinstance(data, Literal):
+            name = str(data)
+            # buscamos alguna linea signigficativa, con mas de un par
+            # de caracteres, para ponerla como etiqueta del bloque.
+            for token in data[:-1]:
+                line = str(token)
+                if len(line) > 2 and not line.isspace():
+                    return "%s ..." % line
+            return data[-1] or "..."
+        return name or str(data) or " "
+
+    def icon(self, item):
+        if item.expandable:
+            return "python" if hasattr(item.data, "token") else "folder"
+        return "plusnode"
+
+    def selicon(self, item):
+        if item.expandable:
+            return "python" if hasattr(item.data, "token") else "openfolder"
+        return "minusnode"
+
+    def item(self, data, name=None, hint=None):
+        item = Tagger.item(self, data, name, hint)
+        item.editable = not item.expandable
+        return item
+
+    def filter_list(self, data):
+        """Evita que se ordenen las listas, porque fastidiaria los Literal"""
+        return enumerate(data)
+
+
+class TmplNav(tk.Tk):
+
+    def __init__(self, loader, geometry="800x600"):
         tk.Tk.__init__(self)
-        self.title("DataNav")
-        self.glob = glob
-        self.data = data
+        self.title("TemplateNav")
         self.hist = list()
         self.cursor = 0
         self.hlen = 20
+        self.loader = loader
         # split the window in two frames
-        self.frames = DataNav.Frames()
+        self.frames = NamedTuple("Frames", "", top=0, bottom=1)
         self.frames.top = tk.Frame(self, borderwidth=5)
         self.frames.top.pack(side=tk.TOP, fill=tk.X)
         self.frames.bottom = tk.Frame(self)
@@ -60,7 +87,7 @@ class DataNav(tk.Tk):
                                 command=self.clicked, padx=5)
         self.button.pack(side=tk.RIGHT)
         # lower frame: the data canvas
-        self.canvas = TreeCanvas(self.frames.bottom)
+        self.canvas = TreeCanvas(self.frames.bottom, TmplTagger())
         # set the geometry
         entry.focus()
         self.geometry(geometry)
@@ -72,26 +99,24 @@ class DataNav(tk.Tk):
 
     def clicked(self, *skip):
         """Presenta los datos seleccionados"""
-        name, data = self.entry.get(), self.data
-        if not name:
-            name = "root"
-            self.cursor = 0
-        else:
+        source, fname = None, self.entry.get()
+        if fname:
             try:
-                match = _ASSIGNMENT.match(name)
-                if match:
-                    exec name in self.data
-                    name = match.group("var")
-                data = eval(name, self.glob, self.data)
-                if name not in self.hist:
-                    self.cursor = 0
-                    self.hist.append(name)
-                    if len(self.hist) > self.hlen:
-                        self.hist.pop(0)
-            except Exception as details:
-                print "Exception: %s" % str(details)
-                return
-        self.canvas.show(name, data)
+                source = FileSource(finder(fname), finder)
+            except:
+                pass
+            else:
+                self.loader.load(source)
+        self.canvas.show("root", self.loader)
+        if len(self.canvas.node.children) == 1:
+            self.canvas.node.children[0].expand()
+        elif source:
+            for node in self.canvas.node.children:
+                if node.item.data.source.id == source.id:
+                    node.expand()
+        self.hist.append(self.entry.get())
+        if len(self.hist) > self.hlen:
+            self.hist.pop(0)
 
     def keyup(self, *skip):
         """Selecciona un elemento anterior en la historia"""
@@ -120,7 +145,7 @@ path = ['.']
 
 parser = OptionParser(usage=usage, version="%%prog %s"%VERSION)
 parser.add_option("-p", "--path", dest="path", metavar="PATH",
-        help="""Ruta donde buscar los ficheros de datos.
+        help="""Ruta donde buscar las plantillas.
 La ruta se especifica al estilo del sistema operativo, por ej.:
 C:\\ruta1;C:\\ruta2 (en windows)
 /ruta1:/ruta2 (en linux)""")
@@ -154,35 +179,13 @@ for name in args:
     else:
         inputfiles.append(name)
 
-
 finder = PathFinder(path)
-loader = DataLoader()
+loader = TmplLoader()
 try:
     for fname in inputfiles:
         source = FileSource(finder(fname), finder)
         loader.load(source)
-    # Cosas muy feas... no se por que, esto funciona:
-    #
-    # def test():
-    #     v = [1, 2, 3, 4, 5]
-    #     print(list(v.index(x) for x in (1, 2)))
-    #
-    # Pero esto no:
-    #
-    # def test():
-    #     v = [1, 2, 3, 4, 5]
-    #     exec "print(list(v.index(x) for x in (1, 2)))" in globals(), locals()
-    #
-    # El segundo ejemplo lanza un error de que "v no esta definido en globals",
-    # ni se molesta en cogerlo de locals.
-    #
-    # En resumen, usar exec con globals y locals da problemillas, asi que lo que
-    # he decidido de momento, al menos para el datanav, es:
-    #
-    # - pongo loader.glob como fallback de loader.data
-    # - ejecuto las cosas con "exec EXPR in loader.data"
-    loader.data._up = loader.glob
-    DataNav(loader.glob, loader.data.fb, geometry).mainloop()
+    TmplNav(loader, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

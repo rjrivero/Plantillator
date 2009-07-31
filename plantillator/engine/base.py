@@ -15,6 +15,13 @@ from ..data.base import normalize
 PLACEHOLD = re.compile(r'\?(?P<expr>[^\?]+)\?')
 _LITERAL_TEXT = _("Texto (%(linenum)d lineas)" )
 
+# nombres de variables permitidos
+VARPATTERN = {
+    'var': r'[a-zA-Z][\w\_]*',
+    'en':  r'en(\s+(el|la|los|las))?',
+    'de':  r'(en|de|del)(\s+(el|la|los|las))?'
+}
+
 
 class Token(object):
 

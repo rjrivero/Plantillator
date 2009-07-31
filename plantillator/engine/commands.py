@@ -142,6 +142,8 @@ class CommandDefine(Command):
     su nombre en cualquier otro punto del patron.
     """
 
+    VALID = re.compile(VARPATTERN['var']).match
+
     def __init__(self, token, match):
         Command.__init__(self, token, match)
         if self.params:
@@ -149,7 +151,7 @@ class CommandDefine(Command):
         else:
             self.params = tuple()
         for item in self.params:
-            if not item.isalnum():
+            if not CommandDefine.VALID(item):
                 raise ParseError(None, token,
                                  _WRONG_PARAMS % {'params': str(self.params)})
 
@@ -215,7 +217,7 @@ class CommandSelect(Command):
     def run(self, glob, data):
         # Con este test comprobamos que el valor que seleccionamos
         # esta definido y no es una lista vacia.
-        if len(data.get(self.var, tuple())) > 0:
+        if data.get(self.var):
             return
         if not self.expr:
             raise ValueError, self.var

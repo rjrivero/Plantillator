@@ -104,8 +104,8 @@ class CSVObject(DataType(object)):
         return self._DOMD.new_set(self, other)
 
     def __str__(self):
-        return ", ".join(str(k) for k in self._type._DOMD.summary
-                         if k is not None)
+        fields = (self.get(k) for k in self._type._DOMD.summary)
+        return ", ".join(str(f) for f in fields if f is not None)
 
 
 def RootType(loader):

@@ -13,13 +13,6 @@ _RUNTIME_ERROR = _("Error ejecutando %(command)s")
 _ERROR_LOCATION = _("Origen %(fname)s, linea $(lineno)d")
 _UNKNOWN_CMD = _("Comando %(command)s desconocido")
 
-# nombres de variables permitidos
-VARPATTERN = {
-    'var': r'[a-zA-Z][\w\_]*',
-    'en':  r'en(\s+(el|la|los|las))?',
-    'de':  r'(en|de|del)(\s+(el|la|los|las))?'
-}
-
 
 class CommandTree(list):
 

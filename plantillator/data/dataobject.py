@@ -77,7 +77,10 @@ def DataType(base):
                     yield (key, value)
 
         def __getitem__(self, item):
-            return getattr(self, item)
+            try:
+                return getattr(self, item)
+            except AttributeError as details:
+                raise KeyError(details)
 
         def __setitem__(self, name, value):
             setattr(self, name, value)
