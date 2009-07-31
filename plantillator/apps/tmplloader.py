@@ -62,7 +62,11 @@ class TmplLoader(dict):
         for sourceid, cmdtree in self.copy().iteritems():
             yield (sourceid, cmdtree, glob, data)
         while self.appended:
-            key, data = self.appended.popitem()
+            # la ordenacion es necesaria para que los patrones siempre
+            # se evaluen en el mismo orden, De esta forma, el resultado 
+            # generado por console.py -l es consistente.
+            key = sorted(self.appended).pop()
+            data = self.appended.pop(key)
             yield (key, self.load(data[0]), data[1], data[2])
 
     def known(self, ext):
