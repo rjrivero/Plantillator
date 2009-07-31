@@ -109,7 +109,7 @@ class CommandFor(Command):
 
     def run(self, glob, data):
         try:
-            expr = asIter(eval(self.expr, glob, data))
+            expr = sorted(list(asIter(eval(self.expr, glob, data))))
         except (AttributeError, KeyError):
             return
         forset = set()

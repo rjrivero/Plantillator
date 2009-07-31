@@ -44,6 +44,9 @@ class Loader(object):
         for tree in self.trees.copy().values():
             yield tree
         while self.appended:
-            index, source = self.appended.popitem()
+            # ordeno el diccionario antes de extraer, para que el resultado
+            # de console -l sea repetible.
+            index = sorted(self.appended).pop()
+            source = self.appended.pop(index)
             yield self.load(source)
 

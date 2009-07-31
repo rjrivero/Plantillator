@@ -114,7 +114,7 @@ def loop_select(opcode, command, glob, data):
     var = command.var
     # busco un elemento que no este totalmente usado.
     hit, hitcount = False, 0
-    for current in sorted(command.pick):
+    for current in sorted(command.pick, cmp=lambda a, b: cmp(str(a), str(b))):
         if str(current) not in WASTED:
             hitcount += 1
             hit = current
@@ -160,6 +160,8 @@ try:
             for item in plantillator.render(overwrite):
                 handle(item)
             overwrite = False
+            if not PICKS:
+                break
             hitcount, hitstr = PICKS.pop()
             WASTED[hitstr] = True
             while hitcount <= 1 and PICKS:
