@@ -160,6 +160,8 @@ try:
             for item in plantillator.render(overwrite):
                 handle(item)
             overwrite = False
+            if not PICKS:
+                break
             hitcount, hitstr = PICKS.pop()
             WASTED[hitstr] = True
             while hitcount <= 1 and PICKS:
