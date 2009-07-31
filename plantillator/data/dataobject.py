@@ -12,7 +12,7 @@ from data.dataset import DataSet
 # Todos los DataObjects que alguna vez tengan que ser identificados por un nombre
 # (dentro de un select, por ejemplo, o en una lista mostrada por una GUI), deben
 # tener al menos uno de estos atributos.
-NAMING_ATTRIBS = ("nombre", "descripcion", "detalles")
+NAMING_ATTRIBS = ("id", "nombre", "descripcion")
 
 
 class DataObject(dict):
@@ -36,6 +36,11 @@ class DataObject(dict):
         """Ancestro de este objeto en la jerarquia de objetos"""
         # up siempre esta definido, evito el fallback
         return dict.__getitem__(self, "up")
+
+    @property
+    def fb(self):
+        """PAra hacerlo 'compatible' con la proxima version del plantillator"""
+        return self
 
     def join(self, var, value):
         var = self._type.extend(var, value)
@@ -79,11 +84,15 @@ class DataObject(dict):
 
     def __str__(self):
         """Identifica al objeto por su nombre o sus primeros atributos"""
-        tag = itertools.chain(
-                    (self.get(x, None) for x in NAMING_ATTRIBS),
-                    (self.get(x, None) for x in self._type.blocked))
-        tag = (str(item) for item in tag if item is not None)
-        return ", ".join(itertools.islice(tag, 0, 3))
+        # Modificado para que coincida con el esquema de nombrado de la
+        # siguiente version del plantillator
+        fields = (self.get(k) for k in NAMING_ATTRIBS)
+        return ", ".join(str(f) for f in fields if f is not None)
+        #tag = itertools.chain(
+        #            (self.get(x, None) for x in NAMING_ATTRIBS),
+        #            (self.get(x, None) for x in self._type.blocked))
+        #tag = (str(item) for item in tag if item is not None)
+        #return ", ".join(itertools.islice(tag, 0, 3))
  
     # Modifico algunas funciones de bajo nivel para permitir que estos objetos
     # puedan meterse en un set, algo que con un diccionario normal no se puede:
