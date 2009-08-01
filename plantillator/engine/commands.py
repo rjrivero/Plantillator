@@ -28,6 +28,11 @@ class Condition(Command):
     Concuerda si una expresion es verdadera.
     """
 
+    def __init__(self, token, match):
+        Command.__init__(self, token, match)
+        if self.expr:
+            self.expr = compile(self.expr, '<string>', 'eval')
+
     def match(self, glob, data):
         try:
             return bool(eval(self.expr, glob, data)) if self.expr else True
@@ -107,9 +112,13 @@ class CommandFor(Command):
     este se elimina.
     """
 
+    def __init__(self, token, match):
+        Command.__init__(self, token, match)
+        self.expr = compile(self.expr, '<string>', 'eval')
+
     def run(self, glob, data):
         try:
-            expr = sorted(list(asIter(eval(self.expr, glob, data))))
+            expr = sorted(asIter(eval(self.expr, glob, data)))
         except (AttributeError, KeyError):
             return
         forset = set()
@@ -129,10 +138,17 @@ class CommandSet(Command):
     Ejecuta una asignacion.
     """
 
+    def __init__(self, token, match):
+        Command.__init__(self, token, match)
+        self.assign = "%s = %s" % (self.var, self.expr)
+        self.assign = compile(self.assign, '<string>', 'exec')
+
     def run(self, glob, data):
-        assign = "%s = %s" % (self.var, self.expr)
-        exec assign in glob, data
-        return Command.run(self, glob, data)
+        try:
+            exec self.assign in glob, data
+            return Command.run(self, glob, data)
+        except (AttributeError, KeyError):
+            pass
 
 
 class CommandDefine(Command):
@@ -183,6 +199,7 @@ class CommandRecall(Command):
         if self.params:
             self.params = self.params.strip()[1:-1].strip()
             self.params = "(%s,)" % self.params if self.params else None
+            self.params = compile(self.params, '<string>', 'eval')
 
     def run(self, glob, data):
         try:
@@ -213,6 +230,11 @@ class CommandSelect(Command):
     Comprueba si <var> esta definida. si no lo esta,
     pide al usuario que seleccione un valor de la lista <expr>
     """
+
+    def __init__(self, token, match):
+        Command.__init__(self, token, match)
+        if self.expr:
+            self.expr = compile(self.expr, '<string>', 'eval')
 
     def run(self, glob, data):
         # Con este test comprobamos que el valor que seleccionamos

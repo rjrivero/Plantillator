@@ -7,12 +7,13 @@ import traceback
 import os.path
 from sys import exc_info
 from gettext import gettext as _
+from itertools import chain
 
 from ..data.base import normalize
 
-
-# marcadores de parametros a reemplazar
-PLACEHOLD = re.compile(r'\?(?P<expr>[^\?]+)\?')
+DELIMITER = "?"
+DELIMITER_RE = re.compile(r'(\?)')
+_INVALID_LITERAL = _("Testo no terminado ('%s' desbalanceados)" % DELIMITER)
 _LITERAL_TEXT = _("Texto (%(linenum)d lineas)" )
 
 # nombres de variables permitidos
@@ -42,6 +43,31 @@ class Token(object):
 
     def __str__(self):
         return (self.head or self.body).strip()
+
+    def _consume(self, parts):
+        """Consume un elemento de la lista de partes"""
+        part = parts.pop(0)
+        if part != DELIMITER:
+            return part
+        expr = parts.pop(0)
+        if parts.pop(0) != DELIMITER:
+            raise IndexError(0)
+        return compile(expr, '<string>', 'eval')
+            
+    def split(self):
+        """Divide el token en trozos separados por el DELIMITADOR"""
+        self.parts = list()
+        try:
+            parts = DELIMITER_RE.split(self.body)
+            while parts:
+                self.parts.append(self._consume(parts))
+        except IndexError:
+            raise ParseError(None, self, _INVALID_LITERAL)
+
+    def evaluate(self, glob, data):
+        "Evalua el contenido de un token previamente 'splitted'."""
+        return (x if isinstance(x, str) else str(eval(x, glob, data))
+                for x in self.parts)
 
 
 class ParseError(Exception):
@@ -126,30 +152,34 @@ class Command(list):
         return str(self)
 
 
-class Literal(list):
+class Literal(object):
 
     """Texto literal, con sustituciones"""
 
+    def __init__(self):
+        self.tokens = list()
+
     def run(self, glob, data):
-        def replacefn(match):
-            return str(eval(match.group('expr'), glob, data))
         try:
             # intento hacer el replace y el yield de una sola vez,
             # con todas las lineas que haya en el literal
-            yield PLACEHOLD.sub(replacefn, "".join(item.body for item in self))
+            yield "".join(chain(x.evaluate(glob, data) for x in self.tokens))
         except CommandError:
             raise
         except:
-            # hay una excepcion. Para afinar, vamos linea por linea
-            # hasta encontrar la que falla.
-            for item in self:
+            # Hay un error en algun token, voy linea por linea para afinar.
+            for token in self.tokens:
                 try:
-                    yield PLACEHOLD.sub(replacefn, item.body)
+                    yield "".join(token.evaluate(glob, data))
                 except:
-                    raise CommandError(None, item, glob, data)
+                    raise CommandError(None, token, glob, data)
+
+    def append(self, token):
+        token.split()
+        self.tokens.append(token)
 
     def __str__(self):
-        return _LITERAL_TEXT % {'linenum': len(self)}
+        return _LITERAL_TEXT % {'linenum': len(self.tokens)}
 
     def __repr__(self):
         return str(self)
