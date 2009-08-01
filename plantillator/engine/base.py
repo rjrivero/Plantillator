@@ -184,3 +184,9 @@ class Literal(object):
     def __repr__(self):
         return str(self)
 
+    def __iter__(self):
+        return self.tokens.__iter__()
+
+    def __getitem__(self, index):
+        return self.tokens[index]
+

@@ -81,6 +81,9 @@ class CommandTree(list):
         for token in tokens:
             last = self.build(self, token, last)
 
+    def __str__(self):
+        return str(self.source)
+
     def _check(self, token):
         line = token.head
         for pre, post in self._MACROS:

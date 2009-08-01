@@ -4,6 +4,7 @@
 
 import Tkinter as tk
 from idlelib.TreeWidget import TreeItem, TreeNode
+from itertools import chain
 
 
 _NAMING_ATTRIBS = ['id', 'nombre', 'descripcion']
@@ -36,8 +37,14 @@ class Tagger(object):
 
     def filter_dict(self, data):
         """Itera sobre los elementos del dict, devolviendo clave y valor"""
-        return ((k, v) for k, v in data.iteritems()
-                       if ((not k.startswith("_")) and k != "up"))
+        try:
+            children = data._type._DOMD.children
+        except (AttributeError, KeyError):
+            return data.iteritems()
+        else:
+            items = ((child, data.get(child)) for child in children)
+            items = (x for x in items if x[1])
+            return chain(data.iteritems(), items)
 
     def filter_list(self, data):
         """Itera sobre los elementos de la lista/set, devolviendo indice y valor"""
@@ -52,14 +59,15 @@ class Item(TreeItem):
         self.data = data
         self.tagger = tagger or Tagger()
         # check properties
-        self.expandable = (data is not None and hasattr(data, '__iter__'))
+        self.expandable = True
         self.editable = False
         if hasattr(data, 'iteritems'):
             self.GetSubList = self._dict
         elif hasattr(data, '__iter__'):
             self.GetSubList = self._list
         else:
-            self.GetSubList = lambda self: None
+            self.expandable = False
+            #self.GetSubList = lambda self: None
 
     def __cmp__(self, other):
         # not expandable items first, then alphabetical order

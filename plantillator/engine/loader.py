@@ -10,8 +10,14 @@ class Loader(object):
 
     def __init__(self):
         self.trees = dict()
+        self.sources = set()
 
     def load(self, source):
+        """Carga el fichero y lo marca para ejecucion"""
+        self.sources.add(source.id)
+        return self._load(source)
+
+    def _load(self, source):
         try:
             return self.trees[source.id]
         except KeyError:
@@ -21,7 +27,7 @@ class Loader(object):
     def run(self, tree, glob, data):
         self.source = tree.source
         for block in tree.run(glob, data):
-            if type(block) == str:
+            if isinstance(block, str):
                 yield block
             elif block.opcode == "APPEND":
                 self._append(block)
@@ -32,21 +38,20 @@ class Loader(object):
 
     def _append(self, block):
         source = self.source.resolve(block.command.path)
-        if not source.id in self.trees:
-            self.appended[source.id] = source
+        self.appended[source.id] = source
 
     def _include(self, block):
         source = self.source.resolve(block.command.path)
-        block.command.included = self.load(source)
+        block.command.included = self._load(source)
 
     def __iter__(self):
         self.appended = dict()
-        for tree in self.trees.copy().values():
-            yield tree
+        for sourceid in self.sources:
+            yield self.trees[sourceid]
         while self.appended:
             # ordeno el diccionario antes de extraer, para que el resultado
             # de console -l sea repetible.
             index = sorted(self.appended).pop()
             source = self.appended.pop(index)
-            yield self.load(source)
+            yield self._load(source)
 

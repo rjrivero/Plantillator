@@ -179,7 +179,7 @@ class CommandDefine(Command):
         return Command.run(self, glob, data)
 
     def run(self, glob, data):
-        self.run = lambda glob, data: tuple()
+        #self.run = lambda glob, data: tuple()
         data.setdefault("_blocks", {})[self.blockname] = self
         return tuple()
 
@@ -261,5 +261,5 @@ class CommandAppend(Command):
 
     def run(self, glob, data):
         yield YieldBlock("APPEND", self, glob, data)
-        self.run = lambda glob, data: tuple()
+        # self.run = lambda glob, data: tuple()
 

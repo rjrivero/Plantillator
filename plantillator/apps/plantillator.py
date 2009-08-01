@@ -9,6 +9,7 @@ import sys
 from contextlib import contextmanager
 
 from ..data.pathfinder import PathFinder, FileSource
+from ..data.dataobject import Fallback
 from ..csvread.source import DataSource
 from ..engine.loader import Loader as TmplLoader
 from ..engine.cmdtree import VARPATTERN
@@ -32,19 +33,22 @@ class Plantillator(object):
 
     def __init__(self):
         self.__dict__.update(self.OPTIONS)
-
-    def render(self, overwrite=True):
         self.dataloader = DataLoader(DataSource())
         self.tmplloader = TmplLoader()
+
+    def prepare(self, overwrite=True):
         data, tmpl = self._classify()
         self._loaddata(data)
         self._addobjects()
         self._loadtmpl(tmpl)
+
+    def render(self, overwrite=True):
         if self.collapse:
             # borro el fichero de salida combinado
             if os.path.isfile(self.outpath) and overwrite:
                 os.unlink(self.outpath)
-        glob, data = self.dataloader.glob, self.dataloader.data
+        glob = self.dataloader.glob
+        data = Fallback(self.dataloader.data, depth=1)
         for tree in self.tmplloader:
             for block in self._renderfile(tree, glob, data):
                 yield block

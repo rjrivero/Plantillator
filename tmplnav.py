@@ -13,17 +13,16 @@ from traceback import print_exc, format_exception_only
 from optparse import OptionParser
 
 try:
-    from plantillator.data.namedtuple import NamedTuple
+    from plantillator.data.pathfinder import PathFinder, FileSource
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.data.namedtuple import NamedTuple
+    from plantillator.data.pathfinder import PathFinder, FileSource
 
-from plantillator.data.pathfinder import PathFinder, FileSource
 from plantillator.engine.cmdtree import CommandTree
 from plantillator.engine.base import Literal
-from plantillator.apps.tmplloader import TmplLoader
+from plantillator.engine.loader import Loader as TmplLoader
 from plantillator.apps.tree import TreeCanvas, Tagger
 
 
@@ -63,6 +62,11 @@ class TmplTagger(Tagger):
 
 class TmplNav(tk.Tk):
 
+    class Frames(object):
+        def __init__(self, top=None, bottom=None):
+            self.top = top
+            self.bottom = bottom
+
     def __init__(self, loader, geometry="800x600"):
         tk.Tk.__init__(self)
         self.title("TemplateNav")
@@ -71,7 +75,7 @@ class TmplNav(tk.Tk):
         self.hlen = 20
         self.loader = loader
         # split the window in two frames
-        self.frames = NamedTuple("Frames", "", top=0, bottom=1)
+        self.frames = TmplNav.Frames()
         self.frames.top = tk.Frame(self, borderwidth=5)
         self.frames.top.pack(side=tk.TOP, fill=tk.X)
         self.frames.bottom = tk.Frame(self)

@@ -48,13 +48,15 @@ class CSVSet(set):
         Si el atributo seleccionado es una sublista, en lugar de un set
         se devuelve un DataSet con todos los elementos encadenados.
         """
-        if attr.startswith('__'):
-            raise KeyError(attr)
-        items = not_none(x.get(attr) for x in self)
+        domd  = self._type._DOMD
+        if attr in domd.attribs:
+            return BaseSet(not_none(x.get(attr) for x in self))
         try:
-            return self._type._DOMD.subtype(attr)._DOMD.new_set(*tuple(items))
-        except KeyError:
-            return BaseSet(items)
+            domd = domd.subtype(attr)._DOMD
+        except AttributeError as details:
+            raise KeyError(details)
+        else:
+            return domd.new_set(*tuple(not_none(x.get(attr) for x in self)))
 
     def __getattr__(self, attr):
         try:

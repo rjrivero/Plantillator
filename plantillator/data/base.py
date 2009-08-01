@@ -193,8 +193,8 @@ class Filter(Deferrer):
         con el operand.
         """
         def evaluate(deferred):
-            deferred = deferred(*self.arg, **self.kw)
-            return super(Filter, self)._defer(deferred, operand)
+            deferred = len(deferred(*self.arg, **self.kw))
+            return operator(deferred, operand)
         return evaluate
 
     def __call__(self, deferred):

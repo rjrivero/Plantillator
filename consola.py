@@ -149,6 +149,7 @@ plantillator.outpath = options.outpath
 plantillator.collapse = options.collapse
 plantillator.definitions = options.definitions or []
 plantillator.inputfiles = inputfiles
+plantillator.prepare()
 try:
     if not options.loop:
         for item in plantillator.render():

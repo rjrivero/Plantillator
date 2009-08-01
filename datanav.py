@@ -20,6 +20,7 @@ except ImportError:
     sys.path.append(".")
     from plantillator.data.pathfinder import PathFinder, FileSource
 
+from plantillator.csvread.source import DataSource
 from plantillator.apps.dataloader import DataLoader
 from plantillator.apps.tree import TreeCanvas
 
@@ -155,12 +156,22 @@ for name in args:
         inputfiles.append(name)
 
 
+def preload(loader, type, pref, dots):
+    item = type()
+    for k in (x for x in loader if x.startswith(pref) and x.count(".")==dots):
+        attrib = k.split(".").pop()
+        csvset = loader[k](item, attrib)
+        preload(loader, csvset._type, k, dots+1)
+
+    
 finder = PathFinder(path)
-loader = DataLoader()
+loader = DataLoader(DataSource())
 try:
     for fname in inputfiles:
         source = FileSource(finder(fname), finder)
         loader.load(source)
+    # precargo las tablas
+    preload(loader.loader, loader.root, "", 0)
     # Cosas muy feas... no se por que, esto funciona:
     #
     # def test():
@@ -181,7 +192,7 @@ try:
     #
     # - pongo loader.glob como fallback de loader.data
     # - ejecuto las cosas con "exec EXPR in loader.data"
-    loader.data._up = loader.glob
+    # loader.data._up = loader.glob
     DataNav(loader.glob, loader.data.fb, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):

@@ -130,11 +130,10 @@ class Fallback(DataType(object)):
         super(Fallback, self).__init__(up, data)
         self._depth = depth
 
-    def _resolve(self, attr):
-        self = self._up
-        while self:
-            yield self.get(attr)
-            self = self._up
+    @property
+    def _type(self):
+        """Sobrecargo "_type" para que pueda accederse a los MetaDatos"""
+        return self._up._type
 
     def __getattr__(self, attr):
         """Busca el atributo en este objeto y sus ancestros"""
@@ -144,4 +143,13 @@ class Fallback(DataType(object)):
             if value is not None:
                 return value
         raise AttributeError(attr)
+
+    def _resolve(self, attr):
+        self = self._up
+        while self:
+            yield self.get(attr)
+            self = self._up
+
+    def __setitem__(self, index, value):
+        setattr(self, index, value)
 
