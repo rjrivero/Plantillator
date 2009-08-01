@@ -1,0 +1,6 @@
+(+pizzas(title="fourcheese").toppings(name="tomato")).fb.type     == ?(+pizzas(title="fourcheese").toppings(name="tomato")).fb.type?
+(+pizzas(title="fourcheese").toppings(name="mozzarella")).fb.type == ?(+pizzas(title="fourcheese").toppings(name="mozzarella")).fb.type?
+(+pizzas(title="fourcheese").toppings(name="ricota")).fb.type     == ?(+pizzas(title="fourcheese").toppings(name="ricota")).fb.type?
+(+pizzas(title="fourcheese").toppings(name="parmesano")).fb.type  == ?(+pizzas(title="fourcheese").toppings(name="parmesano")).fb.type?
+
+

@@ -13,65 +13,39 @@ from traceback import print_exc, format_exception_only
 from optparse import OptionParser
 
 try:
-    from data.namedtuple import NamedTuple
+    from plantillator.data.pathfinder import PathFinder, FileSource
 except ImportError:
     import os.path
     import sys
-    sys.path.append(os.path.dirname(os.path.abspath(sys.argv[0])))
-    from data.namedtuple import NamedTuple
+    sys.path.append(".")
+    from plantillator.data.pathfinder import PathFinder, FileSource
 
-from data.pathfinder import PathFinder, FileSource
-from engine.cmdtree import CommandTree
-from engine.base import Literal
-from apps.tmplloader import TmplLoader
-from apps.tree import TreeCanvas, Tagger
+from plantillator.csvread.source import DataSource
+from plantillator.apps.dataloader import DataLoader
+from plantillator.apps.tree import TreeCanvas
 
 
-class TmplTagger(Tagger):
-
-    def name(self, data, name, hint):
-        if isinstance(data, Literal):
-            name = str(data)
-            # buscamos alguna linea signigficativa, con mas de un par
-            # de caracteres, para ponerla como etiqueta del bloque.
-            for token in data[:-1]:
-                line = str(token)
-                if len(line) > 2 and not line.isspace():
-                    return "%s ..." % line
-            return data[-1] or "..."
-        return name or str(data) or " "
-
-    def icon(self, item):
-        if item.expandable:
-            return "python" if hasattr(item.data, "token") else "folder"
-        return "plusnode"
-
-    def selicon(self, item):
-        if item.expandable:
-            return "python" if hasattr(item.data, "token") else "openfolder"
-        return "minusnode"
-
-    def item(self, data, name=None, hint=None):
-        item = Tagger.item(self, data, name, hint)
-        item.editable = not item.expandable
-        return item
-
-    def filter_list(self, data):
-        """Evita que se ordenen las listas, porque fastidiaria los Literal"""
-        return enumerate(data)
+_ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")
 
 
-class TmplNav(tk.Tk):
+class DataNav(tk.Tk):
 
-    def __init__(self, loader, geometry="800x600"):
+
+    class Frames(object):
+        def __init__(self, top=None, bottom=None):
+            self.top = top
+            self.bottom = bottom
+
+    def __init__(self, glob, data, geometry="800x600"):
         tk.Tk.__init__(self)
-        self.title("TemplateNav")
+        self.title("DataNav")
+        self.glob = glob
+        self.data = data
         self.hist = list()
         self.cursor = 0
         self.hlen = 20
-        self.loader = loader
         # split the window in two frames
-        self.frames = NamedTuple("Frames", "", top=0, bottom=1)
+        self.frames = DataNav.Frames()
         self.frames.top = tk.Frame(self, borderwidth=5)
         self.frames.top.pack(side=tk.TOP, fill=tk.X)
         self.frames.bottom = tk.Frame(self)
@@ -87,7 +61,7 @@ class TmplNav(tk.Tk):
                                 command=self.clicked, padx=5)
         self.button.pack(side=tk.RIGHT)
         # lower frame: the data canvas
-        self.canvas = TreeCanvas(self.frames.bottom, TmplTagger())
+        self.canvas = TreeCanvas(self.frames.bottom)
         # set the geometry
         entry.focus()
         self.geometry(geometry)
@@ -99,24 +73,26 @@ class TmplNav(tk.Tk):
 
     def clicked(self, *skip):
         """Presenta los datos seleccionados"""
-        source, fname = None, self.entry.get()
-        if fname:
+        name, data = self.entry.get(), self.data
+        if not name:
+            name = "root"
+            self.cursor = 0
+        else:
             try:
-                source = FileSource(finder(fname), finder)
-            except:
-                pass
-            else:
-                self.loader.load(source)
-        self.canvas.show("root", self.loader)
-        if len(self.canvas.node.children) == 1:
-            self.canvas.node.children[0].expand()
-        elif source:
-            for node in self.canvas.node.children:
-                if node.item.data.source.id == source.id:
-                    node.expand()
-        self.hist.append(self.entry.get())
-        if len(self.hist) > self.hlen:
-            self.hist.pop(0)
+                match = _ASSIGNMENT.match(name)
+                if match:
+                    exec name in self.data
+                    name = match.group("var")
+                data = eval(name, self.glob, self.data)
+                if name not in self.hist:
+                    self.cursor = 0
+                    self.hist.append(name)
+                    if len(self.hist) > self.hlen:
+                        self.hist.pop(0)
+            except Exception as details:
+                print "Exception: %s" % str(details)
+                return
+        self.canvas.show(name, data)
 
     def keyup(self, *skip):
         """Selecciona un elemento anterior en la historia"""
@@ -145,7 +121,7 @@ path = ['.']
 
 parser = OptionParser(usage=usage, version="%%prog %s"%VERSION)
 parser.add_option("-p", "--path", dest="path", metavar="PATH",
-        help="""Ruta donde buscar las plantillas.
+        help="""Ruta donde buscar los ficheros de datos.
 La ruta se especifica al estilo del sistema operativo, por ej.:
 C:\\ruta1;C:\\ruta2 (en windows)
 /ruta1:/ruta2 (en linux)""")
@@ -179,13 +155,45 @@ for name in args:
     else:
         inputfiles.append(name)
 
+
+def preload(loader, type, pref, dots):
+    item = type()
+    for k in (x for x in loader if x.startswith(pref) and x.count(".")==dots):
+        attrib = k.split(".").pop()
+        csvset = loader[k](item, attrib)
+        preload(loader, csvset._type, k, dots+1)
+
+    
 finder = PathFinder(path)
-loader = TmplLoader()
+loader = DataLoader(DataSource())
 try:
     for fname in inputfiles:
         source = FileSource(finder(fname), finder)
         loader.load(source)
-    TmplNav(loader, geometry).mainloop()
+    # precargo las tablas
+    preload(loader.loader, loader.root, "", 0)
+    # Cosas muy feas... no se por que, esto funciona:
+    #
+    # def test():
+    #     v = [1, 2, 3, 4, 5]
+    #     print(list(v.index(x) for x in (1, 2)))
+    #
+    # Pero esto no:
+    #
+    # def test():
+    #     v = [1, 2, 3, 4, 5]
+    #     exec "print(list(v.index(x) for x in (1, 2)))" in globals(), locals()
+    #
+    # El segundo ejemplo lanza un error de que "v no esta definido en globals",
+    # ni se molesta en cogerlo de locals.
+    #
+    # En resumen, usar exec con globals y locals da problemillas, asi que lo que
+    # he decidido de momento, al menos para el datanav, es:
+    #
+    # - pongo loader.glob como fallback de loader.data
+    # - ejecuto las cosas con "exec EXPR in loader.data"
+    # loader.data._up = loader.glob
+    DataNav(loader.glob, loader.data.fb, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

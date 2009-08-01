@@ -1,0 +1,6 @@
++beverages(color="white").alcohol  == ?+beverages(color="white").alcohol?
++beverages(color="black").alcohol  == ?+beverages(color="black").alcohol?
++beverages(color="red").alcohol    == ?+beverages(color="red").alcohol?
++beverages(color="yellow").alcohol == ?+beverages(color="yellow").alcohol?
+
+

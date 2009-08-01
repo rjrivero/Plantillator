@@ -8,10 +8,17 @@ import re
 import sys
 from contextlib import contextmanager
 
-from data.pathfinder import PathFinder, FileSource
-from apps.dataloader import DataLoader
-from apps.tmplloader import TmplLoader
-from engine.cmdtree import VARPATTERN
+from ..data.pathfinder import PathFinder, FileSource
+from ..data.dataobject import Fallback
+from ..csvread.source import DataSource
+from ..engine.loader import Loader as TmplLoader
+from ..engine.cmdtree import VARPATTERN
+from .dataloader import DataLoader
+
+
+TMPL_EXT = set(('.txt',))
+DATA_EXT = set(('.csv',))
+CONF_EXT = ".cfg"
 
 
 class Plantillator(object):
@@ -24,27 +31,26 @@ class Plantillator(object):
         'inputfiles': [],
     }
 
-    CONF_SUFFIX = ".cfg"
-
     def __init__(self):
         self.__dict__.update(self.OPTIONS)
-
-    def render(self, overwrite=True):
-        self.dataloader = DataLoader()
+        self.dataloader = DataLoader(DataSource())
         self.tmplloader = TmplLoader()
+
+    def prepare(self, overwrite=True):
         data, tmpl = self._classify()
         self._loaddata(data)
         self._addobjects()
         self._loadtmpl(tmpl)
+
+    def render(self, overwrite=True):
         if self.collapse:
             # borro el fichero de salida combinado
             if os.path.isfile(self.outpath) and overwrite:
                 os.unlink(self.outpath)
-        glob, data = self.dataloader.glob, self.dataloader.data
-        # para poder ejecutarlo mas de una vez, no utilizo "data"
-        # directamente, sino un "Fallback" suyo
-        for tmpldata in self.tmplloader.templates(glob, data):
-            for block in self._renderfile(*tmpldata):
+        glob = self.dataloader.glob
+        data = Fallback(self.dataloader.data, depth=1)
+        for tree in self.tmplloader:
+            for block in self._renderfile(tree, glob, data):
                 yield block
 
     def _classify(self):
@@ -54,10 +60,10 @@ class Plantillator(object):
             parts = os.path.splitext(fname)
             if len(parts) < 2:
                 raise ValueError, "Fichero sin extension: %s" % fname
-            ext = parts[1][1:] # viene con un "."
-            if self.tmplloader.known(ext):
+            ext = parts[1].lower()
+            if ext in TMPL_EXT:
                 tmpl.append(FileSource(finder(fname), finder))
-            elif self.dataloader.known(ext):
+            elif ext in DATA_EXT:
                 data.append(FileSource(finder(fname), finder))
             else:
                 raise ValueError, "Extension desconocida: %s" % ext
@@ -88,7 +94,7 @@ class Plantillator(object):
             outcontext = lambda: open(self.outpath, "a+")
         elif self.outpath:
             outname = os.path.basename(sourceid)
-            outname = os.path.splitext(outname)[0] + self.CONF_SUFFIX
+            outname = os.path.splitext(outname)[0] + CONF_EXT
             outname = os.path.join(self.outpath, outname)
             if os.path.isfile(outname):
                 os.unlink(outname)
@@ -100,7 +106,7 @@ class Plantillator(object):
             outcontext = stderr_wrapper
         return outcontext
 
-    def _renderfile(self, sourceid, cmdtree, glob, data):
+    def _renderfile(self, cmdtree, glob, data):
         """Ejecuta un patron.
 
         Ejecuta el patron y va grabando los resultados al fichero de salida
@@ -109,7 +115,7 @@ class Plantillator(object):
         Si se encuentra con un bloque que no sabe interpretar (cualquier cosa
         que no sea texto), lo lanza.
         """
-        outcontext = self._outcontext(sourceid)
+        outcontext = self._outcontext(cmdtree.source.id)
         items = self.tmplloader.run(cmdtree, glob, data)
         try:
             while True:
@@ -123,4 +129,3 @@ class Plantillator(object):
                 yield item
         except StopIteration:
             pass
-

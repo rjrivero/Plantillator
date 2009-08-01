@@ -9,11 +9,19 @@ from sys import exc_info
 from gettext import gettext as _
 from itertools import chain
 
+from ..data.base import normalize
 
 DELIMITER = "?"
 DELIMITER_RE = re.compile(r'(\?)')
 _INVALID_LITERAL = _("Testo no terminado ('%s' desbalanceados)" % DELIMITER)
 _LITERAL_TEXT = _("Texto (%(linenum)d lineas)" )
+
+# nombres de variables permitidos
+VARPATTERN = {
+    'var': r'[a-zA-Z][\w\_]*',
+    'en':  r'en(\s+(el|la|los|las))?',
+    'de':  r'(en|de|del)(\s+(el|la|los|las))?'
+}
 
 
 class Token(object):
@@ -79,7 +87,7 @@ class ParseError(Exception):
             "Error interpretando %s" % str(self.token),
             self.errmsg
         ]
-        # error.extend(traceback.format_exception(*self.exc_info))
+        #error.extend(traceback.format_exception(*self.exc_info))
         return "\n".join(error)
 
 
@@ -110,7 +118,7 @@ class CommandError(Exception):
             "Error ejecutando %s" % str(self.token),
             "%s: %s" % (self.exc_info[0].__name__, str(self.exc_info[1]))
         ]
-        # error.extend(traceback.format_exception(*self.exc_info))
+        error.extend(traceback.format_exception(*self.exc_info))
         return "\n".join(error)
 
 
@@ -121,7 +129,7 @@ class Command(list):
     def __init__(self, token, match):
         list.__init__(self)
         for key, val in match.groupdict().iteritems():
-            setattr(self, key, val.strip() or None if val else None)
+            setattr(self, key, normalize(val) if val else None)
         self.token = token
 
     def run(self, glob, data):

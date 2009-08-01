@@ -31,6 +31,9 @@ class LineSource(object):
         """Devuelve una nueva fuente correspondiente al nombre dado"""
         raise NotImplementedError, "%s.resolve" % self.__class.__name__
 
+    def __str__(self):
+        return str(self.id)
+
 
 class FileSource(LineSource):
 
@@ -55,15 +58,12 @@ class StringSource(LineSource):
 
     """Wrapper sobre un string"""
 
-    def __init__(self, id, stream):
+    def __init__(self, desc, stream):
         LineSource.__init__(self, desc)
         self.lines = stream.split("\n")
 
     def readlines(self, mode="r"):
         return self.lines
-
-    def __str__(self):
-        return self.id
 
 
 class PathFinder(list):

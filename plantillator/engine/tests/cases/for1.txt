@@ -1,0 +1,4 @@
+{{por cada beverage de beverages
+ beverage.color: ?beverage.color?, beverage.alcohol: ?beverage.alcohol?
+}}
+

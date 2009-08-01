@@ -5,20 +5,13 @@
 import re
 from gettext import gettext as _
 
-from engine.base import *
-from engine.commands import *
+from .base import *
+from .commands import *
 
 
 _RUNTIME_ERROR = _("Error ejecutando %(command)s")
 _ERROR_LOCATION = _("Origen %(fname)s, linea $(lineno)d")
 _UNKNOWN_CMD = _("Comando %(command)s desconocido")
-
-# nombres de variables permitidos
-VARPATTERN = {
-    'var': r'[a-zA-Z][\w\_]*',
-    'en':  r'en(\s+(el|la|los|las))?',
-    'de':  r'(en|de|del)(\s+(el|la|los|las))?'
-}
 
 
 class CommandTree(list):
@@ -88,6 +81,9 @@ class CommandTree(list):
         for token in tokens:
             last = self.build(self, token, last)
 
+    def __str__(self):
+        return str(self.source)
+
     def _check(self, token):
         line = token.head
         for pre, post in self._MACROS:
@@ -101,7 +97,7 @@ class CommandTree(list):
 
     def build(self, base, token, last):
         if not token.head:
-	    return self._chain(base, token, last)
+            return self._chain(base, token, last)
         cmd, inner = self._check(token), None
         for nested in token.body:
             inner = self.build(cmd, nested, inner)

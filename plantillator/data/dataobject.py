@@ -2,133 +2,154 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-import itertools
-
-from data.operations import asIter
-from data.datatype import DataType
-from data.dataset import DataSet
+from itertools import islice
 
 
-# Todos los DataObjects que alguna vez tengan que ser identificados por un nombre
-# (dentro de un select, por ejemplo, o en una lista mostrada por una GUI), deben
-# tener al menos uno de estos atributos.
-NAMING_ATTRIBS = ("id", "nombre", "descripcion")
+def DataType(base):
 
+    """Devuelve un tipo derivado de "base" que se comporta como un dict.
 
-class DataObject(dict):
+    Los atributos de los objetos de este tipo seran accesibles como entradas
+    de diccionario. Es decir, x['attrib'] == x.attrib
 
-    """Objeto accesible por "scopes"
-
-    Puede accederse a los atributos del  objeto como si fueran valores de
-    un diccionario. Si se hace referencia a un atributo que no existe, se
-    sube en la jerarquia buscandolo.
+    Los DataObjects estan relacionados en forma de arbol. Cada nodo "hijo"
+    tiene un nodo "padre", y un nodo "padre" puede tener varios nodos "hijo".
     """
 
-    def __init__(self, mytype, data=None, fallback=None):
-        """Inicializa el DataObject con los datos y fallback especificados"""
-        dict.__init__(self, data or dict())
-        self._type = mytype
-        # hago "up" accesible a lo que se ejecute dentro de mi entorno
-        self['up'] = fallback
+    class _DataObject(base):
+
+        def __init__(self, up=None, data=None):
+            super(_DataObject, self).__init__()
+            self._up = up
+            if data:
+                self.update(data)
+
+        @property
+        def _type(self):
+            return self.__class__
+
+        @property
+        def up(self):
+            """Ancestro de este objeto en la jerarquia de objetos"""
+            return self._up
+
+        @property
+        def fb(self, data=None, depth=None):
+            """Devuelve un "proxy" para la busqueda de atributos.
+
+            Cualquier atributo al que se acceda sera buscado en el objeto que
+            ha generado el fallback y sus ancestros
+            """
+            return Fallback(self, data, depth)
+
+        # Funciones que proporcionan la dualidad objeto / diccionario.
+
+        def get(self, item, defval=None):
+            """Busca el atributo, devuelve "defval" si no existe o es None"""
+            try:
+                retval = getattr(self, item)
+            except AttributeError:
+                return defval
+            else:
+                return retval if retval is not None else defval
+
+        def setdefault(self, attrib, value):
+            try:
+                retval = getattr(self, attrib)
+            except AttributeError:
+                retval = None
+            if retval is None:
+                setattr(self, attrib, value)
+                retval = value
+            return retval
+
+        def update(self, data):
+            self.__dict__.update(data)
+
+        def __contains__(self, attrib):
+            """Comprueba que exista el atributo"""
+            return (self.get(attrib) is not None)
+        
+        def iteritems(self):
+            for key in (str(x) for x in self._type._DOMD.attribs):
+                value = self.get(key)
+                if value is not None:
+                    yield (key, value)
+
+        def __getitem__(self, item):
+            try:
+                return getattr(self, item)
+            except AttributeError as details:
+                raise KeyError(details)
+
+        def __setitem__(self, name, value):
+            setattr(self, name, value)
+
+        # Herramientas para filtrado
+
+        def _matches(self, kw):
+            """Comprueba si el atributo indicado cumple el criterio."""
+            return all(crit(self.get(key)) for key, crit in kw.iteritems())
+
+    return _DataObject
+
+
+class MetaData(object):
+
+    """MetaDatos relacionados con una clase de DataObject
+
+    name: label de la clase (string)
+    parent: clase padre, en la jerarquia (DataObject.__class__)
+    children: clases hijo en la jerarquia (dict(string, DataObject.__class__))
+    attribs: conjunto de atributos (list(string))
+    summary: lista ordenada de atributos que puede usarse como
+             "sumario" o descripcion abreviada de un objeto
+
+    Por convencion, las clases derivadas de DataObject(...) deben tener un
+    atributo _DOMD (DataObject MetaData) de este tipo.
+    """
+
+    def __init__(self, cls, name='', parent=None):
+        self.name     = name
+        self.parent   = parent
+        self.children = dict()
+        self.attribs  = set()
+        self.summary  = list()
+        # por convencion, el tipo siempre se llama _type.
+        self._type    = cls
+
+
+class Fallback(DataType(object)):
+
+    """Realiza fallback en la jerarquia de objetos
+
+    Objeto que implementa el mecanismo de fallback de los DataObjects.
+    """
+
+    def __init__(self, up, data=None, depth=None):
+        super(Fallback, self).__init__(up, data)
+        self._depth = depth
 
     @property
-    def up(self):
-        """Ancestro de este objeto en la jerarquia de objetos"""
-        # up siempre esta definido, evito el fallback
-        return dict.__getitem__(self, "up")
+    def _type(self):
+        """Sobrecargo "_type" para que pueda accederse a los MetaDatos"""
+        return self._up._type
 
-    @property
-    def fb(self):
-        """PAra hacerlo 'compatible' con la proxima version del plantillator"""
-        return self
+    def __getattr__(self, attr):
+        """Busca el atributo en este objeto y sus ancestros"""
+        if attr.startswith('__'):
+            raise AttributeError(attr)
+        for value in islice(self._resolve(attr), 0, self._depth):
+            if value is not None:
+                return value
+        raise AttributeError(attr)
 
-    def join(self, var, value):
-        var = self._type.extend(var, value)
-        self[var] = asIter(value)
-        return self
+    def _resolve(self, attr):
+        self = self._up
+        while self:
+            yield self.get(attr)
+            self = self._up
 
-    # Funciones que proporcionan la dualidad objeto (accesible por atributos) /
-    # / diccionario (accesible por indice). Integran tambien el fallback.
-
-    def __getitem__(self, item):
-        try:
-            return dict.__getitem__(self, item)
-        except KeyError:
-            if self.up and item not in self._type.blocked:
-                return self.up[item]
-            return self.setdefault(item, DataSet(self._type.subtypes[item]))
-
-    def __getattr__(self, attrib):
-        try:
-            return self[attrib]
-        except KeyError:
-            raise AttributeError, attrib
-
-    def __setattr__(self, key, val):
-        """Da valor al atributo"""
-        try:
-            self[key] = val
-        except KeyError:
-            raise AttributeError, key
-
-    def get(self, item, defval=None):
-        """Busca el atributo, devuelve "defval" si no lo encuentra"""
-        try:
-            return self[item]
-        except KeyError:
-            return defval
-
-    # Hay varias utilidades donde se intenta dar un nombre a un DataObject
-    # en funcion de algunos de sus valores, asi que he decidido que es mejor
-    # que haya un solo sitio donde se intente encontrar ese nombre.
-
-    def __str__(self):
-        """Identifica al objeto por su nombre o sus primeros atributos"""
-        # Modificado para que coincida con el esquema de nombrado de la
-        # siguiente version del plantillator
-        fields = (self.get(k) for k in NAMING_ATTRIBS)
-        return ", ".join(str(f) for f in fields if f is not None)
-        #tag = itertools.chain(
-        #            (self.get(x, None) for x in NAMING_ATTRIBS),
-        #            (self.get(x, None) for x in self._type.blocked))
-        #tag = (str(item) for item in tag if item is not None)
-        #return ", ".join(itertools.islice(tag, 0, 3))
- 
-    # Modifico algunas funciones de bajo nivel para permitir que estos objetos
-    # puedan meterse en un set, algo que con un diccionario normal no se puede:
-    #
-    # - Los objetos se comparan por identidad, no por valor
-    # - El hash es fijo
-
-    def __hash__(self):
-        return hash(id(self))
-
-    def __cmp__(self, other):
-        return cmp(id(self), id(other))
-
-    # Ahora modifico otro conjunto de propiedades del objeto, para hacerlo
-    # comportarse lo mas parecido a un ScopeSet de longitud 1:
-    #
-    # - Al iterar sobre ellos se devuelven a si mismos.
-    # - Su longitud es siempre 1.
-    # - Soportan filtrado con la funcion __call__.
-
-    def _matches(self, kw):
-        """Comprueba si el atributo indicado cumple el criterio."""
-        return all(crit(self.get(key)) for key, crit in kw.iteritems())
-
-    def __len__(self):
-        return 1
-
-    def __iter__(self):
-        yield self
-
-    def __call__(self, *arg, **kw):
-        """Busca los elementos de la lista que cumplan los criterios dados"""
-        crit = self._type.adapt(arg, kw)
-        return self if self._matches(crit) else DataSet(self._type)
-
-    def __pos__(self):
-        """Para compatibilidad con la siguiente version del plantillator"""
-        return self
+    def __setitem__(self, index, value):
+        setattr(self, index, value)
 

@@ -5,13 +5,12 @@
 import re
 import itertools
 import functools
+from collections import namedtuple
 from gettext import gettext as _
 
-from data.operations import asIter
-from data.namedtuple import NamedTuple
-from data.datatype import DataType
-from data.dataobject import DataObject
-from engine.base import *
+from ..data.base import asIter
+from ..data.dataobject import Fallback
+from .base import *
 
 
 # cadenas de error
@@ -21,11 +20,7 @@ _WRONG_PARAMS = _("La cadena %(params)s no es valida")
 _ELSE_WITHOUT_IF = _("\"si no\" desemparejado")
 
 
-YieldBlock = NamedTuple("YieldBlock",
-    """Bloque que es lanzado por un comando para indicar que necesita
-    informacion o procesamiento adicional para traducir un patron
-    """,
-    opcode=0, command=1, glob=2, data=3)
+YieldBlock = namedtuple("YieldBlock", "opcode, command, glob, data")
 
 
 class Condition(Command):
@@ -41,7 +36,7 @@ class Condition(Command):
     def match(self, glob, data):
         try:
             return bool(eval(self.expr, glob, data)) if self.expr else True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return False
 
     def run(self, glob, data):
@@ -58,24 +53,24 @@ class ConditionNot(Condition):
     def match(self, glob, data):
         try:
             return not bool(eval(self.expr, glob, data)) if self.expr else True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return True
 
 
 class ConditionExist(Condition):
     """Comprobacion de variable
     Concuerda si una variable esta definida en la lista que
-    (se espera que) devuelva la evaluzacion de una expresion.
+    (se espera que) devuelva la evaluacion de una expresion.
     """
 
     def match(self, glob, data):
         try:
             expr = eval(self.expr, glob, data)
-            if (self.var in expr):
+            if expr[self.var] is not None:
                 return True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return False
-        
+
 
 class ConditionNotExist(ConditionExist):
     """Comprobacion de no existencia de variable
@@ -87,9 +82,9 @@ class ConditionNotExist(ConditionExist):
     def match(self, glob, data):
         try:
             expr = eval(self.expr, glob, data)
-            if not (self.var in expr):
+            if expr[self.var] is None:
                 return True
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, NameError):
             return True
 
 
@@ -123,7 +118,7 @@ class CommandFor(Command):
 
     def run(self, glob, data):
         try:
-            expr = sorted(list(asIter(eval(self.expr, glob, data))))
+            expr = sorted(asIter(eval(self.expr, glob, data)))
         except (AttributeError, KeyError):
             return
         forset = set()
@@ -163,15 +158,16 @@ class CommandDefine(Command):
     su nombre en cualquier otro punto del patron.
     """
 
+    VALID = re.compile(VARPATTERN['var']).match
+
     def __init__(self, token, match):
         Command.__init__(self, token, match)
         if self.params:
             self.params = tuple(x.strip() for x in self.params.split(","))
         else:
             self.params = tuple()
-        self.fake_type = DataType(None)
         for item in self.params:
-            if item != self.fake_type.add_field(item):
+            if not CommandDefine.VALID(item):
                 raise ParseError(None, token,
                                  _WRONG_PARAMS % {'params': str(self.params)})
 
@@ -179,11 +175,11 @@ class CommandDefine(Command):
         if len(params) != len(self.params):
             raise ValueError(params)
         vals = dict(zip(self.params, params))
-        data = DataObject(self.fake_type, vals, data)
+        data = Fallback(data, vals, 2)
         return Command.run(self, glob, data)
 
     def run(self, glob, data):
-        self.run = lambda glob, data: tuple()
+        #self.run = lambda glob, data: tuple()
         data.setdefault("_blocks", {})[self.blockname] = self
         return tuple()
 
@@ -243,7 +239,7 @@ class CommandSelect(Command):
     def run(self, glob, data):
         # Con este test comprobamos que el valor que seleccionamos
         # esta definido y no es una lista vacia.
-        if len(data.get(self.var, tuple())) > 0:
+        if data.get(self.var):
             return
         if not self.expr:
             raise ValueError, self.var
@@ -265,5 +261,5 @@ class CommandAppend(Command):
 
     def run(self, glob, data):
         yield YieldBlock("APPEND", self, glob, data)
-        self.run = lambda glob, data: tuple()
+        # self.run = lambda glob, data: tuple()
 

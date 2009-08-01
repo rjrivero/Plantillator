@@ -4,33 +4,14 @@
 
 from os.path import splitext
 
-import csvread.datasource
-from data.operations import Deferrer, Filter
-from data.base import *
-from data.dataobject import DataObject
-from data.datatype import TypeTree
-
-
-_DATASOURCES = {
-    'csv': csvread.datasource.DataSource
-}
-
-_DEFAULT_EXT = 'csv'
-
-
-class LoadError(Exception):
-
-    def __init__(self, source, lineno, *args):
-        Exception.__init__(self, *args)
-        self.source = source
-        self.lineno = lineno
+from ..data.base import *
+from ..csvread.csvdata import RootType
+from ..csvread.parser import DataError
 
 
 class DataLoader(object):
 
-    def __init__(self):
-        self.tree = TypeTree()
-        self.data = DataObject(self.tree.root)
+    def __init__(self, loader):
         self.hist = set()
         self.glob = {
             "__builtins__": __builtins__,
@@ -44,6 +25,9 @@ class DataLoader(object):
             "x": Deferrer(),
             "donde": Filter
         }
+        self.loader = loader
+        self.root = RootType(self.loader)
+        self.data = self.root()
 
     def load(self, source):
         sources = [source]
@@ -54,18 +38,12 @@ class DataLoader(object):
                 self.hist.add(source.id)
 
     def _resolve(self, source):
-        ext = splitext(source.id)[-1].lower()
-        if not ext in _DATASOURCES:
-            ext = _DEFAULT_EXT
-        ds = _DATASOURCES[ext](self.tree, self.data)
         try:
-            return list(source.resolve(item) for item in ds.read(source))
+            deps = self.loader.read(source, self.data)
+            return list(source.resolve(item) for item in deps)
         except (SyntaxError, ValueError) as details:
-            raise LoadError(source, ds.lineno, details.message)
+            raise DataError(source, "N/A", details.message)
 
     def evaluate(self, expr):
         return eval(expr, self.glob, self.data)
-
-    def known(self, ext):
-        return ext.lower() in _DATASOURCES
 
