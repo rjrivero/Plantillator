@@ -37,7 +37,11 @@ class Loader(object):
                 yield block
 
     def _append(self, block):
-        source = self.source.resolve(block.command.path)
+        try:
+            source = block.command.source
+        except AttributeError:
+            source = self.source.resolve(block.command.path)
+            block.command.source = source
         self.appended[source.id] = source
 
     def _include(self, block):

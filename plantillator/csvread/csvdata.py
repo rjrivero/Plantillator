@@ -66,6 +66,12 @@ class CSVObject(DataType(object)):
     (DataSet).
     """
 
+    def __init__(self, up=None, data=None):
+        super(CSVObject, self).__init__()
+        self._up = up
+        if data:
+            self.update(data)
+
     def __getattr__(self, attr):
         """Intenta crear el atributo solicitado usando _Properties
         Si no puede, lanza AttributeError

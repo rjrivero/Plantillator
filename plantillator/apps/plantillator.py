@@ -21,6 +21,40 @@ DATA_EXT = set(('.csv',))
 CONF_EXT = ".cfg"
 
 
+#class FallbackDict(dict):
+#
+#    """Diccionario que hace Fallback a un DataObject
+#
+#    Lo he definido para usarlo como "locals" en las llamadas a exec
+#    y eval, por si utilizar un tipo basado en diccionario mejoraba algo
+#    el rendimiento comparado con un tipo basado en DataType. Pero la verdad
+#    es que el rendimiento se queda igual.
+#    """
+#
+#    def __init__(self, data):
+#        dict.__init__(self)
+#        self._up = data
+#
+#    def __getitem__(self, index):
+#        try:
+#            return dict.__getitem__(self, index)
+#        except KeyError:
+#            return self.setdefault(index, self._up[index])
+#
+#    @property
+#    def _type(self):
+#        return self._up._type
+#
+#    def __setattr__(self, index, value):
+#        self[index] = value
+#
+#    def __getattr__(self, attr):
+#        try:
+#            return self[attr]
+#        except KeyError as details:
+#            raise AttributeError(details)
+
+
 class Plantillator(object):
 
     OPTIONS = {
@@ -48,6 +82,7 @@ class Plantillator(object):
             if os.path.isfile(self.outpath) and overwrite:
                 os.unlink(self.outpath)
         glob = self.dataloader.glob
+        #data = FallbackDict(self.dataloader.data)
         data = Fallback(self.dataloader.data, depth=1)
         for tree in self.tmplloader:
             for block in self._renderfile(tree, glob, data):

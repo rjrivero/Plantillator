@@ -14,15 +14,11 @@ def DataType(base):
 
     Los DataObjects estan relacionados en forma de arbol. Cada nodo "hijo"
     tiene un nodo "padre", y un nodo "padre" puede tener varios nodos "hijo".
+
+    Los elementos del diccionario clsdict se le agregan a la clase devuelta.
     """
 
     class _DataObject(base):
-
-        def __init__(self, up=None, data=None):
-            super(_DataObject, self).__init__()
-            self._up = up
-            if data:
-                self.update(data)
 
         @property
         def _type(self):
@@ -90,6 +86,10 @@ def DataType(base):
         def _matches(self, kw):
             """Comprueba si el atributo indicado cumple el criterio."""
             return all(crit(self.get(key)) for key, crit in kw.iteritems())
+
+        # Necesario para que django no meta basurilla por medio
+        class Meta(object):
+            abstract = True
 
     return _DataObject
 
