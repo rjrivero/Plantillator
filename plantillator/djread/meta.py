@@ -138,6 +138,7 @@ class MetaData(dataobject.MetaData):
         los metadatos, y eleminando los que no sean significativos para
         el ORM.
         """
+
         try:
             parent = d['_up']._DOMD
         except KeyError:
@@ -189,4 +190,12 @@ class MetaData(dataobject.MetaData):
             setattr(self, key, val)
         setattr(cls, propname, property(fget, fset))
         self.dynamic.add(propname)
+
+
+def RootData():
+    """Crea un nuevo tipo raiz (parent == None)"""
+    root = DataType(object)
+    data = root()
+    setattr(root, '_DOMD', MetaData(root, 'ROOT', root.__bases__, {}, data))
+    return data
 

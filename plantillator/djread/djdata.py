@@ -191,4 +191,3 @@ class DJModel(DataType(models.Model)):
 
     def __add__(self, other):
         return _add(self, other)
-
