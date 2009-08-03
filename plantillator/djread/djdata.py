@@ -2,10 +2,11 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
+from itertools import chain
 from django.db import models, backend
 from django.db.models import Count
 
-from ..data.base import BaseSet
+from ..data.base import BaseSet, asIter
 from ..data.dataobject import DataType
 import meta
 
@@ -72,6 +73,17 @@ class Deferrer(object):
         return self._defer(False, 'in', asIter(arg))
 
 
+def _add(one, other):
+    if one._type != other._type:
+        raise TypeError(other._type)
+    ids = chain(asIter(one.pk), asIter(other.pk))
+    objects = one._type.objects.all().filter(pk__in=ids)
+    objects._agg = False
+    objects._pos = {'pk__in': ids}
+    objects._neg = dict()
+    return objects
+
+
 class DJSet(models.query.QuerySet):
 
     """QuerySet que implementa la interfaz de los DataSets
@@ -123,7 +135,7 @@ class DJSet(models.query.QuerySet):
     def __getattr__(self, attrib):
         """Obtiene el atributo seleccionado"""
         domd = self._type._DOMD
-        if attrib in domd.attribs:
+        if attrib == 'pk' or attrib in domd.attribs:
             return BaseSet(x[attrib] for x in self.values(attrib))
         try:
             objects = domd.children[attrib].objects.all()
@@ -145,6 +157,9 @@ class DJSet(models.query.QuerySet):
         objects._pos = pos
         objects._neg = neg
         return objects
+
+    def __add__(self, other):
+        return _add(self, other)
 
     @property
     def up(self):
@@ -174,4 +189,6 @@ class DJModel(DataType(models.Model)):
     class Meta(object):
         abstract = True
 
+    def __add__(self, other):
+        return _add(self, other)
 
