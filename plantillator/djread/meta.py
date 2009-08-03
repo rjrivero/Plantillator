@@ -3,6 +3,7 @@
 
 
 from itertools import chain
+#import pprint
 from collections import namedtuple
 from gettext import gettext as _
 
@@ -22,7 +23,7 @@ class AnchorMeta(namedtuple('AnchorMeta', 'kind, relations, field, arg, kw')):
         self.relations.add(AnchorMeta.Relation(model, attrib))
 
     def __repr__(self):
-        return str(self.relations)
+        return repr(self.relations)
 
 
 def anchor(field_cls, *arg, **kw):
@@ -44,7 +45,7 @@ def anchor(field_cls, *arg, **kw):
 
 class ChildOfMeta(namedtuple('ChildOfMeta', 'kind, model')):
     def __repr__(self):
-        print "child of %s" % self.model._DOMD.name
+        return "child of %s" % self.model._DOMD.name
 
 
 def childOf(fk, model, *arg, **kw):
@@ -69,7 +70,7 @@ class RelationMeta(namedtuple('RelationMeta', 'kind, model, field, filter')):
         return self.model._DOMD.anchors[self.field]
 
     def __repr__(self):
-        print "%s.%s" % (self.model._DOMD.name, self.field)
+        return "%s.%s" % (self.model._DOMD.name, self.field)
 
 
 def relation(model, field_name, **kw):
@@ -102,7 +103,7 @@ def relation(model, field_name, **kw):
 
 class DynamicMeta(namedtuple('DynamicMeta', 'kind, func')):
     def __repr__(self):
-        return self.func.__doc__
+        return self.func.__doc__ or repr(self.func)
 
 
 def dynamic(field_cls, *arg, **kw):
@@ -130,19 +131,19 @@ def dynamic(field_cls, *arg, **kw):
 
 class MetaData(dataobject.MetaData):
 
-    def __init__(self, cls, name, bases, d, data):
+    def __init__(self, root, name, bases, d):
         """Procesa el diccionario de una nueva clase de DataObject.
 
         Debe ser llamada por la funcion __new__ de la Metaclase, antes de
         comenzar con el proceso del tipo. Recorre el diccionario recuperando
-        los metadatos, y eleminando los que no sean significativos para
+        los metadatos, y eliminando los que no sean significativos para
         el ORM.
         """
 
         try:
             parent = d['_up']._DOMD
         except KeyError:
-            parent = data._type
+            parent = root
         else:
             assert(parent.kind == 'childOf')
             parent = parent.model
@@ -151,11 +152,19 @@ class MetaData(dataobject.MetaData):
         # la clase en trozos separados por "_", y quedarme como nombre para
         # el atributo solo con la ultima parte.
         name = name.split("_").pop().lower()
-        super(MetaData, self).__init__(cls, name, parent)
+        super(MetaData, self).__init__(name, parent)
+        # Cargo variables de Meta definidas a mano.
+        try:
+            meta = d.pop('DOMD')
+            for key, val in meta.__dict__.iteritems():
+                if not key.startswith('_'):
+                    setattr(self, key, val)
+        except KeyError:
+            pass
+        # proceso los atributos
         self.anchors = dict()
         self.related = dict()
-        self.dynamic = set()
-        # proceso los atributos
+        self.dynamic = dict()
         for key, value in d.iteritems():
             try:
                 domd = value._DOMD
@@ -164,38 +173,64 @@ class MetaData(dataobject.MetaData):
                     self.attribs.add(key)
             else:
                 func = getattr(self, 'add_%s' % domd.kind)
-                func(domd, key, data)
+                func(domd, key)
 
-    def add_childOf(self, domd, key, data):
+    def add_childOf(self, domd, key):
         assert(key == '_up')
-        self.parent._DOMD.children[self.name] = self._type
 
-    def add_relation(self, domd, key, data):
-        anchor = domd.anchor
-        anchor.relate(self._type, key)
+    def add_relation(self, domd, key):
         self.attribs.add(key)
         self.related[key] = domd
 
-    def add_anchor(self, domd, key, data):
-        self.anchors[key] = domd
+    def add_anchor(self, domd, key):
         self.attribs.add(key)
+        self.anchors[key] = domd
 
-    def add_dynamic(self, domd, key, data):
+    def add_dynamic(self, domd, key):
         assert(key.startswith('_'))
-        propname = key[1:]
-        def fget(self):
-            val = self.get(key)
-            return val if val is not None else domd.func(self, data)
-        def fset(self, val):
-            setattr(self, key, val)
-        setattr(cls, propname, property(fget, fset))
-        self.dynamic.add(propname)
+        self.dynamic[key] = domd
 
+    def post_dynamic(self):
+        dynamic = set()
+        for key, domd in self.dynamic.iteritems():
+            propname = key[1:]
+            def fget(self):
+                val = self.get(key)
+                return val if val is not None else domd.func(self, data)
+            def fset(self, val):
+                setattr(self, key, val)
+            setattr(self._type, propname, property(fget, fset))
+            dynamic.add(propname)
+        self.dynamic = dynamic
 
-def RootData():
-    """Crea un nuevo tipo raiz (parent == None)"""
-    root = DataType(object)
-    data = root()
-    setattr(root, '_DOMD', MetaData(root, 'ROOT', root.__bases__, {}, data))
-    return data
+    def post_childOf(self):
+        self.parent._DOMD.children[self.name] = self._type
+
+    def post_relation(self):
+        for key, domd in self.related.iteritems():
+            domd.anchor.relate(self._type, key)
+
+    def post_new(self, cls, data=None):
+        """Procesa los campos dinamicos
+
+        'data' debe ser el dataobject raiz que los campos dinamicos recibiran
+        como argumento para realizar sus consultas.
+        """
+        super(MetaData, self).post_new(cls)
+        if self.parent:
+            self.post_childOf()
+        self.post_relation()
+        self.post_dynamic()
+
+#    def __repr__(self):
+#        return pprint.pformat({
+#            'name': self.name,
+#            'parent': self.parent._DOMD.name if self.parent else 'None',
+#            'children': self.children.keys(),
+#            'attribs': self.attribs,
+#            'summary': self.summary,
+#            'anchors': self.anchors,
+#            'related': self.related,
+#            'dynamic': self.dynamic,
+#        })
 

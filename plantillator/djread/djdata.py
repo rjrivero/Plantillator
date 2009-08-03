@@ -161,6 +161,11 @@ class DJSet(models.query.QuerySet):
     def __add__(self, other):
         return _add(self, other)
 
+    def __pos__(self):
+        if len(self) == 1:
+            return self[0]
+        raise IndexError(0)
+
     @property
     def up(self):
         parent = self._type._DOMD.parent.objects.all()
@@ -189,5 +194,36 @@ class DJModel(DataType(models.Model)):
     class Meta(object):
         abstract = True
 
+    def __getattr__(self, attr):
+        try:
+            child = self._type._DOMD.children[attr]
+        except KeyError as details:
+            raise AttributeError(details)
+        else:
+            objects = child.objects.filter(_up__exact=self.pk)
+            setattr(self, attr, objects)
+            return objects
+
     def __add__(self, other):
         return _add(self, other)
+
+
+def RootType():
+    """Crea un nuevo objeto raiz (parent == None)"""
+
+    rootmeta = meta.MetaData(None, 'ROOT', tuple(), dict())
+
+    class Root(DataType(object)):
+
+        def __getattr__(self, attr):
+            try:
+                objects = self._DOMD.children[attr].objects.all()
+            except KeyError as details:
+                raise AttributeError(details)
+            else:
+                setattr(self, attr, objects)
+                return objects
+
+    rootmeta.post_new(Root)
+    return Root
+

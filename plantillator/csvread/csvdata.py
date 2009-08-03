@@ -14,15 +14,14 @@ class CSVMetaData(MetaData):
 
     """Metadatos correspondientes a un DataObject leido de CSV"""
 
-    def __init__(self, cls, loader, name='', parent=None):
+    def __init__(self, loader, name='', parent=None):
         """Inicia el objeto
 
-        cls: Clase a la que se le adjuntan estos MetaDatos.
         loader: TableLoader que se usa para resolver referencias a atributos
         name: label de la clase.
         parent: clase padre de cls en la jerarquia
         """
-        MetaData.__init__(self, cls, name, parent)
+        MetaData.__init__(self, name, parent)
         self.summary = ('id', 'nombre', 'descripcion')
         if not parent:
             # objeto raiz. No tiene path.
@@ -46,10 +45,9 @@ class CSVMetaData(MetaData):
         try:
             return self.children[attr]
         except KeyError:
-            stype = type(attr, (CSVObject,), dict())
-            smeta = CSVMetaData(stype, self.loader, attr, self._type)
-            setattr(stype, '_DOMD', smeta)
-            return self.children.setdefault(attr, stype)
+            meta = CSVMetaData(self.loader, attr, self._type)
+            meta.post_new(type(attr, (CSVObject,), dict()))
+            return self.children.setdefault(attr, meta._type)
 
     def new_set(self, *sets):
         sets = tuple(asIter(x) for x in sets)
@@ -116,7 +114,7 @@ class CSVObject(DataType(object)):
 
 def RootType(loader):
     """Crea un nuevo tipo raiz (parent == None) derivado de CSVObject"""
-    root = type("RootType", (CSVObject,), dict())
-    setattr(root, '_DOMD', CSVMetaData(root, loader))
-    return root
+    meta = CSVMetaData(loader)
+    meta.post_new(type("RootType", (CSVObject,), dict()))
+    return meta._type
 
