@@ -127,7 +127,10 @@ class Fallback(DataType(object)):
     """
 
     def __init__(self, up, data=None, depth=None):
-        super(Fallback, self).__init__(up, data)
+        super(Fallback, self).__init__()
+        self._up = up
+        if data:
+            self.update(data)
         self._depth = depth
 
     @property
