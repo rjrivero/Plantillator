@@ -144,11 +144,8 @@ class CommandSet(Command):
         self.assign = compile(self.assign, '<string>', 'exec')
 
     def run(self, glob, data):
-        try:
-            exec self.assign in glob, data
-            return Command.run(self, glob, data)
-        except (AttributeError, KeyError):
-            pass
+        exec self.assign in glob, data
+        return Command.run(self, glob, data)
 
 
 class CommandDefine(Command):
