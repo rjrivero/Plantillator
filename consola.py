@@ -13,6 +13,7 @@ from operator import itemgetter
 from optparse import OptionParser
 from traceback import print_exc, format_exception_only
 
+from plantillator.data.base import DataError
 from plantillator.engine.base import ParseError, CommandError
 from plantillator.apps.plantillator import Plantillator
 
@@ -149,8 +150,9 @@ plantillator.outpath = options.outpath
 plantillator.collapse = options.collapse
 plantillator.definitions = options.definitions or []
 plantillator.inputfiles = inputfiles
-plantillator.prepare()
+
 try:
+    plantillator.prepare()
     if not options.loop:
         for item in plantillator.render():
             handle(item)
@@ -179,7 +181,7 @@ except CommandError as detail:
         detail.data['error'] = detail
         code.interact("Consola de depuracion", local={'data':detail.data})
     sys.exit(TRANSLATION_ERRNO)
-except ParseError as detail:
+except (ParseError, DataError) as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:

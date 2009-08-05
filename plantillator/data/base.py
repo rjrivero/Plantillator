@@ -45,7 +45,7 @@ class DataError(Exception):
     def __str__(self):
         error = [
             "%s [ %s ]" % (str(self.source), str(self.itemid)),
-            self.errmsg
+            str(self.errmsg)
         ]
         # error.extend(traceback.format_exception(*self.exc_info))
         return "\n".join(error)
