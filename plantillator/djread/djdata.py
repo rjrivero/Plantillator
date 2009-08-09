@@ -11,20 +11,6 @@ from ..data.dataobject import DataType
 import meta
 
 
-def anchor(field_cls, *arg, **kw):
-    kw['db_index'] = True
-    return meta.anchor(field_cls, *arg, **kw)
-
-def childOf(model, *arg, **kw):
-    return meta.childOf(models.ForeignKey, model, *arg, **kw)
-
-def relation(model, field_name, **kw):
-    kw['db_index'] = True
-    return meta.relation(model, field_name, **kw)
-
-dynamic = meta.dynamic
-
-
 class Deferrer(object):
 
     """Adapta el Deferrer de data.base para usarlo con Django"""
@@ -206,24 +192,4 @@ class DJModel(DataType(models.Model)):
 
     def __add__(self, other):
         return _add(self, other)
-
-
-def RootType():
-    """Crea un nuevo objeto raiz (parent == None)"""
-
-    rootmeta = meta.MetaData(None, 'ROOT', tuple(), dict())
-
-    class Root(DataType(object)):
-
-        def __getattr__(self, attr):
-            try:
-                objects = self._DOMD.children[attr].objects.all()
-            except KeyError as details:
-                raise AttributeError(details)
-            else:
-                setattr(self, attr, objects)
-                return objects
-
-    rootmeta.post_new(Root)
-    return Root
 
