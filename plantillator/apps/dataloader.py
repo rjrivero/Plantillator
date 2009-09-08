@@ -4,30 +4,18 @@
 
 from os.path import splitext
 
-from ..data.base import *
+from ..data.base import Deferrer, Filter
+from ..data.container import DataContainer
 from ..csvread.csvdata import RootType
 from ..csvread.parser import DataError
 
 
-class DataLoader(object):
+class DataLoader(DataContainer):
 
     def __init__(self, loader):
-        self.hist = set()
-        self.glob = {
-            "__builtins__": __builtins__,
-            "LISTA": asList,
-            "RANGO": asRange,
-            "GRUPO": asSet,
-            "cualquiera": Deferrer(),
-            "ninguno": None,
-            "ninguna": None,
-            "X": Deferrer(),
-            "x": Deferrer(),
-            "donde": Filter
-        }
         self.loader = loader
-        self.root = RootType(self.loader)
-        self.data = self.root()
+        self.hist = set()
+        DataContainer.__init__(self, RootType(self.loader), Deferrer, Filter)
 
     def load(self, source):
         sources = [source]
@@ -43,7 +31,3 @@ class DataLoader(object):
             return list(source.resolve(item) for item in deps)
         except (SyntaxError, ValueError) as details:
             raise DataError(source, "N/A", details.message)
-
-    def evaluate(self, expr):
-        return eval(expr, self.glob, self.data)
-

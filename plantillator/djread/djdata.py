@@ -8,7 +8,6 @@ from django.db.models import Count
 
 from ..data.base import BaseSet, asIter
 from ..data.dataobject import DataType
-import meta
 
 
 class Deferrer(object):
@@ -154,9 +153,8 @@ class DJSet(models.query.QuerySet):
 
     @property
     def up(self):
-        parent = self._type._DOMD.parent.objects.all()
         pos    = {'pk__in': self.values('_up').query}
-        parent = parent.filter(**pos)
+        parent = self._type._DOMD.parent.objects.filter(**pos)
         parent._agg = False
         parent._pos = pos
         parent._neg = dict()
