@@ -49,7 +49,7 @@ class DataContainer(object):
             "x": deferrer_type(),
             "donde": filter_type
         }
-        self.root = root
+        self.root = root_type
         self.data = self.root()
 
     def evaluate(self, expr):
