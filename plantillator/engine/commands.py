@@ -28,9 +28,10 @@ class Condition(Command):
     Concuerda si una expresion es verdadera.
     """
 
-    def __init__(self, token, match):
-        Command.__init__(self, token, match)
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
         if self.expr:
+            self.backup_expr = self.expr
             self.expr = compile(self.expr, '<string>', 'eval')
 
     def match(self, glob, data):
@@ -112,8 +113,8 @@ class CommandFor(Command):
     este se elimina.
     """
 
-    def __init__(self, token, match):
-        Command.__init__(self, token, match)
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
         self.expr = compile(self.expr, '<string>', 'eval')
 
     def run(self, glob, data):
@@ -138,8 +139,8 @@ class CommandSet(Command):
     Ejecuta una asignacion.
     """
 
-    def __init__(self, token, match):
-        Command.__init__(self, token, match)
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
         self.assign = "%s = %s" % (self.var, self.expr)
         self.assign = compile(self.assign, '<string>', 'exec')
 
@@ -157,8 +158,8 @@ class CommandDefine(Command):
 
     VALID = re.compile(VARPATTERN['var']).match
 
-    def __init__(self, token, match):
-        Command.__init__(self, token, match)
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
         if self.params:
             self.params = tuple(x.strip() for x in self.params.split(","))
         else:
@@ -188,8 +189,8 @@ class CommandRecall(Command):
     y cosas asi.
     """
 
-    def __init__(self, token, match):
-        Command.__init__(self, token, match)
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
         # Me aseguro de que self.params evalua a una tupla.
         # si el cuerpo de la llamada tiene un solo argumento, evaluarlo
         # no devolveria una tupla y la ejecucion del comando fallaria.
@@ -222,14 +223,15 @@ class CommandInclude(Command):
         # En la proxima ejecucion no hace falta volver a pasar por este tramite.
         self.run = self.included.run
 
+
 class CommandSelect(Command):
     """Seleccion de variable
     Comprueba si <var> esta definida. si no lo esta,
     pide al usuario que seleccione un valor de la lista <expr>
     """
 
-    def __init__(self, token, match):
-        Command.__init__(self, token, match)
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
         if self.expr:
             self.expr = compile(self.expr, '<string>', 'eval')
 
@@ -260,3 +262,13 @@ class CommandAppend(Command):
         yield YieldBlock("APPEND", self, glob, data)
         # self.run = lambda glob, data: tuple()
 
+
+class CommandSection(Command):
+    """Comando "section"
+    Etiqueta un bloque de codigo (una seccion) con un nombre que
+    puede ser utilizado para acceder al bloque
+    """
+
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
+        tree.sections[self.label] = self

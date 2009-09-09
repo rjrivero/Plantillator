@@ -22,13 +22,13 @@ class Tokenizer(object):
 
     Si una linea comienza por "comment", la considera un comentario.
     """
-    def __init__(self, source, opener='{{', closer='}}', comment='#'):
+    def __init__(self, source, opener=None, closer=None, comment=None):
         self.source = source
-        self.opener = opener
-        self.closer = closer
+        self.opener = opener or BLOCK_OPENER
+        self.closer = closer or BLOCK_CLOSER
+        self.comment = comment or LINE_COMMENT
         self.lineno = 0
         self.delimiter = re.compile("(%s|%s)" % (opener, closer))
-        self.comment = comment
 
     def tokenize(self, line):
         if line.strip().startswith(self.comment):

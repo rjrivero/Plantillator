@@ -5,23 +5,31 @@
 import re
 import traceback
 import os.path
+from collections import namedtuple
 from sys import exc_info
 from gettext import gettext as _
 from itertools import chain
 
 from ..data.base import normalize
 
-DELIMITER = "?"
-DELIMITER_RE = re.compile(r'(\?)')
-_INVALID_LITERAL = _("Testo no terminado ('%s' desbalanceados)" % DELIMITER)
-_LITERAL_TEXT = _("Texto (%(linenum)d lineas)" )
 
+DELIMITER = "?"
+BLOCK_OPENER = '{{'
+BLOCK_CLOSER = '}}'
+LINE_COMMENT = '#'
+
+
+DELIMITER_RE = re.compile(r'(\?)')
 # nombres de variables permitidos
 VARPATTERN = {
     'var': r'[a-zA-Z][\w\_]*',
     'en':  r'en(\s+(el|la|los|las))?',
     'de':  r'(en|de|del)(\s+(el|la|los|las))?'
 }
+
+
+_INVALID_LITERAL = _("Testo no terminado ('%s' desbalanceados)" % DELIMITER)
+_LITERAL_TEXT = _("Texto (%(linenum)d lineas)" )
 
 
 class Token(object):
@@ -44,6 +52,8 @@ class Token(object):
     def __str__(self):
         return (self.head or self.body).strip()
 
+    Atom = namedtuple('Atom', 'text, expr')
+
     def _consume(self, parts):
         """Consume un elemento de la lista de partes"""
         part = parts.pop(0)
@@ -52,7 +62,7 @@ class Token(object):
         expr = parts.pop(0)
         if parts.pop(0) != DELIMITER:
             raise IndexError(0)
-        return compile(expr, '<string>', 'eval')
+        return Token.Atom(expr, compile(expr, '<string>', 'eval'))
             
     def split(self):
         """Divide el token en trozos separados por el DELIMITADOR"""
@@ -66,8 +76,18 @@ class Token(object):
 
     def evaluate(self, glob, data):
         "Evalua el contenido de un token previamente 'splitted'."""
-        return (x if isinstance(x, str) else str(eval(x, glob, data))
+        return (x if isinstance(x, str) else str(eval(x.expr, glob, data))
                 for x in self.parts)
+
+    def style(self, style):
+        for x in self.parts:
+            if isinstance(x, str):
+                style.text(x)
+            else:
+                style.delimiter(DELIMITER)
+                style.inline(x.text)
+                style.delimiter(DELIMITER)
+        return style
 
 
 class ParseError(Exception):
@@ -126,7 +146,7 @@ class Command(list):
 
     """Comando de la plantilla"""
 
-    def __init__(self, token, match):
+    def __init__(self, tree, token, match):
         list.__init__(self)
         for key, val in match.groupdict().iteritems():
             setattr(self, key, normalize(val) if val else None)
@@ -150,6 +170,24 @@ class Command(list):
 
     def __repr__(self):
         return str(self)
+
+    def style(self, style_type, indent=0):
+        # creo un objeto para el comando
+        style = style_type(indent)
+        style.opener(BLOCK_OPENER)
+        self._style(self, style)
+        # Inserto los comandos en una lista
+        style_set = [style]
+        if not self.token.body:
+            style.closer(BLOCK_CLOSER)
+        else:
+            ending = style_type(indent)
+            ending.closer(BLOCK_CLOSER)
+            indent = indent + 1
+            for item in self.token.body:
+                style_set.append(item.style(style_type, indent))
+            style_set.append(ending)
+        return style_set
 
 
 class Literal(object):
@@ -190,3 +228,8 @@ class Literal(object):
     def __getitem__(self, index):
         return self.tokens[index]
 
+    def style(self, style_type, indent=0):
+        style_set = list()
+        for item in self.tokens:
+            style_set.append(item.style(style_type(indent)))
+        return style_set

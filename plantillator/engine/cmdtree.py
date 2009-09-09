@@ -50,6 +50,9 @@ class CommandTree(list):
         # Comando APPEND
         # p.e. "procesar file"
         (r'^procesar\s+(?P<path>.*)$', CommandAppend),
+        # Comando SECTION
+        # p.e. "seccion dhcp"
+        (r'^seccion\s+(?P<label>%(var)s)\s*$' % VARPATTERN, CommandSection),
         # Comando SELECT
         # p.ej. "utiliza un <var> de la lista <expr>"
         (r'^(necesito|necesita|utilizo|utiliza)\s+(?P<art>un|una)\s+(?P<var>%(var)s)\s+(de|del)(\s+(la|las|los)\s+(lista\s+)?)?(?P<expr>.*)$' % VARPATTERN,
@@ -77,6 +80,7 @@ class CommandTree(list):
     def __init__(self, source, tokens):
         list.__init__(self)
         self.source = source
+        self.sections = dict()
         last = None
         for token in tokens:
             last = self.build(self, token, last)
@@ -91,7 +95,7 @@ class CommandTree(list):
         for expr, cls in self._COMMANDS:
             match = expr.match(line)
             if match:
-                return cls(token, match)
+                return cls(self, token, match)
         raise ParseError(self.source, token, _UNKNOWN_CMD % {
             'command': token.head})
 
@@ -125,4 +129,3 @@ class CommandTree(list):
                 raise details
             except:
                 raise CommandError(self.source, item.token, glob, data)
-
