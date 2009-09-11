@@ -28,7 +28,7 @@ class Tokenizer(object):
         self.closer = closer or BLOCK_CLOSER
         self.comment = comment or LINE_COMMENT
         self.lineno = 0
-        self.delimiter = re.compile("(%s|%s)" % (opener, closer))
+        self.delimiter = re.compile("(%s|%s)" % (self.opener, self.closer))
 
     def tokenize(self, line):
         if line.strip().startswith(self.comment):
@@ -67,4 +67,3 @@ class Tokenizer(object):
         except StopIteration:
             eof = Token(self.lineno, "<EOF>")
             raise ParseError(self.source, eof, _UNEXPECTED_EOF)
-
