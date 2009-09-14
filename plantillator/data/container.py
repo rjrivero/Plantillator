@@ -54,3 +54,4 @@ class DataContainer(object):
 
     def evaluate(self, expr):
         return eval(expr, self.glob, self.data)
+

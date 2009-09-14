@@ -109,18 +109,16 @@ class MetaData(object):
     atributo _DOMD (DataObject MetaData) de este tipo.
     """
 
-    def __init__(self, name='', parent=None):
-        self.name     = name
-        self.parent   = parent
-        self.children = dict()
-        self.attribs  = set()
-        self.summary  = list()
-
-    def post_new(self, cls):
-        """Funcion a llamar una vez creada la clase"""
+    def __init__(self, cls, name='', parent=None):
+        # Nos encargamos de poner el atributo aqui
+        setattr(cls, '_DOMD', self)
         # por convencion, el tipo siempre se llama _type.
         self._type = cls
-        setattr(cls, '_DOMD', self)
+        self.parent = parent
+        self.name = name
+        self.children = dict()
+        self.attribs = set()
+        self.summary = list()
 
 
 class Fallback(DataType(object)):

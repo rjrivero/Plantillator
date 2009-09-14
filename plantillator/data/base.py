@@ -112,6 +112,7 @@ def asRange(varrange):
         rango = [normalize(str(varrange))]
     return BaseList(rango)
 
+
 class Deferrer(object):
 
     """Factoria de operadores
@@ -199,3 +200,4 @@ class Filter(Deferrer):
 
     def __call__(self, deferred):
         return len(deferred(*self.arg, **self.kw)) == len(deferred)
+

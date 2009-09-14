@@ -14,15 +14,13 @@ class CSVMetaData(MetaData):
 
     """Metadatos correspondientes a un DataObject leido de CSV"""
 
-    def __init__(self, loader, name='', parent=None):
-        """Inicia el objeto
-
+    def __init__(self, loader, name='RootType', parent=None):
+        """Inicia el objeto.
         loader: TableLoader que se usa para resolver referencias a atributos
         name: label de la clase.
         parent: clase padre de cls en la jerarquia
         """
-        MetaData.__init__(self, name, parent)
-        self.summary = ('id', 'nombre', 'descripcion')
+        MetaData.__init__(self, type(name, (CSVObject,), {}), name, parent)
         if not parent:
             # objeto raiz. No tiene path.
             self.path = None
@@ -33,12 +31,14 @@ class CSVMetaData(MetaData):
             # resto de casos
             self.path = ".".join((parent._DOMD.path, name))
         # me asigno directamente el parser que va a leer mis datos.
-        self.parser = None
         self.loader = loader
+        self.parser = None
         if self.path:
             # si no existe el atributo, se lanza un KeyError. Util para
             # evitar que se creen subtipos que no se pueden leer.
             self.parser = loader[self.path]
+        # un grupo de campos habitual para hacer de summary
+        self.summary = ('id', 'nombre', 'descripcion')
 
     def subtype(self, attr):
         """Crea un subtipo de este"""
@@ -46,7 +46,6 @@ class CSVMetaData(MetaData):
             return self.children[attr]
         except KeyError:
             meta = CSVMetaData(self.loader, attr, self._type)
-            meta.post_new(type(attr, (CSVObject,), dict()))
             return self.children.setdefault(attr, meta._type)
 
     def new_set(self, *sets):
@@ -114,7 +113,5 @@ class CSVObject(DataType(object)):
 
 def RootType(loader):
     """Crea un nuevo tipo raiz (parent == None) derivado de CSVObject"""
-    meta = CSVMetaData(loader)
-    meta.post_new(type("RootType", (CSVObject,), dict()))
-    return meta._type
+    return CSVMetaData(loader)._type
 
