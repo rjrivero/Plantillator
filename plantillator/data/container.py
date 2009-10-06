@@ -5,6 +5,7 @@
 from inspect import getmembers
 
 from .base import asList, asRange, asSet
+from .ip import IPAddress
 
 
 class RestrictedBuiltins(dict):
@@ -42,6 +43,7 @@ class DataContainer(object):
             "LISTA": asList,
             "RANGO": asRange,
             "GRUPO": asSet,
+            "IP": IPAddress,
             "cualquiera": deferrer_type(),
             "ninguno": None,
             "ninguna": None,

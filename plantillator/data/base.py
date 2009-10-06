@@ -6,6 +6,8 @@ import operator
 import re
 from itertools import chain
 
+from .ip import IPAddress
+
 
 def BaseMaker(basetype):
 
@@ -65,6 +67,18 @@ def normalize(item):
         return int(item)
     if item.startswith("'") and item.endswith("'"):
         return item[1:-1]
+    # NUEVO: normalizo IPs
+    if item.count("/") == 1:
+        try:
+            item = IPAddress(item)
+            # fuerzo la validacion
+            item.host
+        except Exception:
+            pass
+        else:
+            # IP validada, la devuelvo
+            return item
+    # si no es ni entero ni IP ni escapado, limpio y devuelvo.
     return item or None if not item.isspace() else None
 
 
@@ -169,6 +183,7 @@ class Deferrer(object):
     def __sub__(self, arg):
         """Comprueba la no pertenencia a una lista"""
         return self._defer(lambda x, y: x not in asIter(y), arg)
+
 
 
 class Filter(Deferrer):
