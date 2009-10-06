@@ -3,10 +3,7 @@
 
 
 from itertools import chain
-try:
-    from IPy import IP
-except ImportError:
-    from ..IPy.IPy import IP
+from IPy import IP
 
 
 BYTES_LIST = ('255','127','63','31','15','7','3','1')
@@ -51,7 +48,7 @@ class IPAddress(object):
         else:
             self._str = ip
 
-    def _parse(self):
+    def validate(self):
         try:
             address, mask = self._str.split('/')
         except IndexError:
@@ -63,10 +60,10 @@ class IPAddress(object):
         return self
 
     def _base(self):
-        return self._parse().base
+        return self.validate().base
 
     def _host(self):
-        return self._parse().host
+        return self.validate().host
 
     def _ip(self):
         return self.base[self.host].strNormal(0)

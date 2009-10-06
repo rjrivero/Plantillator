@@ -70,14 +70,9 @@ def normalize(item):
     # NUEVO: normalizo IPs
     if item.count("/") == 1:
         try:
-            item = IPAddress(item)
-            # fuerzo la validacion
-            item.host
+            return IPAddress(item).validate()
         except Exception:
             pass
-        else:
-            # IP validada, la devuelvo
-            return item
     # si no es ni entero ni IP ni escapado, limpio y devuelvo.
     return item or None if not item.isspace() else None
 
