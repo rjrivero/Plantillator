@@ -42,7 +42,7 @@ class IPAddress(object):
         'ip',           # IP (texto)
         'mascara',      # mascara (texto)
         'red',          # IP de la red (texto)
-        'broadcast'     # IP de broadcast de la red (texto)
+        'broadcast',    # IP de broadcast de la red (texto)
         'bits',         # numero de bits de la mascara (entero)
         'bitsize',      # numero de bits totales de la direccion
         'wildmask'      # mascara invertida (estilo Cisco)
