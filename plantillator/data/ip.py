@@ -64,7 +64,7 @@ class IPAddress(object):
         """Valida una IP que se ha creado a partir de una cadena de texto"""
         try:
             address, mask = self._str.split('/')
-        except IndexError:
+        except ValueError:
             address, mask = self._str, None
         ip = IP(address) 
         self.bitsize = ip.prefixlen()
