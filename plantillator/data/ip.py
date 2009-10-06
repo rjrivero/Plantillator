@@ -14,6 +14,7 @@ NIBBLES_LIST = (
     '000f', '0007', '0003', '0001',
 )
 
+
 class IPAddress(object):
 
     WILDMASK_IPV4 = tuple(chain(
@@ -41,7 +42,9 @@ class IPAddress(object):
         'ip',           # IP (texto)
         'mascara',      # mascara (texto)
         'red',          # IP de la red (texto)
+        'broadcast'     # IP de broadcast de la red (texto)
         'bits',         # numero de bits de la mascara (entero)
+        'bitsize',      # numero de bits totales de la direccion
         'wildmask'      # mascara invertida (estilo Cisco)
     ))
 
@@ -58,38 +61,56 @@ class IPAddress(object):
             self._str = ip
 
     def validate(self):
+        """Valida una IP que se ha creado a partir de una cadena de texto"""
         try:
             address, mask = self._str.split('/')
         except IndexError:
             address, mask = self._str, None
         ip = IP(address) 
-        masklen = int(mask) if mask is not None else ip.prefixlen()
+        self.bitsize = ip.prefixlen()
+        masklen = int(mask) if mask is not None else self.bitsize
         self.raw_network = ip.make_net(masklen)
         self.host = ip.int() - self.raw_network.int()
         return self
 
     def _raw_network(self):
+        """Objeto IPy.IP que representa la red"""
         return self.validate().raw_network
 
     def _host(self):
+        """Numero de host dentro de la red"""
         return self.validate().host
 
+    def _bitsize(self):
+        """Longitud de la direccion, en bits"""
+        return 32 if self.raw_network.version() == 4 else 128
+
     def _base(self):
+        """Objeto IPAddress que representa la red"""
         return IPAddress(self.raw_network, 0)
 
     def _ip(self):
+        """Direccion IP en formato texto"""
         return self.raw_network[self.host].strNormal(0)
 
     def _mascara(self):
+        """Mascara de la red en formato texto"""
         return self.raw_network.netmask().strNormal(0)
 
     def _red(self):
+        """Direccion de la red en formato texto"""
         return self.raw_network.strNormal(0)
 
     def _bits(self):
+        """Bits de la mascara"""
         return self.raw_network.prefixlen()
 
+    def _broadcast(self):
+        """Direccion de broadcast"""
+        return self.raw_network.broadcast.strNormal(0)
+
     def _wildmask(self):
+        """Mascara invertida, estilo ACL Cisco"""
         if self.raw_network.version() == 4:
             masks = IPAddress.WILDMASK_IPV4
         else:
@@ -107,9 +128,13 @@ class IPAddress(object):
         return IPAddress(self.raw_network, self.host + num)
 
     def __str__(self):
+        if self.bits == self.bitsize:
+            return self.ip
         return " /".join((self.ip, str(self.bits)))
 
     def __unicode__(self):
+        if self.bits == self.bitsize:
+            return unicode(self.ip)
         return u" /".join((self.ip, str(self.bits)))
 
     def __repr__(self):
