@@ -34,7 +34,16 @@ class IPAddress(object):
         ("::%s" % a for a in NIBBLES_LIST),
         ("::0",)))
 
-    ATTRIBS = set(('base', 'host', 'ip', 'mascara', 'red', 'bits', 'wildmask'))
+    ATTRIBS = set((
+        'raw_network',  # el objeto IPy.IP que representa a la red
+        'host',         # el numero de host dentro de la red
+        'base',         # objeto IPAddress con la misma red y host 0
+        'ip',           # IP (texto)
+        'mascara',      # mascara (texto)
+        'red',          # IP de la red (texto)
+        'bits',         # numero de bits de la mascara (entero)
+        'wildmask'      # mascara invertida (estilo Cisco)
+    ))
 
     def __init__(self, ip, host=None):
         """Construye un objeto de tipo IP.
@@ -43,8 +52,8 @@ class IPAddress(object):
         - Si no se omite "host", ip debe ser un objeto IPy.IP.
         """
         if host is not None:
-            self.base = ip
             self.host = host
+            self.raw_network = ip
         else:
             self._str = ip
 
@@ -55,30 +64,33 @@ class IPAddress(object):
             address, mask = self._str, None
         ip = IP(address) 
         masklen = int(mask) if mask is not None else ip.prefixlen()
-        self.base = ip.make_net(masklen)
-        self.host = ip.int() - self.base.int()
+        self.raw_network = ip.make_net(masklen)
+        self.host = ip.int() - self.raw_network.int()
         return self
 
-    def _base(self):
-        return self.validate().base
+    def _raw_network(self):
+        return self.validate().raw_network
 
     def _host(self):
         return self.validate().host
 
+    def _base(self):
+        return IPAddress(self.raw_network, 0)
+
     def _ip(self):
-        return self.base[self.host].strNormal(0)
+        return self.raw_network[self.host].strNormal(0)
 
     def _mascara(self):
-        return self.base.netmask()
+        return self.raw_network.netmask().strNormal(0)
 
     def _red(self):
-        return IPAddress(self.base, 0)
+        return self.raw_network.strNormal(0)
 
     def _bits(self):
-        return self.base.prefixlen()
+        return self.raw_network.prefixlen()
 
     def _wildmask(self):
-        if self.base.version() == 4:
+        if self.raw_network.version() == 4:
             masks = IPAddress.WILDMASK_IPV4
         else:
             masks = IPAddress.WILDMASK_IPV6
@@ -92,7 +104,7 @@ class IPAddress(object):
         return result
 
     def __add__(self, num):
-        return IPAddress(self.base, self.host + num)
+        return IPAddress(self.raw_network, self.host + num)
 
     def __str__(self):
         return " /".join((self.ip, str(self.bits)))
@@ -104,8 +116,7 @@ class IPAddress(object):
         return "IPAddress('%s')" % str(self)
 
     def __cmp__(self, other):
-        result = cmp(self.base, other.base)
+        result = cmp(self.raw_network, other.raw_network)
         if not result:
             result = cmp(self.host, other.host)
         return result
-
