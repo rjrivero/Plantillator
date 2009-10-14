@@ -73,6 +73,10 @@ class IPAddress(object):
         self.host = ip.int() - self.raw_network.int()
         return self
 
+    def asHost(self):
+        """Devuelve un objeto IPAddress con la misma IP y máscara FF...FF"""
+        return IPAddress(self.raw_network[self.host], 0)
+
     def _raw_network(self):
         """Objeto IPy.IP que representa la red"""
         return self.validate().raw_network
