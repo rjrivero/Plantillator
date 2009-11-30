@@ -3,7 +3,7 @@
 
 
 from itertools import chain
-from IPy import IP
+from .IPy import IP
 
 
 BYTES_LIST = ('255','127','63','31','15','7','3','1')
