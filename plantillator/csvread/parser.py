@@ -143,3 +143,7 @@ class TableParser(list):
         else:
             self._append(asIter(current), item)
 
+    def sources(self):
+        """Devuelve una lista de los sources que han aportado datos"""
+        return dict((s.id, s) for s, block in self).values()
+

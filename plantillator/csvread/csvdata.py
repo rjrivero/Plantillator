@@ -70,9 +70,7 @@ class CSVObject(DataType(object)):
             self.update(data)
 
     def __getattr__(self, attr):
-        """Intenta crear el atributo solicitado usando _Properties
-        Si no puede, lanza AttributeError
-        """
+        """Intenta crear el atributo solicitado"""
         # Hay un problema porque, cuando el backend es una base de datos,
         # es posible que un atributo tenga el valor "None".
         # He probado a devolver "None" cuando un atributo no existe, por
