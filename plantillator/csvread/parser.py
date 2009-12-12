@@ -111,12 +111,17 @@ class TableParser(list):
 
     def _block(self, source, block):
         """Carga un bloque de datos"""
+        # Divido las cabeceras en path + attribs
         headers = block.headers[:]
         filters = [RowFilter(x, headers) for x in self.path]
         attfilt = RowFilter(self.attr, headers)
         for h in (x for x in headers if x.prefix):
-            raise DataError(source, 'header', _UNKNOWN_PREFIX % {'prefix': h})           
-        self._type._DOMD.attribs.update(headers)
+            raise DataError(source, 'header', _UNKNOWN_PREFIX % {'prefix': h})
+        # actualizo los metadatos con la lista de atributos           
+        attribs = self._type._DOMD.attribs
+        for h in headers:
+            attribs.setdefault(h, len(attribs))
+        # cargo los objetos
         for (itemid, item) in block:
             try:
                 self._item(filters, attfilt, item)

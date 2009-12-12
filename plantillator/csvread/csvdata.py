@@ -2,7 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-from itertools import chain
+from itertools import chain, islice
 
 from ..data.base import asIter
 from ..data.dataobject import DataType, MetaData
@@ -37,8 +37,21 @@ class CSVMetaData(MetaData):
             # si no existe el atributo, se lanza un KeyError. Util para
             # evitar que se creen subtipos que no se pueden leer.
             self.parser = loader[self.path]
-        # un grupo de campos habitual para hacer de summary
-        self.summary = ('id', 'nombre', 'descripcion')
+        # Variables "implicitas" de los metadatos
+        self.children = dict()
+        self.attribs = dict()
+        self._summary = None
+
+    @property
+    def summary(self):
+        """Construye el sumario con los tres primeros atributos"""
+        if not self._summary:
+            # self.attribs contiene un diccionario nombre del atributo =>
+            # orden de insercion. Le doy la vuelta para encontrar los
+            # primeros atributos insertados.
+            reverse = sorted((n, x) for (x, n) in self.attribs.iteritems())
+            self._summary = tuple(i[1] for i in islice(reverse, 0, 3))
+        return self._summary
 
     def subtype(self, attr):
         """Crea un subtipo de este"""

@@ -116,9 +116,9 @@ class MetaData(object):
         self._type = cls
         self.parent = parent
         self.name = name
-        self.children = dict()
-        self.attribs = set()
-        self.summary = list()
+        #self.children = dict()
+        #self.attribs = set()
+        #self.summary = list()
 
 
 class Fallback(DataType(object)):
