@@ -30,8 +30,8 @@ class Condition(Command):
 
     def __init__(self, tree, token, match):
         Command.__init__(self, tree, token, match)
+        self.backup_expr = self.expr
         if self.expr:
-            self.backup_expr = self.expr
             self.expr = compile(self.expr, '<string>', 'eval')
 
     def match(self, glob, data):
@@ -43,6 +43,10 @@ class Condition(Command):
     def run(self, glob, data):
         self.matched = self.match(glob, data)
         return Command.run(self, glob, data) if self.matched else tuple()
+
+    def _style(self, style):
+        style.keyword("si")
+        style.expression(self.backup_expr)
 
 
 class ConditionNot(Condition):
@@ -56,6 +60,10 @@ class ConditionNot(Condition):
             return not bool(eval(self.expr, glob, data)) if self.expr else True
         except (AttributeError, KeyError, NameError):
             return True
+
+    def _style(self, style):
+        style.keyword("si no")
+        style.expression(self.backup_expr)
 
 
 class ConditionExist(Condition):
@@ -71,6 +79,10 @@ class ConditionExist(Condition):
                 return True
         except (AttributeError, KeyError, NameError):
             return False
+
+    def _style(self, style):
+        style.keyword("si existe")
+        style.expression(self.backup_expr)
 
 
 class ConditionNotExist(ConditionExist):
@@ -88,6 +100,10 @@ class ConditionNotExist(ConditionExist):
         except (AttributeError, KeyError, NameError):
             return True
 
+    def _style(self, style):
+        style.keyword("si no existe")
+        style.expression(self.backup_expr)
+
 
 class CommandElse(Command):
     """Comando "else"
@@ -104,6 +120,9 @@ class CommandElse(Command):
             raise ParseError(None, self.token, _ELSE_WITHOUT_IF)
         self.prev = prev
 
+    def _style(self, style):
+        style.keyword("si no")
+
 
 class CommandFor(Command):
     """Iterador sobre una lista.
@@ -115,6 +134,7 @@ class CommandFor(Command):
 
     def __init__(self, tree, token, match):
         Command.__init__(self, tree, token, match)
+        self.backup_expr = self.expr
         self.expr = compile(self.expr, '<string>', 'eval')
 
     def run(self, glob, data):
@@ -133,6 +153,12 @@ class CommandFor(Command):
             forset.add("".join(result))
         yield "".join(sorted(forset))
 
+    def _style(self, style):
+        style.keyword("por cada")
+        style.variable(self.var)
+        style.keyword("de")
+        style.expression(self.backup_expr)
+
 
 class CommandSet(Command):
     """Comando "set"
@@ -147,6 +173,11 @@ class CommandSet(Command):
     def run(self, glob, data):
         exec self.assign in glob, data
         return Command.run(self, glob, data)
+
+    def _style(self, style):
+        style.variable(self.var)
+        style.keyword("=")
+        style.expression(self.expr)
 
 
 class CommandDefine(Command):
@@ -181,6 +212,17 @@ class CommandDefine(Command):
         data.setdefault("_blocks", {})[self.blockname] = self
         return tuple()
 
+    def _style(self, style):
+        style.keyword("bloque")
+        style.variable(self.blockname)
+        if self.params:
+            style.keyword("(")
+            for param in self.params[:-1]:
+                style.variable(param)
+                style.keyword(',')
+            style.variable(self.params[-1])
+            style.keyword(")")
+
 
 class CommandRecall(Command):
     """Invocacion de bloque
@@ -194,6 +236,7 @@ class CommandRecall(Command):
         # Me aseguro de que self.params evalua a una tupla.
         # si el cuerpo de la llamada tiene un solo argumento, evaluarlo
         # no devolveria una tupla y la ejecucion del comando fallaria.
+        self.backup_params = self.params
         if self.params:
             self.params = self.params.strip()[1:-1].strip()
             self.params = "(%s,)" % self.params if self.params else None
@@ -207,6 +250,10 @@ class CommandRecall(Command):
         params = eval(self.params, glob, data) if self.params else tuple()
         return itertools.chain(Command.run(self, glob, data),
                                block.invoke(glob, data, params))
+
+    def _style(self, style):
+        style.keyword(self.blockname)
+        style.expression(self.backup_params)
 
 
 class CommandInclude(Command):
@@ -223,6 +270,10 @@ class CommandInclude(Command):
         # En la proxima ejecucion no hace falta volver a pasar por este tramite.
         self.run = self.included.run
 
+    def _style(self, style):
+        style.keyword("incluir")
+        style.expression(self.path)
+
 
 class CommandSelect(Command):
     """Seleccion de variable
@@ -232,6 +283,7 @@ class CommandSelect(Command):
 
     def __init__(self, tree, token, match):
         Command.__init__(self, tree, token, match)
+        self.backup_expr = self.expr
         if self.expr:
             self.expr = compile(self.expr, '<string>', 'eval')
 
@@ -251,6 +303,14 @@ class CommandSelect(Command):
         if data.get(self.var, None) is None:
             raise ValueError(_NOT_SELECTED % {'var': self.var})
 
+    def _style(self, style):
+        style.keyword("utiliza")
+        if self.art:
+            style.keyword(self.art)
+        style.variable(self.var)
+        style.keyword("de")
+        style.expression(self.backup_expr)
+
 
 class CommandAppend(Command):
     """comando "append"
@@ -260,7 +320,12 @@ class CommandAppend(Command):
 
     def run(self, glob, data):
         yield YieldBlock("APPEND", self, glob, data)
+        # no sustituyo el run, para que el comando sea repetible.
         # self.run = lambda glob, data: tuple()
+
+    def _style(self, style):
+        style.keyword("procesar")
+        style.expression(self.path)
 
 
 class CommandSection(Command):
@@ -272,3 +337,8 @@ class CommandSection(Command):
     def __init__(self, tree, token, match):
         Command.__init__(self, tree, token, match)
         tree.sections[self.label] = self
+
+    def _style(self, style):
+        style.keyword("seccion")
+        style.variable(self.label)
+

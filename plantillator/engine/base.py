@@ -176,18 +176,18 @@ class Command(list):
         style = style_type(indent)
         style.opener(BLOCK_OPENER)
         self._style(self, style)
-        # Inserto los comandos en una lista
-        style_set = [style]
         if not self.token.body:
             style.closer(BLOCK_CLOSER)
+            yield style
         else:
+            yield style
             ending = style_type(indent)
             ending.closer(BLOCK_CLOSER)
             indent = indent + 1
             for item in self.token.body:
-                style_set.append(item.style(style_type, indent))
-            style_set.append(ending)
-        return style_set
+                for s in item.style(style_type, indent):
+                    yield s
+            yield ending
 
 
 class Literal(object):
@@ -229,7 +229,6 @@ class Literal(object):
         return self.tokens[index]
 
     def style(self, style_type, indent=0):
-        style_set = list()
         for item in self.tokens:
-            style_set.append(item.style(style_type(indent)))
-        return style_set
+            yield item.style(style_type(indent))
+

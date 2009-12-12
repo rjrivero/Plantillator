@@ -129,3 +129,4 @@ class CommandTree(list):
                 raise details
             except:
                 raise CommandError(self.source, item.token, glob, data)
+

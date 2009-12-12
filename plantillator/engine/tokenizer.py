@@ -67,3 +67,4 @@ class Tokenizer(object):
         except StopIteration:
             eof = Token(self.lineno, "<EOF>")
             raise ParseError(self.source, eof, _UNEXPECTED_EOF)
+
