@@ -50,6 +50,9 @@ parser.add_option("-D", "--define",
 parser.add_option("-d", "--debug",
         action="store_true", dest="debug", default=False,
         help="Vuelca los mensajes de debug en stderr")
+parser.add_option("-s", "--shell",
+        action="store_true", dest="shell", default=False,
+        help="Carga los datos y entra en un interprete de comandos")
 parser.add_option("-l", "--loop",
         action="store_true", dest="loop", default=False,
         help="Itera sobre todos los posibles valores de los 'utiliza'")
@@ -153,6 +156,13 @@ plantillator.inputfiles = inputfiles
 
 try:
     plantillator.prepare()
+    if options.shell:
+        local = {
+            'glob': plantillator.dataloader.glob,
+            'data': plantillator.dataloader.data,
+        }
+        code.interact("Shell de pruebas", local=local)
+        exit(0)
     if not options.loop:
         for item in plantillator.render():
             handle(item)
