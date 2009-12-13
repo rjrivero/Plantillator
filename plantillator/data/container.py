@@ -6,6 +6,7 @@ from inspect import getmembers
 
 from .base import asList, asRange, asSet
 from .ip import IPAddress
+from .ciscopw import password, secret
 
 
 class RestrictedBuiltins(dict):
@@ -44,6 +45,8 @@ class DataContainer(object):
             "RANGO": asRange,
             "GRUPO": asSet,
             "IP": IPAddress,
+            "CISCOPASSWORD": password,
+            "CISCOSECRET": secret,
             "cualquiera": deferrer_type(),
             "ninguno": None,
             "ninguna": None,
