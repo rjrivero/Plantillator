@@ -110,8 +110,14 @@ class Plantillator(object):
             self.dataloader.load(source)
 
     def _loadtmpl(self, tmpl_sources):
-       """carga los patrones de texto"""
-       for source in tmpl_sources:
+        """carga los patrones de texto"""
+        glob, loc = self.dataloader.glob, dict()
+        for dirname in self.path:
+            init = os.path.sep.join((dirname, '__init__.py'))
+            if os.path.isfile(init):
+                execfile(init, glob, loc)
+        glob.update(loc)
+        for source in tmpl_sources:
             self.tmplloader.load(source)
 
     def _addobjects(self):
