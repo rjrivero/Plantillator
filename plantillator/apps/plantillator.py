@@ -19,6 +19,7 @@ from .dataloader import DataLoader
 TMPL_EXT = set(('.txt',))
 DATA_EXT = set(('.csv',))
 CONF_EXT = ".cfg"
+TOOLS_FILE = "tools.py"
 
 
 #class FallbackDict(dict):
@@ -113,7 +114,7 @@ class Plantillator(object):
         """carga los patrones de texto"""
         glob, loc = self.dataloader.glob, dict()
         for dirname in self.path:
-            init = os.path.sep.join((dirname, '__init__.py'))
+            init = os.path.sep.join((dirname, TOOLS_FILE))
             if os.path.isfile(init):
                 execfile(init, glob, loc)
         glob.update(loc)
