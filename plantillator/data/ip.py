@@ -39,13 +39,14 @@ class IPAddress(object):
         'raw_network',  # el objeto IPy.IP que representa a la red
         'host',         # el numero de host dentro de la red
         'base',         # objeto IPAddress con la misma red y host 0
+        'int',          # direccion IP como un entero
         'ip',           # IP (texto)
         'mascara',      # mascara (texto)
         'red',          # IP de la red (texto)
         'broadcast',    # IP de broadcast de la red (texto)
         'bits',         # numero de bits de la mascara (entero)
         'bitsize',      # numero de bits totales de la direccion
-        'wildmask'      # mascara invertida (estilo Cisco)
+        'wildmask',     # mascara invertida (estilo Cisco)
     ))
 
     def __init__(self, ip, host=None):
@@ -77,6 +78,16 @@ class IPAddress(object):
         """Devuelve un objeto IPAddress con la misma IP y máscara FF...FF"""
         return IPAddress(self.raw_network[self.host], 0)
 
+    def agg(self, other):
+        """Trata de agregar dos objetos de red"""
+        if self.host == 0 and other.host == 0 and self.bits == other.bits:
+            offs = self.bitsize - self.bits + 1
+            sb = self.raw_network.int() >> offs
+            ob = other.raw_network.int() >> offs
+            if sb == ob:
+                return IPAddress(IP(sb << offs).make_net(self.bits-1), 0)
+        return None
+
     def _raw_network(self):
         """Objeto IPy.IP que representa la red"""
         return self.validate().raw_network
@@ -92,6 +103,10 @@ class IPAddress(object):
     def _base(self):
         """Objeto IPAddress que representa la red"""
         return IPAddress(self.raw_network, 0)
+
+    def _int(self):
+        """Direccion IP como un numero entero"""
+        return self.raw_network.int() + self.host
 
     def _ip(self):
         """Direccion IP en formato texto"""
@@ -145,7 +160,5 @@ class IPAddress(object):
         return "IPAddress('%s')" % str(self)
 
     def __cmp__(self, other):
-        result = cmp(self.raw_network, other.raw_network)
-        if not result:
-            result = cmp(self.host, other.host)
-        return result
+        return cmp(self.int, other.int)
+
