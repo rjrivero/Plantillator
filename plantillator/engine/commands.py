@@ -7,9 +7,11 @@ import itertools
 import functools
 from collections import namedtuple
 from gettext import gettext as _
+from operator import attrgetter
 
 from ..data.base import asIter
 from ..data.dataobject import Fallback
+from ..data.oset import OrderedSet
 from .base import *
 
 
@@ -134,15 +136,23 @@ class CommandFor(Command):
 
     def __init__(self, tree, token, match):
         Command.__init__(self, tree, token, match)
+        try:
+            self.sortby = attrgetter(match.group('sortby'))
+        except IndexError:
+            self.sortby = None
         self.backup_expr = self.expr
         self.expr = compile(self.expr, '<string>', 'eval')
 
     def run(self, glob, data):
         try:
-            expr = sorted(asIter(eval(self.expr, glob, data)))
+            expr = asIter(eval(self.expr, glob, data))
+            if self.sortby:
+                expr = sorted(expr, key=self.sortby)
+            else:
+                expr = sorted(expr)
         except (AttributeError, KeyError):
             return
-        forset = set()
+        forset = OrderedSet()
         for item in expr:
             data[self.var], result = item, list()
             for shot in Command.run(self, glob, data):
@@ -151,7 +161,7 @@ class CommandFor(Command):
                 else:
                     yield shot
             forset.add("".join(result))
-        yield "".join(sorted(forset))
+        yield "".join(forset)
 
     def _style(self, style):
         style.keyword("por cada")

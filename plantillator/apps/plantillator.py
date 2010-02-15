@@ -18,7 +18,6 @@ from .dataloader import DataLoader
 
 TMPL_EXT = set(('.txt',))
 DATA_EXT = set(('.csv',))
-CONF_EXT = ".cfg"
 TOOLS_FILE = "tools.py"
 
 
@@ -64,6 +63,7 @@ class Plantillator(object):
         'collapse': False,
         'definitions': [],
         'inputfiles': [],
+        'ext': ".cfg",
     }
 
     def __init__(self):
@@ -136,7 +136,7 @@ class Plantillator(object):
             outcontext = lambda: open(self.outpath, "a+")
         elif self.outpath:
             outname = os.path.basename(sourceid)
-            outname = os.path.splitext(outname)[0] + CONF_EXT
+            outname = os.path.splitext(outname)[0] + self.ext
             outname = os.path.join(self.outpath, outname)
             if os.path.isfile(outname):
                 os.unlink(outname)

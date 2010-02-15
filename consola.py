@@ -56,6 +56,8 @@ parser.add_option("-s", "--shell",
 parser.add_option("-l", "--loop",
         action="store_true", dest="loop", default=False,
         help="Itera sobre todos los posibles valores de los 'utiliza'")
+parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
+        help="Extension del fichero resultado (por defecto, .cfg)")
 
 (options, args) = parser.parse_args()
 if len(args) < 2:
@@ -153,6 +155,7 @@ plantillator.outpath = options.outpath
 plantillator.collapse = options.collapse
 plantillator.definitions = options.definitions or []
 plantillator.inputfiles = inputfiles
+plantillator.ext = options.ext
 
 try:
     plantillator.prepare()
