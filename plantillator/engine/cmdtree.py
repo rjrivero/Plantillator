@@ -86,8 +86,11 @@ class CommandTree(list):
         self.source = source
         self.sections = dict()
         last = None
-        for token in tokens:
-            last = self.build(self, token, last)
+        try:
+            for token in tokens:
+                last = self.build(self, token, last)
+        except SyntaxError as details:
+            raise ParseError(self.source, token, str(details)) 
 
     def __str__(self):
         return str(self.source)
