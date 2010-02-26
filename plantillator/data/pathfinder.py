@@ -89,14 +89,21 @@ class PathFinder(list):
             pass
         list.insert(self, pos, item)
 
+    def every(self, fname):
+        """Itera sobre todos los ficheros coincidentes en la ruta definida"""
+        for fpath in (os.path.join(dir, fname) for dir in self):
+            if os.path.isfile(fpath):
+                yield fpath
+
     def __call__(self, fname):
         """Busca el fichero en la ruta definida
 
         Si encuentra el fichero, devuelve un FileSource conectado con el
         fichero. Si no lo encuentra, lanza un ValueError.
         """
-        for fpath in (os.path.join(dir, fname) for dir in self):
-            if os.path.isfile(fpath):
-                return fpath
-        raise ValueError(_FILE_NOT_FOUND %
+        try:
+            return next(self.every(fname))
+        except StopIteration:
+            raise ValueError(_FILE_NOT_FOUND %
                          {'file': fname, 'path': os.pathsep.join(self)})
+

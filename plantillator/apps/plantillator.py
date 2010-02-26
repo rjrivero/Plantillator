@@ -100,7 +100,7 @@ class Plantillator(object):
             if ext in TMPL_EXT:
                 tmpl.append(FileSource(finder(fname), finder))
             elif ext in DATA_EXT:
-                data.append(FileSource(finder(fname), finder))
+                data.extend(FileSource(x, finder) for x in finder.every(fname))
             else:
                 raise ValueError, "Extension desconocida: %s" % ext
         return data, tmpl
