@@ -68,6 +68,9 @@ class CommandTree(list):
         # Comando RECALL
         (r'^(?P<blockname>%(var)s)\s*(?P<params>\(.*\))?\s*$' % VARPATTERN,
              CommandRecall),
+        # comando SET IF
+        # p.e. "var ?= XXXX"
+        (r'^(?P<var>[^=]+)\s*\?=\s*(?P<expr>.+)$' % VARPATTERN, CommandSetIf),        
         # comando SET
         # ESTE COMANDO DEBE SER EL ULTIMO!
         # p.e. "var = var1 (+ var2)*

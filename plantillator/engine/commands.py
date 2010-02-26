@@ -190,6 +190,29 @@ class CommandSet(Command):
         style.expression(self.expr)
 
 
+class CommandSetIf(Command):
+    """Comando "setif"
+    Ejecuta una asignacion, si no genera error.
+    """
+
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
+        self.backup_expr = self.expr
+        self.expr = compile(self.expr, '<string>', 'eval')
+
+    def run(self, glob, data):
+        try:
+            data[self.var] = eval(self.expr, glob, data)
+        except:
+            data.setdefault(self.var, None)
+        return Command.run(self, glob, data)
+
+    def _style(self, style):
+        style.variable(self.var)
+        style.keyword("?=")
+        style.expression(self.backup_expr)
+
+
 class CommandDefine(Command):
     """Comando "define"
 
