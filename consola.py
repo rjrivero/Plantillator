@@ -60,7 +60,7 @@ parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
         help="Extension del fichero resultado (por defecto, .cfg)")
 
 (options, args) = parser.parse_args()
-if len(args) < 2:
+if len(args) < 2 and not options.shell:
     parser.print_help(sys.stderr)
     sys.exit(OPTIONS_ERRNO)
 

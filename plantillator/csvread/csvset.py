@@ -64,6 +64,11 @@ class CSVSet(set):
         except KeyError as details:
             raise AttributeError(details)
 
+    def __repr__(self):
+        # No hago un volcado correcto, simplemente evito que
+        # me saque por pantalla mucha morralla...
+        return "CSVSet<%s> [%d items]" % (self._type._DOMD.path, len(self))
+
     @property
     def up(self):
         data = not_none(x._up for x in self)

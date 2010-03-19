@@ -18,8 +18,10 @@ class Tagger(object):
         item ha salido de un diccionario, el indice si el item ha salido de
         una lista)
         """
-        if not name and hasattr(data, 'iteritems'):
-            return ", ".join(str(data.get(x,"")) for x in _NAMING_ATTRIBS)
+        #if not name and hasattr(data, 'iteritems'):
+        #    return ", ".join(str(data.get(x,"")) for x in _NAMING_ATTRIBS)
+        if not name:
+            return str(data)
         elif not hasattr(data, "__iter__"):
             return "%s = %s" % (name, str(data)) if name else str(data)
         return name or hint or "<>"

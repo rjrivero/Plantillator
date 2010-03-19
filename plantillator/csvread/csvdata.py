@@ -121,6 +121,11 @@ class CSVObject(DataType(object)):
         fields = (self.get(k) for k in self._type._DOMD.summary)
         return ", ".join(str(f) for f in fields if f is not None)
 
+    def __repr__(self):
+        # No es una representacion completa, es solo para no meter
+        # mucha morralla en la shell
+        return "DataObject<%s> (%s,...)" % (self._type._DOMD.path, str(self))
+
 
 def RootType(loader):
     """Crea un nuevo tipo raiz (parent == None) derivado de CSVObject"""
