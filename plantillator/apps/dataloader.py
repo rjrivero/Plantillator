@@ -4,7 +4,7 @@
 
 from os.path import splitext
 
-from ..data.base import Deferrer, Filter
+from ..data.base import ChainedResolver, Deferrer, Filter
 from ..data.container import DataContainer
 from ..csvread.csvdata import RootType
 from ..csvread.parser import DataError
@@ -15,7 +15,7 @@ class DataLoader(DataContainer):
     def __init__(self, loader):
         self.loader = loader
         self.hist = set()
-        DataContainer.__init__(self, RootType(self.loader), Deferrer, Filter)
+        DataContainer.__init__(self, RootType(self.loader), Deferrer, Filter, ChainedResolver)
 
     def load(self, source):
         sources = [source]

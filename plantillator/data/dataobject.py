@@ -85,7 +85,21 @@ def DataType(base):
 
         def _matches(self, kw):
             """Comprueba si el atributo indicado cumple el criterio."""
-            return all(crit(self.get(key)) for key, crit in kw.iteritems())
+            return all(crit._verify(self.get(key), self) for key, crit in kw.iteritems())
+
+        def follow(self, table, **kw):
+            """Sigue una referencia a una tabla.
+
+            Recibe una tabla y unos criterios de filtrado. Resuelve todas las referencias
+            a "self" que haya en los criterios, sustituyendolas por si mismo, y luego
+            aplica los criterios a la tabla que se esta siguiendo.
+
+            Se supone que se esta siguiendo una clave primaria, por lo tanto los criterios
+            deben llevar a un unico objeto.
+            """
+            crit = dict((k, (v if not hasattr(v, '_resolve') else v._resolve(self)))
+                        for (k, v) in kw.iteritems())
+            return +table(**crit)
 
         # Necesario para que django no meta basurilla por medio
         class Meta(object):

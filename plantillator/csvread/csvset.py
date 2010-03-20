@@ -12,6 +12,11 @@ def not_none(filter_me):
     return (x for x in filter_me if x is not None)
 
 
+def not_empty(filter_me):
+    """Devuelve los objetos de la lista que no son listas vacias"""
+    return (x for x in filter_me if len(x))
+
+
 class CSVSet(set):
 
     """Lista de CSVObjects"""
@@ -24,7 +29,7 @@ class CSVSet(set):
     def __call__(self, **kw):
         """Busca los elementos de la lista que cumplan los criterios dados"""
         d = Deferrer()
-        crit = dict((k, (v if hasattr(v, '__call__') else (d == v)))
+        crit = dict((k, (v if hasattr(v, '_verify') else (d == v)))
                     for k, v in kw.iteritems())
         return self._type._DOMD.new_set(x for x in self if x._matches(crit))
 
@@ -56,7 +61,7 @@ class CSVSet(set):
         except AttributeError as details:
             raise KeyError(details)
         else:
-            return domd.new_set(*tuple(not_none(x.get(attr) for x in self)))
+            return domd.new_set(*tuple(not_empty(x.get(attr) for x in self)))
 
     def __getattr__(self, attr):
         try:
@@ -68,6 +73,10 @@ class CSVSet(set):
         # No hago un volcado correcto, simplemente evito que
         # me saque por pantalla mucha morralla...
         return "CSVSet<%s> [%d items]" % (self._type._DOMD.path, len(self))
+
+    def follow(self, table, **kw):
+        domd = table._type._DOMD
+        return domd.new_set(x.follow(table, **kw) for x in self)
 
     @property
     def up(self):

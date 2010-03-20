@@ -19,9 +19,9 @@ def BaseMaker(basetype):
 
         def __call__(self, arg):
             """Devuelve el subconjunto de elementos que cumple el criterio"""
-            if not hasattr(arg, '__call__'):
+            if not hasattr(arg, '_verify'):
                 arg = (Deferrer() == arg)
-            return BaseSequence(x for x in self if arg(x))
+            return BaseSequence(x for x in self if arg._verify(x))
 
         def __pos__(self):
             if len(self) == 1:
@@ -122,6 +122,182 @@ def asRange(varrange):
     return BaseList(rango)
 
 
+class ChainedResolver(object):
+
+    """Resolvedor encadenado
+
+    Sirve como base para los reolvedores de atributos y filtrado,
+    y permite que se encadenen unos con otros:
+
+    x = ChainedResolver().attrib1.attrib2(*arg, **kw).attrib3
+    y = x._resolve(item) ==> y = item.attrib1.attrib2(*arg, **kw).attrib3
+    """
+
+    def __init__(self, parent=None):
+        self._parent = parent
+
+    def __getattr__(self, attrib):
+        if attrib.startswith("_"):
+            raise AttributeError(attrib)
+        return AttrResolver(self, attrib)
+
+    def __call__(self, *arg, **kw):
+        return FilterResolver(self, arg, kw)
+
+    def __pos__(self):
+        return PosResolver(self)
+
+    def _resolve(self, item):
+        return item if not self._parent else self._parent._resolve(item)
+
+
+class AttrResolver(ChainedResolver):
+
+    """Resolvedor de atributos
+
+    Sirve para posponer el acceso a los atributos de un objeto. Por ejemplo,
+
+    x = AttrResolver().attrib1.attrib2
+    y = x._resolve(item) ==> y = item.attrib1.attrib2
+    """
+
+    def __init__(self, parent, attrib):
+        super(AttrResolver, self).__init__(parent)
+        self._attrib = attrib
+
+    def _resolve(self, item):
+        item = super(AttrResolver, self)._resolve(item)
+        return item.get(self._attrib)
+
+
+class FilterResolver(ChainedResolver):
+
+    """Resolvedor de filtrados
+
+    Sirve para posponer el filtrado de una lista. Por ejemplo,
+
+    x = FilterResolver(*args, *kw)
+    y = x._resolve(item) ==> y = item(*args, **kw)
+    """
+
+    def __init__(self, parent, *arg, **kw):
+        super(FilterResolver, self).__init__(parent)
+        self._arg = arg
+        self._kw = kw
+
+    def _resolve(self, item):
+        item = super(FilterResolver, self)._resolve(item)
+        return item(*self._arg, **self._kw)
+
+
+class PosResolver(ChainedResolver):
+
+    """Resolvedor del operador prefijo "+"
+
+    Permite posponer la extraccion de un elemento de una lista.
+    """
+
+    def __init__(self, parent):
+        super(PosResolver, self).__init__(parent)
+
+    def _resolve(self, item):
+        item = super(PosResolver, self)._resolve(item)
+        return +item
+
+
+class ListResolver(object):
+
+    """Resolvedor de listas
+
+    Resuelve una lista con referencias dinamicas a un objeto
+    """
+
+    def __init__(self, items):
+        self.items = items
+
+    def _resolve(self, item):
+        return tuple(x if not hasattr(x, '_resolve') else x._resolve(item)
+                       for x in self.items)
+
+
+class StaticCrit(object):
+
+    """Criterio estatico.
+
+    Callable que comprueba si un par (atributo, objeto) cumple
+    un cierto criterio.
+
+    En este caso, el criterio es la comparacion del valor dado
+    con un valor estatico.
+
+    Si el atributo es una lista, lo que se compara es
+    la longitud de esa lista. 
+    """
+
+    def __init__(self, operator, operand):
+        self.operator = operator
+        self.operand = operand
+
+    def _verify(self, value, item=None):
+        if hasattr(value, '__iter__'):
+            value = len(value)
+        return self.operator(value, self.operand)
+
+    def _resolve(self, item):
+        """Resuelve los parametros dinamicos y devuelve un criterio estatico"""
+        return self
+
+
+class DynamicCrit(StaticCrit):
+
+    """Criterio dinamico
+
+    Callable que comprueba si un par (atributo, objeto) cumple
+    un cierto criterio.
+
+    En este caso, el criterio es la comparacion del valor dado
+    con un valor dinamico. El valor dinamico se calcula en funcion del
+    propio objeto que se esta comparando.
+
+    Si el atributo es una lista, lo que se compara es
+    la longitud de esa lista. 
+    """
+
+    def __init__(self, operator, operand):
+        super(DynamicCrit, self).__init__(operator, None)
+        self.dynamic = operand
+
+    def _verify(self, value, item):
+        self.operand = self.dynamic._resolve(item)
+        return super(DynamicCrit, self)._verify(value, item)
+
+    def _resolve(self, item):
+        """Resuelve los parametros dinamicos y devuelve un criterio estatico"""
+        return StaticCrit(self.operator, self.dynamic._resolve(item))
+
+
+class FilterCrit(StaticCrit):
+
+    """Criterio estatico con prefiltro
+
+    Callable que comprueba si un par (atributo, objeto) cumple
+    un cierto criterio.
+
+    En este caso, antes de comparar el valor, se le aplica un
+    prefiltro.
+
+    Si el atributo es una lista, lo que se compara es
+    la longitud de esa lista. 
+    """
+
+    def __init__(self, operator, operand, prefilter):
+        super(FilterCrit, self).__init__(operator, operand)
+        self.prefilter = prefilter
+
+    def _verify(self, value, item):
+        return super(FilterCrit, self)._verify(self.prefilter(value), item)
+
+
 class Deferrer(object):
 
     """Factoria de operadores
@@ -129,24 +305,36 @@ class Deferrer(object):
     Cuando se le aplica un operador de comparacion a un objeto de
     este tipo, el resultado es un version pospuesta de ese operador.
 
-    Por ejemplo, (MyOperator() >= 5) devuelve un operador
-    pospuesto que, al ser aplicado sobre una variable X, devuelve
-    el resultado de "<X> >= 5".
+    Por ejemplo, (Deferrer() >= 5) devuelve un callable que, al ser
+    invocado como <X>(item, attr) devuelve el resultado de
+    "item.getattr(attr) >= 5".
     """
 
-    def _defer(self, operator, operand):
-        """Devuelve una funcion f(x) == operator(x, operand)
-        Comprueba si x es una lista, y en ese caso, lo que compara es
-        la longitud de x (es decir, f(x) == operator(len(x), operand))
-        """
-        def evaluate(deferred):
-            if hasattr(deferred, '__iter__'):
-                deferred = len(deferred)
-            return operator(deferred, operand)
-        return evaluate
+    def _dynlist(self, items):
+        """Verifica si una lista tiene elementos dinamicos.
 
-    def __call__(self, item):
-        return bool(item)
+        Si no los tiene, devuelve la lista. Si los tiene, devuelve un
+        callable que aplica el item a los elementos dinamicos de la lista.
+        """
+        # si "items" es un elemento dinamico, no lo convertimos a lista, sino
+        # que confiamos en que el resultado de evaluarlo sera una lista.
+        if hasattr(items, '_resolve'):
+            return items
+        # si no es un callable, nos aseguramos de que es iterable y
+        # revisamos si tiene algun elemento dinamico.
+        items = asIter(items)
+        if not any(hasattr(x, '_resolve') for x in items):
+            return items
+        return ListResolver(items)
+
+    def _defer(self, operator, operand):
+        """Devuelve el criterio adecuado"""
+        if not hasattr(operand, '_resolve'):
+            return StaticCrit(operator, operand)
+        return DynamicCrit(operator, operand)
+
+    def _verify(self, value, item=None):
+        return bool(value)
 
     def __eq__(self, other):
         return self._defer(operator.eq, other)
@@ -173,12 +361,14 @@ class Deferrer(object):
 
     def __add__(self, arg):
         """Comprueba la pertenecia a una lista"""
-        return self._defer(lambda x, y: x in asIter(y), arg)
+        return self._defer(lambda x, y: x in y, self._dynlist(arg))
 
     def __sub__(self, arg):
         """Comprueba la no pertenencia a una lista"""
-        return self._defer(lambda x, y: x not in asIter(y), arg)
+        return self._defer(lambda x, y: x not in y, self._dynlist(arg))
 
+    def _resolve(self, item):
+        return self
 
 
 class Filter(Deferrer):
@@ -188,7 +378,7 @@ class Filter(Deferrer):
     Cuando se le aplica un operador de comparacion a un objeto de
     este tipo, el resultado es un version pospuesta de ese operador.
 
-    Por ejemplo, (MyOperator() >= 5) devuelve un operador
+    Por ejemplo, (Filter() >= 5) devuelve un operador
     pospuesto que, al ser aplicado sobre una variable X, devuelve
     el resultado de "len(<X(*arg, **kw)>)) >= 5".
     """
@@ -203,11 +393,10 @@ class Filter(Deferrer):
         Es decir, filtra x, y luego compara la longitud de la lista filtrada
         con el operand.
         """
-        def evaluate(deferred):
-            deferred = len(deferred(*self.arg, **self.kw))
-            return operator(deferred, operand)
-        return evaluate
+        def prefilter(value):
+            return len(value(*self.arg, **self.kw))
+        return FilterCrit(operator, operand, prefilter)
 
-    def __call__(self, deferred):
-        return len(deferred(*self.arg, **self.kw)) == len(deferred)
+    def _verify(self, value, item=None):
+        return len(value(*self.arg, **self.kw)) == len(value)
 
