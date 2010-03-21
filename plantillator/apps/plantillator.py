@@ -8,11 +8,9 @@ import re
 import sys
 from contextlib import contextmanager
 
-from ..data.pathfinder import PathFinder, FileSource
-from ..data.dataobject import Fallback
-from ..csvread.source import DataSource
-from ..engine.loader import Loader as TmplLoader
-from ..engine.cmdtree import VARPATTERN
+from ..data import PathFinder, FileSource, Fallback
+from ..csvread import DataSource
+from ..engine import Loader as TmplLoader, VARPATTERN
 from .dataloader import DataLoader
 
 
@@ -171,3 +169,4 @@ class Plantillator(object):
                 yield item
         except StopIteration:
             pass
+

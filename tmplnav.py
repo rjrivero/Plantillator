@@ -13,17 +13,16 @@ from traceback import print_exc, format_exception_only
 from optparse import OptionParser
 
 try:
-    from plantillator.data.pathfinder import PathFinder, FileSource
+    from plantillator.data import PathFinder, FileSource
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.data.pathfinder import PathFinder, FileSource
+    from plantillator.data import PathFinder, FileSource
 
-from plantillator.engine.cmdtree import CommandTree
-from plantillator.engine.base import Literal
-from plantillator.engine.loader import Loader as TmplLoader
-from plantillator.apps.tree import TreeCanvas, Tagger
+from plantillator.engine import CommandTree, Literal
+from plantillator.engine import Loader as TmplLoader
+from plantillator.apps import TreeCanvas, Tagger
 
 
 class TmplTagger(Tagger):

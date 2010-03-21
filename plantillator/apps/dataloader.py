@@ -4,10 +4,9 @@
 
 from os.path import splitext
 
-from ..data.base import ChainedResolver, Deferrer, Filter
-from ..data.container import DataContainer
-from ..csvread.csvdata import RootType
-from ..csvread.parser import DataError
+from ..data import DataError, DataContainer
+from ..data import ChainedResolver, Deferrer, Filter
+from ..csvread import RootType
 
 
 class DataLoader(DataContainer):

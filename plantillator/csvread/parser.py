@@ -5,7 +5,7 @@
 import re
 from gettext import gettext as _
 
-from ..data.base import DataError, asIter
+from ..data import DataError, asIter
 
 
 _NOT_ENOUGH_INDEXES = _("No hay suficientes indices")
@@ -101,12 +101,14 @@ class TableParser(list):
 
     def __call__(self, item, attrib):
         """Carga el atributo solicitado "attrib" del item"""
-        self._type = item._type._DOMD.subtype(attrib)
+        self._type = item._type._domd.subtype(attrib)
         if not len(self):
-            return self._type._DOMD.new_set()
+            return self._type._domd.concat()
         while self:
             source, block = self.pop()
             self._block(source, block)
+        # actualizo el summary de los objetos
+        self._type._domd.update_summary()
         return item[attrib]
 
     def _block(self, source, block):
@@ -118,7 +120,7 @@ class TableParser(list):
         for h in (x for x in headers if x.prefix):
             raise DataError(source, 'header', _UNKNOWN_PREFIX % {'prefix': h})
         # actualizo los metadatos con la lista de atributos           
-        attribs = self._type._DOMD.attribs
+        attribs = self._type._domd.attribs
         for h in headers:
             attribs.setdefault(h, len(attribs))
         # cargo los objetos

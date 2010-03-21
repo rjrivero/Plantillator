@@ -13,16 +13,15 @@ from traceback import print_exc, format_exception_only
 from optparse import OptionParser
 
 try:
-    from plantillator.data.pathfinder import PathFinder, FileSource
+    from plantillator.data import PathFinder, FileSource
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.data.pathfinder import PathFinder, FileSource
+    from plantillator.data import PathFinder, FileSource
 
-from plantillator.csvread.source import DataSource
-from plantillator.apps.dataloader import DataLoader
-from plantillator.apps.tree import TreeCanvas
+from plantillator.csvread import DataSource
+from plantillator.apps import DataLoader, TreeCanvas
 
 
 _ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")

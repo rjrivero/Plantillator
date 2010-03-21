@@ -13,9 +13,9 @@ from operator import itemgetter
 from optparse import OptionParser
 from traceback import print_exc, format_exception_only
 
-from plantillator.data.base import DataError
-from plantillator.engine.base import ParseError, CommandError
-from plantillator.apps.plantillator import Plantillator
+from plantillator.data import DataError
+from plantillator.engine import ParseError, CommandError
+from plantillator.apps import Plantillator
 
 VERSION           = "0.2"
 OPTIONS_ERRNO     = -1

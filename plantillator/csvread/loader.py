@@ -4,7 +4,7 @@
 
 from itertools import chain, izip_longest
 
-from ..data.base import normalize, DataError
+from ..data import normalize, DataError
 from .tokenizer import Tokenizer
 from .parser import TableParser, ValidHeader, DataError
 

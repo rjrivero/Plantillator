@@ -4,7 +4,7 @@
 
 from gettext import gettext as _
 
-from ..data.base import DataError
+from ..data import DataError
 from .loader import TableLoader, Block
 from .parser import *
 

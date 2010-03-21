@@ -7,9 +7,6 @@ from idlelib.TreeWidget import TreeItem, TreeNode
 from itertools import chain
 
 
-_NAMING_ATTRIBS = ['id', 'nombre', 'descripcion']
-
-
 class Tagger(object):
 
     def name(self, data, name=None, hint=None):
@@ -18,8 +15,6 @@ class Tagger(object):
         item ha salido de un diccionario, el indice si el item ha salido de
         una lista)
         """
-        #if not name and hasattr(data, 'iteritems'):
-        #    return ", ".join(str(data.get(x,"")) for x in _NAMING_ATTRIBS)
         if not name:
             # es un elemento de una lista: lo convierto a string y, si viene
             # con una "cuenta de repeticiones", la incluyo.
@@ -44,11 +39,11 @@ class Tagger(object):
     def filter_dict(self, data):
         """Itera sobre los elementos del dict, devolviendo clave y valor"""
         try:
-            children = data._type._DOMD.descendants
+            children = data._domd.refs.keys()
         except (AttributeError, KeyError):
             return data.iteritems()
         else:
-            items = ((child, data.get(child)) for child in children)
+            items = ((child, data.get(child)) for child in children if child != "up")
             items = (x for x in items if x[1])
             return chain(data.iteritems(), items)
 
@@ -150,3 +145,4 @@ class TreeCanvas(tk.Canvas):
         node.expand()
         for item in node.children:
             self._expand(item)
+

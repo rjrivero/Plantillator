@@ -82,3 +82,4 @@ class HTMLStyle(style):
         pre = "<span class='%s'>%s'" % (HTMLStyle.CSSLine, indent)
         post = "</span>"
         return pre + " ".join(self) + post
+
