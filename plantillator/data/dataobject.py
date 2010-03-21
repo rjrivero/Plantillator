@@ -2,7 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-from itertools import islice
+from itertools import islice, chain
 
 
 def DataType(base):
@@ -92,14 +92,13 @@ def DataType(base):
 
             Recibe una tabla y unos criterios de filtrado. Resuelve todas las referencias
             a "self" que haya en los criterios, sustituyendolas por si mismo, y luego
-            aplica los criterios a la tabla que se esta siguiendo.
+            aplica los criterios a la tabla que se esta siguiendo, y almacena el resultado
+            en un atributo con el mismo nombre que la tabla.
 
-            Se supone que se esta siguiendo una clave primaria, por lo tanto los criterios
-            deben llevar a un unico objeto.
+            Devuelv self.
             """
-            crit = dict((k, (v if not hasattr(v, '_resolve') else v._resolve(self)))
-                        for (k, v) in kw.iteritems())
-            return +table(**crit)
+            self._type._DOMD.add_synthetic(table, **kw)
+            return self
 
         # Necesario para que django no meta basurilla por medio
         class Meta(object):
@@ -116,6 +115,7 @@ class MetaData(object):
     parent: clase padre, en la jerarquia (DataObject.__class__)
     children: clases hijo en la jerarquia (dict(string, DataObject.__class__))
     attribs: conjunto de atributos (list(string))
+    synthetic: atributos "sinteticos" (foreign keys)
     summary: lista ordenada de atributos que puede usarse como
              "sumario" o descripcion abreviada de un objeto
 
@@ -130,9 +130,30 @@ class MetaData(object):
         self._type = cls
         self.parent = parent
         self.name = name
+        self.synthetic = dict()
         #self.children = dict()
         #self.attribs = set()
         #self.summary = list()
+
+    def follow(self, table, **kw):
+        """Agrega un nuevo atributo sintetico"""
+        self.synthetic[table._type._DOMD.name] = (table, kw)
+
+    @property
+    def descendants(self):
+        return sorted(set(chain(self.children.keys(), self.synthetic.keys())))
+
+    def produce(self, item, attr):
+        """Genera la lista de objetos hijos del item actual.
+
+        Solo recorre los sinteticos, no los children. El tipo de
+        objetos children y la forma de crear listas a partir de ellos
+        depende del tipo derivado de MetaData que se este usando.
+        """
+        table, kw = self.synthetic[attr]
+        crit = dict((k, (v if not hasattr(v, '_resolve') else v._resolve(item)))
+                           for (k, v) in kw.iteritems())
+        return table(**crit)
 
 
 class Fallback(DataType(object)):
@@ -158,12 +179,12 @@ class Fallback(DataType(object)):
         """Busca el atributo en este objeto y sus ancestros"""
         if attr.startswith('__'):
             raise AttributeError(attr)
-        for value in islice(self._resolve(attr), 0, self._depth):
+        for value in islice(self._fallback(attr), 0, self._depth):
             if value is not None:
                 return value
         raise AttributeError(attr)
 
-    def _resolve(self, attr):
+    def _fallback(self, attr):
         self = self._up
         while self:
             yield self.get(attr)

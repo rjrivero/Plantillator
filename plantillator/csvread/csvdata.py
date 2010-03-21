@@ -61,6 +61,16 @@ class CSVMetaData(MetaData):
             meta = CSVMetaData(self.loader, attr, self._type)
             return self.children.setdefault(attr, meta._type)
 
+    def produce(self, item, attr):
+        """Construye la lista de todos los objetos descendientes de 'item'"""
+        try:
+            submeta = self.subtype(attr)._DOMD
+        except KeyError:
+            # no es un child normal, intentamos devolver un sintetico
+            return super(CSVMetaData, self).produce(item, attr)
+        else:
+            return submeta.parser(item, attr)
+
     def new_set(self, *sets):
         sets = tuple(asIter(x) for x in sets)
         return CSVSet(self._type, chain(*sets))
@@ -103,11 +113,10 @@ class CSVObject(DataType(object)):
         #   - en el engine, "Si existe" / "Si no existe" tomara los valores
         #     None como no existentes.
         try:
-            parser = self._DOMD.subtype(attr)._DOMD.parser
+            data = self._DOMD.produce(self, attr)
         except KeyError:
             raise AttributeError(attr)
         else:
-            data = parser(self, attr)
             setattr(self, attr, data)
             return data
 

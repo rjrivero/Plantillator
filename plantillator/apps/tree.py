@@ -21,8 +21,12 @@ class Tagger(object):
         #if not name and hasattr(data, 'iteritems'):
         #    return ", ".join(str(data.get(x,"")) for x in _NAMING_ATTRIBS)
         if not name:
-            return str(data)
+            # es un elemento de una lista: lo convierto a string y, si viene
+            # con una "cuenta de repeticiones", la incluyo.
+            return "%s (%d)" % (str(data), hint) if hint is not None else str(data)
         elif not hasattr(data, "__iter__"):
+            # Es un atributo de un objeto, un elemento de diccionario.
+            # indico su nombre y su valor.
             return "%s = %s" % (name, str(data)) if name else str(data)
         return name or hint or "<>"
 
@@ -40,7 +44,7 @@ class Tagger(object):
     def filter_dict(self, data):
         """Itera sobre los elementos del dict, devolviendo clave y valor"""
         try:
-            children = data._type._DOMD.children
+            children = data._type._DOMD.descendants
         except (AttributeError, KeyError):
             return data.iteritems()
         else:
@@ -50,7 +54,15 @@ class Tagger(object):
 
     def filter_list(self, data):
         """Itera sobre los elementos de la lista/set, devolviendo indice y valor"""
-        return enumerate(sorted(data))
+        try:
+            return enumerate(sorted(data))
+        except TypeError:
+            # la lista tiene elementos de distintos tipos, no se puede ordenar
+            return enumerate(data)
+
+    def filter_orderedset(self, data):
+        """Itera sobre los elementos del orderedset, devolviendo valor y repeticiones"""
+        return data.itercounts()
 
 
 class Item(TreeItem):
@@ -63,7 +75,9 @@ class Item(TreeItem):
         # check properties
         self.expandable = True
         self.editable = False
-        if hasattr(data, 'iteritems'):
+        if hasattr(data, 'itercounts'):
+            self.GetSubList = self._orderedset
+        elif hasattr(data, 'iteritems'):
             self.GetSubList = self._dict
         elif hasattr(data, '__iter__'):
             self.GetSubList = self._list
@@ -91,8 +105,12 @@ class Item(TreeItem):
     def GetSelectedIconName(self):
         return self.tagger.selicon(self)
 
+    def _orderedset(self):
+        return list(self.tagger.item(x, hint=count)
+                      for x, count in self.tagger.filter_orderedset(self.data))
+
     def _list(self):
-        return list(self.tagger.item(x, hint="[%d]"%index)
+        return list(self.tagger.item(x)
                       for index, x in self.tagger.filter_list(self.data))
 
     def _dict(self):

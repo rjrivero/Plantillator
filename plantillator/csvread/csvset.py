@@ -75,8 +75,14 @@ class CSVSet(set):
         return "CSVSet<%s> [%d items]" % (self._type._DOMD.path, len(self))
 
     def follow(self, table, **kw):
-        domd = table._type._DOMD
-        return domd.new_set(x.follow(table, **kw) for x in self)
+        """Modifica los objetos, agregando la referencia seguida.
+
+        Cada objeto de la lista tendra un nuevo campo con el nombre de la tabla,
+        y que apuntara a la tabla (filtrada con los criterios especificados).
+        """
+        # creo o actualizo el campo sintetico.
+        self._type._DOMD.follow(table, **kw)
+        return self
 
     @property
     def up(self):

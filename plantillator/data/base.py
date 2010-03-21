@@ -4,9 +4,11 @@
 
 import operator
 import re
+from collections import namedtuple
 from itertools import chain
 
 from .ip import IPAddress
+from .oset import OrderedSet
 
 
 def BaseMaker(basetype):
@@ -21,18 +23,37 @@ def BaseMaker(basetype):
             """Devuelve el subconjunto de elementos que cumple el criterio"""
             if not hasattr(arg, '_verify'):
                 arg = (Deferrer() == arg)
-            return BaseSequence(x for x in self if arg._verify(x))
+            return BaseSequence(x for x in self if arg._verify(x, x))
 
         def __pos__(self):
             if len(self) == 1:
                 return list(self).pop()
             raise IndexError(0)
 
+        def follow(self, table, **kw):
+            """Sigue una referencia
+
+            Devuelve una lista de tuplas con dos elementos: "key" es el valor
+            del set, y "<table>" (nombre de la tabla) es el resultado de filtrar la tabla
+            con los criterios dados, aplicados a ese valor.
+
+            Ej: vpns.organismos.follow(sedes_fo, vpn_organismo=self) =>
+                lista de tuplas con
+                    .key ==> nombre del organismo
+                    .sedes_fo ==> lista de sedes de fibra óptica que pertenecen al organismo 
+            """
+            followmap = dict()
+            for item in self:
+                crit = dict((k, (v if not hasattr(v, '_resolve') else v._resolve(item)))
+                        for (k, v) in kw.iteritems())
+                followmap[item] = table(**crit)
+            return followmap
+
     return BaseSequence
 
 
 BaseList = BaseMaker(tuple)
-BaseSet  = BaseMaker(frozenset)
+BaseSet  = BaseMaker(OrderedSet)
 
 
 class DataError(Exception):
