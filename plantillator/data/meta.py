@@ -3,8 +3,8 @@
 
 from itertools import chain
 
-from .resolver import asIter
 from .base import BaseSet, SYMBOL_SELF, SYMBOL_FOLLOW
+from .resolver import asIter, RootResolver, UnknownSymbolError
 from .filter import Deferrer
 from .dataobject import DataSet
 
@@ -64,6 +64,32 @@ class UpReference(object):
 
     def __call__(self, item):
         return item._up
+
+
+class FilterSetResolver(RootResolver):
+
+    """Resuelve un filtrado aplazado por un simbolo desconocido.
+
+    Cuando se invoca a filterset utilizando criterios que hacen
+    referencia a simbolos desconocidos, no se puede ejecutar el
+    filtro inmediatamente. En su lugar, se devuelve un Resolver
+    que retrasa la ejecucion del filtro hasta que se tengan todos
+    los simbolos.
+    """
+
+    def __init__(self, symbols, dataset, crit):
+        super(FilterSetResolver, self).__init__(None)
+        self._symbols = symbols
+        self._dataset = dataset
+        self._crit = crit
+
+    def _resolve(self, symbols):
+        # actualizo "self._symbols" directamente en lugar de copiarlo antes
+        # porque "self._symbols" viene de un filterset aplazado, y el que
+        # llama a la funcion "filterset" ya sabe que se lo puede modificar.
+        # No hay necesidad de preservar el "symbols" original.
+        self._symbols.update(symbols)
+        return self._dataset._domd.filterset(self._symbols, self._dataset, self._crit)
 
 
 class MetaData(object):
@@ -147,7 +173,12 @@ class MetaData(object):
 
     def filterset(self, symbols, dataset, crit):
         """Filtra un Dataset, devuelve el resultado"""
-        return self.concat(self._matches(symbols, dataset, crit))
+        try:
+            return self.concat(self._matches(symbols, dataset, crit))
+        except UnknownSymbolError:
+            # Faltan simbolos! seguramente se este invocando el filtro
+            # desde dentro de un "follow". Retrasamos la evaluacion...
+            return FilterSetResolver(symbols, dataset, crit)
 
     def produceset(self, dataset, attr):
         """Genera la lista de objetos hijos de la lista actual.

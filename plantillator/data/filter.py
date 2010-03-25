@@ -188,6 +188,7 @@ class Filter(Deferrer):
         return FilterCrit(operator, operand, prefilter)
 
     def _verify(self, symbols, value):
+        # copio la tabla de simbolos para que no me machaque el "self".
         symbols = symbols.copy()
         return len(value._filter(symbols, self.params)) == len(value)
 

@@ -7,6 +7,11 @@ def asIter(item):
     return item if hasattr(item, '__iter__') else (item,)
 
 
+class UnknownSymbolError(Exception):
+    """Notifica un simbolo no encontrado"""
+    pass
+
+
 class ChainedResolver(object):
 
     """Resolvedor encadenado
@@ -49,7 +54,10 @@ class RootResolver(ChainedResolver):
         self._symbol = symbol
 
     def _resolve(self, symbols):
-        return symbols[self._symbol]
+        try:
+            return symbols[self._symbol]
+        except KeyError:
+            raise UnknownSymbolError(self._symbol)
 
 
 class AttrResolver(ChainedResolver):
