@@ -40,13 +40,13 @@ class ForeignReference(object):
         crit:    lista de criterios (pares clave, crit) que se usan para
                  filtrar la tabla.
         """
-        self.dataset = dataset
-        self.crit = crit
+        self._dataset = dataset
+        self._crit = crit
         self._domd = dataset._domd
         self._mutable = True
 
     def __call__(self, item):
-        return self._domd.filterset({SYMBOL_FOLLOW: item}, self.dataset, self.crit)
+        return self._domd.filterset({SYMBOL_FOLLOW: item}, self._dataset, self._crit)
 
 
 class UpReference(object):

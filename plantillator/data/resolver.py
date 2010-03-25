@@ -68,7 +68,9 @@ class AttrResolver(ChainedResolver):
 
     def _resolve(self, symbols):
         item = super(AttrResolver, self)._resolve(symbols)
-        return item.get(self._attrib)
+        # return item.get(self._attrib) --> Error!!!
+        #                                   los DataSets no implementan "get".
+        return getattr(item, self._attrib)
 
 
 class FilterResolver(ChainedResolver):

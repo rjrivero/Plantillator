@@ -22,13 +22,13 @@ class StaticCrit(object):
     """
 
     def __init__(self, operator, operand):
-        self.operator = operator
-        self.operand = operand
+        self._operator = operator
+        self._operand = operand
 
     def _verify(self, symbols, value):
         if hasattr(value, '__iter__'):
             value = len(value)
-        return self.operator(value, self.operand)
+        return self._operator(value, self._operand)
 
     def _resolve(self, symbols):
         """Resuelve los parametros dinamicos y devuelve un criterio estatico"""
@@ -52,15 +52,15 @@ class DynamicCrit(StaticCrit):
 
     def __init__(self, operator, operand):
         super(DynamicCrit, self).__init__(operator, None)
-        self.dynamic = operand
+        self._dynamic = operand
 
     def _verify(self, symbols, value):
-        self.operand = self.dynamic._resolve(symbols)
+        self._operand = self._dynamic._resolve(symbols)
         return super(DynamicCrit, self)._verify(symbols, value)
 
     def _resolve(self, symbols):
         """Resuelve los parametros dinamicos y devuelve un criterio estatico"""
-        return StaticCrit(self.operator, self.dynamic._resolve(symbols))
+        return StaticCrit(self._operator, self._dynamic._resolve(symbols))
 
 
 class FilterCrit(StaticCrit):
@@ -79,10 +79,10 @@ class FilterCrit(StaticCrit):
 
     def __init__(self, operator, operand, prefilter):
         super(FilterCrit, self).__init__(operator, operand)
-        self.prefilter = prefilter
+        self._prefilter = prefilter
 
     def _verify(self, symbols, value):
-        value = self.prefilter(symbols, value)
+        value = self._prefilter(symbols, value)
         return super(FilterCrit, self)._verify(symbols, value)
 
 

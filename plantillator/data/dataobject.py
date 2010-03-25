@@ -146,8 +146,8 @@ class DataObject(object):
 
         Devuelv self.
         """
-        domd = self._domd
-        domd.follow(table, domd.crit(kw))
+        domd, tdom = self._domd, table._domd
+        domd.follow(table, tdom.crit(kw))
         self.invalidate()
         return self
 
@@ -229,9 +229,9 @@ class DataSet(set):
         y que apuntara a la tabla (filtrada con los criterios especificados).
         """
         # creo o actualizo el campo sintetico.
-        domd = self._domd
-        domd.follow(table, domd.crit(kw))
-        self.invalidate((table._domd.name,))
+        domd, tdom = self._domd, table._domd
+        domd.follow(table, tdom.crit(kw))
+        self.invalidate((tdom.name,))
         return self
 
     def invalidate(self, attribs=None):
