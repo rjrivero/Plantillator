@@ -19,6 +19,7 @@ class SubReference(object):
 
     def __init__(self, domd):
         self._domd = domd
+        self._mutable = False
 
     def __call__(self, item):
         return self._domd.parser(item, self._domd.name)

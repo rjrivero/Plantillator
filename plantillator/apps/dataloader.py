@@ -4,8 +4,8 @@
 
 from os.path import splitext
 
-from ..data import DataError, DataContainer
-from ..data import ChainedResolver, Deferrer, Filter
+from ..data import DataError, DataContainer, Deferrer, Filter
+from ..data import RootResolver, SYMBOL_SELF, SYMBOL_FOLLOW
 from ..csvread import RootType
 
 
@@ -14,7 +14,11 @@ class DataLoader(DataContainer):
     def __init__(self, loader):
         self.loader = loader
         self.hist = set()
-        DataContainer.__init__(self, RootType(self.loader), Deferrer, Filter, ChainedResolver)
+        symbols = {
+            'self':   RootResolver(SYMBOL_SELF),
+            'orig': RootResolver(SYMBOL_FOLLOW),
+        }
+        DataContainer.__init__(self, RootType(self.loader), Deferrer, Filter, symbols)
 
     def load(self, source):
         sources = [source]

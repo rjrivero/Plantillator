@@ -33,7 +33,7 @@ class DataContainer(object):
 
     """Contenedor para los objetos root, data y glob"""
 
-    def __init__(self, root_type, deferrer_type, filter_type, self_type):
+    def __init__(self, root_type, deferrer_type, filter_type, symbols):
         """Construye e inicializa el contenedor.
         root_type: tipo raiz del contenedor.
         deferrer_type: tipo que se usa como deferrer.
@@ -47,7 +47,6 @@ class DataContainer(object):
             "IP": IPAddress,
             "CISCOPASSWORD": password,
             "CISCOSECRET": secret,
-            "self": self_type(),
             "cualquiera": deferrer_type(),
             "ninguno": None,
             "ninguna": None,
@@ -55,6 +54,7 @@ class DataContainer(object):
             "x": deferrer_type(),
             "donde": filter_type
         }
+        self.glob.update(symbols)
         self.root = root_type
         self.data = self.root()
 

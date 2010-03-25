@@ -136,10 +136,6 @@ class DataObject(object):
 
     # Herramientas para filtrado
 
-    def _matches(self, kw):
-        """Comprueba si el atributo indicado cumple el criterio."""
-        return all(crit._verify(self.get(key), self) for key, crit in kw.iteritems())
-
     def follow(self, table, **kw):
         """Sigue una referencia a una tabla.
 
@@ -150,8 +146,22 @@ class DataObject(object):
 
         Devuelv self.
         """
-        self._domd.follow(table, **kw)
+        domd = self._domd
+        domd.follow(table, domd.crit(kw))
+        self.invalidate()
         return self
+
+    def invalidate(self, attribs=None):
+        """Invalida los atributos dinamicos del objeto.
+
+        Se incluyo para poder cambiar referencias dinamicamente,
+        y refrescar, en el DataNav.
+        """
+        for attr in (attribs or self._domd.mutables):
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                pass
 
 
 class DataSet(set):
@@ -169,7 +179,12 @@ class DataSet(set):
 
     def __call__(self, **kw):
         """Busca los elementos de la lista que cumplan los criterios dados"""
-        return self._domd.filterset(self, **kw)
+        return self._filter({}, kw)
+
+    def _filter(self, symbols, kw):
+        """Como __call__, pero acepta una tabla de simbolos"""
+        domd = self._domd
+        return domd.filterset(symbols, self, domd.crit(kw))
 
     def __add__(self, other):
         """Concatena dos DataSets"""
@@ -214,8 +229,13 @@ class DataSet(set):
         y que apuntara a la tabla (filtrada con los criterios especificados).
         """
         # creo o actualizo el campo sintetico.
-        self._domd.follow(table, **kw)
+        domd = self._domd
+        domd.follow(table, domd.crit(kw))
+        self.invalidate((table._domd.name,))
         return self
+
+    def invalidate(self, attribs=None):
+        self._domd.invalidate(self, attribs)
 
     @property
     def _type(self):

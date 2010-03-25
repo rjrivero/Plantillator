@@ -1,52 +1,16 @@
 #!/usr/bin/env python
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
-
 import re
 from itertools import chain
 
 from .ip import IPAddress
 from .oset import OrderedSet
+from .resolver import asIter
+from .filter import Deferrer
 
-
-def BaseMaker(basetype):
-
-    class BaseSequence(basetype):
-
-        def __add__(self, other):
-            """Concatena dos secuencias"""
-            return BaseSequence(chain(self, asIter(other)))
-
-        def __call__(self, arg):
-            """Devuelve el subconjunto de elementos que cumple el criterio"""
-            if not hasattr(arg, '_verify'):
-                arg = (Deferrer() == arg)
-            return BaseSequence(x for x in self if arg._verify(x, x))
-
-        def __pos__(self):
-            if len(self) == 1:
-                return list(self).pop()
-            raise IndexError(0)
-
-        def follow(self, table, **kw):
-            """Sigue una referencia
-
-            Devuelve un diccionario donde cada clave es uno de los elementos del set,
-            y el valor correspondiente es el resultado de filtrar la tabla
-            con los criterios dados.
-            """
-            followmap = dict()
-            for item in self:
-                crit = dict((k, (v if not hasattr(v, '_resolve') else v._resolve(item)))
-                        for (k, v) in kw.iteritems())
-                followmap[item] = table(**crit)
-            return followmap
-
-    return BaseSequence
-
-
-BaseList = BaseMaker(tuple)
-BaseSet  = BaseMaker(OrderedSet)
+SYMBOL_SELF   = 0
+SYMBOL_FOLLOW = 1
 
 
 class DataError(Exception):
@@ -91,9 +55,55 @@ def normalize(item):
     return item or None if not item.isspace() else None
 
 
-def asIter(item):
-    """Se asegura de que el objeto es iterable"""
-    return item if hasattr(item, '__iter__') else (item,)
+def BaseMaker(basetype):
+
+    class BaseSequence(basetype):
+
+        def __add__(self, other):
+            """Concatena dos secuencias"""
+            return self.__class__(chain(self, asIter(other)))
+
+        def __call__(self, *args):
+            """Devuelve el subconjunto de elementos que cumple el criterio"""
+            return self._filter({}, args)
+
+        def __pos__(self):
+            if len(self) == 1:
+                return list(self).pop()
+            raise IndexError(0)
+
+        def _matches(self, symbols, args):
+            """Devuelve los objetos que cumplen los criterios"""
+            # Normalizo los criterios y los convierto en objetos
+            d = Deferrer()
+            args = tuple(x if hasattr(x, '_verify') else (d == x)
+                           for x in args)
+            # Filtro los elementos con los criterios
+            for item in self:
+                symbols[SYMBOL_SELF] = item
+                if all(x._verify(symbols, item) for x in args):
+                    yield item
+
+        def follow(self, table, **kw):
+            """Sigue una referencia
+
+            Devuelve un diccionario donde cada clave es uno de los elementos del set,
+            y el valor correspondiente es el resultado de filtrar la tabla
+            con los criterios dados.
+            """
+            domd = table._domd
+            crit = domd.crit(kw)
+            return dict((x, domd.filterset({SYMBOL_FOLLOW: x}, table, crit)) for x in self)
+
+        def _filter(self, symbols, args):
+            """como __call__, pero recibe una tabla de simbolos."""
+            return self.__class__(self._matches(symbols, args))
+
+    return BaseSequence
+
+
+BaseList = BaseMaker(tuple)
+BaseSet  = BaseMaker(OrderedSet)
 
 
 def asList(varlist):

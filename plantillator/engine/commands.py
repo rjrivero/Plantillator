@@ -9,9 +9,7 @@ from collections import namedtuple
 from gettext import gettext as _
 from operator import attrgetter
 
-from ..data.base import asIter
-from ..data.dataobject import Fallback
-from ..data.oset import OrderedSet
+from ..data import asIter, Fallback, OrderedSet
 from .base import *
 
 
