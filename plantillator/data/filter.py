@@ -122,8 +122,8 @@ class Deferrer(object):
         return DynamicCrit(operator, operand)
 
     def _verify(self, symbols, value):
-        return bool(value)
-
+        return value is not None
+    
     def __eq__(self, other):
         return self._defer(operator.eq, other)
 
