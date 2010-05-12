@@ -28,7 +28,7 @@ VARPATTERN = {
 }
 
 
-_INVALID_LITERAL = _("Testo no terminado ('%s' desbalanceados)" % DELIMITER)
+_INVALID_LITERAL = _("Texto no terminado ('%s' desbalanceados)" % DELIMITER)
 _LITERAL_TEXT = _("Texto (%(linenum)d lineas)" )
 
 
@@ -62,6 +62,10 @@ class Token(object):
         expr = parts.pop(0)
         if parts.pop(0) != DELIMITER:
             raise IndexError(0)
+        # interpretamos dos delimitadores consecutivos como un
+        # caracter escapado.
+        if not expr:
+            return DELIMITER
         return Token.Atom(expr, compile(expr, '<string>', 'eval'))
             
     def split(self):
