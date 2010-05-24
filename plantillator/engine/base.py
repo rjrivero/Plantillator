@@ -50,6 +50,7 @@ class Token(object):
         self.body = body
 
     def __str__(self):
+        return "[head: %s, body: %s]" % (str(self.head), str(self.body))
         return (self.head or self.body).strip()
 
     Atom = namedtuple('Atom', 'text, expr')
@@ -88,9 +89,40 @@ class Token(object):
             if isinstance(x, str):
                 style.text(x)
             else:
-                style.delimiter(DELIMITER)
-                style.inline(x.text)
-                style.delimiter(DELIMITER)
+                with style.block():
+                    style.delimiter(DELIMITER)
+                    style.inline(x.text)
+                    style.delimiter(DELIMITER)
+        return style
+
+
+class Comment(object):
+
+    """Comentario de un fichero de patrones.
+
+    - self.lineno: numero de linea
+    - self.head: None (por compatibilidad con Token).
+    - self.body: Texto del comentario.
+    """
+
+    def __init__(self, lineno, body=None):
+        self.lineno = lineno
+        self.head = None
+        self.body = body
+
+    def __str__(self):
+        return self.body
+
+    def split(self):
+        """No hace nada"""
+        pass
+
+    def evaluate(self, glob, data):
+        """Devuelve el comentario"""
+        return (self.body,)
+
+    def style(self, style):
+        style.comment(self.body)
         return style
 
 
@@ -178,19 +210,20 @@ class Command(list):
     def style(self, style_type, indent=0):
         # creo un objeto para el comando
         style = style_type(indent)
-        style.opener(BLOCK_OPENER)
-        self._style(self, style)
-        if not self.token.body:
-            style.closer(BLOCK_CLOSER)
-            yield style
-        else:
-            yield style
-            ending = style_type(indent)
-            ending.closer(BLOCK_CLOSER)
-            indent = indent + 1
-            for item in self.token.body:
-                for s in item.style(style_type, indent):
+        empty = not len(self)
+        with style.block():
+            style.opener(BLOCK_OPENER)
+            self._style(style)
+            if empty:
+                style.closer(BLOCK_CLOSER)
+        yield style
+        if not empty:
+            for item in self:
+                for s in item.style(style_type, indent+1):
                     yield s
+            ending = style_type(indent)
+            with ending.block():
+                ending.closer(BLOCK_CLOSER)                
             yield ending
 
 

@@ -56,8 +56,10 @@ TOOLS_FILE = "tools.py"
 class Plantillator(object):
 
     OPTIONS = {
+        'keep_comments': False,
         'path': [],
         'outpath': "",
+        'overwrite': True,
         'collapse': False,
         'definitions': [],
         'inputfiles': [],
@@ -66,19 +68,19 @@ class Plantillator(object):
 
     def __init__(self):
         self.__dict__.update(self.OPTIONS)
-        self.dataloader = DataLoader(DataSource())
-        self.tmplloader = TmplLoader()
 
-    def prepare(self, overwrite=True):
+    def prepare(self):
+        self.dataloader = DataLoader(DataSource())
+        self.tmplloader = TmplLoader(self.keep_comments)
         data, tmpl = self._classify()
         self._loaddata(data)
         self._addobjects()
         self._loadtmpl(tmpl)
 
-    def render(self, overwrite=True):
+    def render(self):
         if self.collapse:
             # borro el fichero de salida combinado
-            if os.path.isfile(self.outpath) and overwrite:
+            if os.path.isfile(self.outpath) and self.overwrite:
                 os.unlink(self.outpath)
         glob = self.dataloader.glob
         #data = FallbackDict(self.dataloader.data)

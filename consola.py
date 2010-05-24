@@ -58,6 +58,9 @@ parser.add_option("-l", "--loop",
         help="Itera sobre todos los posibles valores de los 'utiliza'")
 parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
         help="Extension del fichero resultado (por defecto, .cfg)")
+parser.add_option("-k", "--keep_comments",
+        action="store_true", dest="keep_comments", default=False,
+        help="Conserva los comentarios de la plantilla")
 
 (options, args) = parser.parse_args()
 if len(args) < 2 and not options.shell:
@@ -156,6 +159,8 @@ plantillator.collapse = options.collapse
 plantillator.definitions = options.definitions or []
 plantillator.inputfiles = inputfiles
 plantillator.ext = options.ext
+plantillator.overwrite = True
+plantillator.keep_comments = options.keep_comments
 
 try:
     plantillator.prepare()
@@ -170,12 +175,11 @@ try:
         for item in plantillator.render():
             handle(item)
     else:
-        overwrite = True
         while True:
             PICKS = list()
-            for item in plantillator.render(overwrite):
+            for item in plantillator.render():
                 handle(item)
-            overwrite = False
+            plantillator.overwrite = False
             if not PICKS:
                 break
             hitcount, hitstr = PICKS.pop()

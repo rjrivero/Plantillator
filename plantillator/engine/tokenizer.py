@@ -22,26 +22,28 @@ class Tokenizer(object):
 
     Si una linea comienza por "comment", la considera un comentario.
     """
-    def __init__(self, source, opener=None, closer=None, comment=None):
+    def __init__(self, source, keep_comments=False, opener=None, closer=None, comment=None):
         self.source = source
         self.opener = opener or BLOCK_OPENER
         self.closer = closer or BLOCK_CLOSER
         self.comment = comment or LINE_COMMENT
+        self.keep_comments = keep_comments
         self.lineno = 0
         self.delimiter = re.compile("(%s|%s)" % (self.opener, self.closer))
 
-    def tokenize(self, line):
+    def _tokenize(self, lineno, line):
         if line.strip().startswith(self.comment):
-            return tuple()
+            return (Comment(lineno, line),) if self.keep_comments else tuple()
         if line.isspace():
-            return (line,)
-        return (t for t in self.delimiter.split(line) if t and not t.isspace())
+            return (Token(lineno, None, line),)
+        return (Token(lineno, None, t) for t in self.delimiter.split(line)
+                if t and not t.isspace())
 
-    def tokens(self):
+    def _tokens(self):
         """Iterador que genera un flujo de tokens"""
         for self.lineno, line in enumerate(self.source.readlines()):
-            for token in self.tokenize(line):
-                yield Token(self.lineno+1, None, token)
+            for token in self._tokenize(self.lineno+1, line):
+                yield token
 
     def _group(self, tokens):
         command, body = tokens.next(), list()
@@ -56,7 +58,7 @@ class Tokenizer(object):
 
     def __iter__(self):
         try:
-            tokens = self.tokens()
+            tokens = self._tokens()
             for token in tokens:
                 if token.body == self.closer:
                     raise ParseError(self.source, token, _UNBALANCED)
@@ -67,4 +69,3 @@ class Tokenizer(object):
         except StopIteration:
             eof = Token(self.lineno, "<EOF>")
             raise ParseError(self.source, eof, _UNEXPECTED_EOF)
-

@@ -4,4 +4,5 @@
 from .base import VARPATTERN, ParseError, CommandError, Literal
 from .loader import Loader
 from .cmdtree import CommandTree
+from .style import HTMLStyle
 

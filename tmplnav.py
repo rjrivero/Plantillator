@@ -20,7 +20,7 @@ except ImportError:
     sys.path.append(".")
     from plantillator.data import PathFinder, FileSource
 
-from plantillator.engine import CommandTree, Literal
+from plantillator.engine import CommandTree, Literal, HTMLStyle
 from plantillator.engine import Loader as TmplLoader
 from plantillator.apps import TreeCanvas, Tagger
 
@@ -157,6 +157,9 @@ parser.add_option("-g", "--geometry", dest="geometry", metavar="WxH+X+Y",
 parser.add_option("-d", "--debug",
         action="store_true", dest="debug", default=False,
         help="Vuelca los mensajes de debug en stderr")
+parser.add_option("-s", "--style",
+        action="store_true", dest="style", default=False,
+        help="Aplicar estilos a la plantilla")
 
 (options, args) = parser.parse_args()
 if len(args) < 1:
@@ -173,6 +176,24 @@ logging.basicConfig(level=loglevel,
         format='%(asctime)s %(levelname)s %(message)s',
         stream=sys.stderr)
 
+def dumpHTML(loader):
+    print """
+<html>
+<head>
+<style type="text/css">
+body { font-family: courier new,courier; font-size: small; }
+%s
+</style>
+</head>
+<body>
+""" % HTMLStyle.css()
+    for tree in loader:
+        for s in tree.style(HTMLStyle):
+            print str(s)
+    print """
+</body>
+</html>"""
+
 # expando los nombres, que en windows me pueden venir con wildcards
 inputfiles = []
 for name in args:
@@ -183,12 +204,15 @@ for name in args:
         inputfiles.append(name)
 
 finder = PathFinder(path)
-loader = TmplLoader()
+loader = TmplLoader(keep_comments=True)
 try:
     for fname in inputfiles:
         source = FileSource(finder(fname), finder)
         loader.load(source)
-    TmplNav(loader, geometry).mainloop()
+    if not options.style:
+        TmplNav(loader, geometry).mainloop()
+    else:
+        dumpHTML(loader)
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

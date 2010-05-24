@@ -8,7 +8,8 @@ from .tokenizer import Tokenizer
 
 class Loader(object):
 
-    def __init__(self):
+    def __init__(self, keep_comments=False):
+        self.keep_comments = keep_comments
         self.trees = dict()
         self.sources = set()
 
@@ -21,7 +22,7 @@ class Loader(object):
         try:
             return self.trees[source.id]
         except KeyError:
-            tree = CommandTree(source, Tokenizer(source))
+            tree = CommandTree(source, Tokenizer(source, self.keep_comments))
             return self.trees.setdefault(source.id, tree)
 
     def run(self, tree, glob, data):

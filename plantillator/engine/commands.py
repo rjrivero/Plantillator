@@ -81,7 +81,9 @@ class ConditionExist(Condition):
             return False
 
     def _style(self, style):
-        style.keyword("si existe")
+        style.keyword("si hay")
+        style.variable(self.var)
+        style.keyword("en")
         style.expression(self.backup_expr)
 
 
