@@ -13,11 +13,18 @@ except ImportError:
     pass
 
 
-class Style(list):
+class Style(object):
 
     def __init__(self, indent):
         self.indent = indent
+        self.items  = list()
         super(Style, self).__init__()
+
+    def append(self, item):
+        self.items.append(item)
+
+    def __iter__(self):
+        return iter(self.items)
 
     def variable(self, text):
         self.append(text)
@@ -48,8 +55,20 @@ class Style(list):
 
     @contextmanager
     def block(self):
+        """Agrupa una serie de items en un bloque.
+
+        Los elementos de un bloque se asume que son tokens, y se
+        inserta espacio en blanco entre ellos.
+
+        Los elementos que no estan en un bloque se consideran texto normal
+        y no se les inserta espacio en blanco.
+        """
         self._openblock()
+        backup = self.items
+        self.items = list()
         yield
+        backup.append(" ".join(self.items))
+        self.items = backup
         self._closeblock()
 
     def _openblock(self):
@@ -194,4 +213,4 @@ class HTMLStyle(Style):
         indent = "&nbsp;&nbsp;" * self.indent
         pre = "<div class='%s'>%s" % (HTMLStyle.CSSLine, indent)
         post = "</div>\n"
-        return pre + " ".join(self) + post
+        return pre + "".join(self) + post
