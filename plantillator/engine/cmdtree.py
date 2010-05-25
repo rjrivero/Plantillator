@@ -89,11 +89,8 @@ class CommandTree(list):
         self.source = source
         self.sections = dict()
         last = None
-        try:
-            for token in tokens:
-                last = self.build(self, token, last)
-        except SyntaxError as details:
-            raise ParseError(self.source, token, str(details)) 
+        for token in tokens:
+            last = self.build(self, token, last)
 
     def __str__(self):
         return str(self.source)
@@ -110,9 +107,12 @@ class CommandTree(list):
             'command': token.head})
 
     def build(self, base, token, last):
-        if not token.head:
-            return self._chain(base, token, last)
-        cmd, inner = self._check(token), None
+        try:
+            if not token.head:
+                return self._chain(base, token, last)
+            cmd, inner = self._check(token), None
+        except SyntaxError as details:
+            raise ParseError(self.source, token, details)
         for nested in token.body:
             inner = self.build(cmd, nested, inner)
         cmd.chainto(last)
