@@ -50,7 +50,6 @@ class Token(object):
         self.body = body
 
     def __str__(self):
-        return "[head: %s, body: %s]" % (str(self.head), str(self.body))
         return (self.head or self.body).strip()
 
     Atom = namedtuple('Atom', 'text, expr')

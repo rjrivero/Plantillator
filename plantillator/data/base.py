@@ -11,6 +11,7 @@ from .filter import Deferrer
 
 SYMBOL_SELF   = 0
 SYMBOL_FOLLOW = 1
+IP_ADDRESS = re.compile("^\d+\.\d+\.\d+\.\d+\s*/\s*\d+$")
 
 
 class DataError(Exception):
@@ -46,7 +47,7 @@ def normalize(item):
     if item.startswith("'") and item.endswith("'"):
         return item[1:-1]
     # NUEVO: normalizo IPs
-    if item.count("/") == 1:
+    if item.count("/") == 1 and IP_ADDRESS.match(item):
         try:
             return IPAddress(item).validate()
         except Exception:
