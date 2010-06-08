@@ -126,9 +126,13 @@ class CommandTree(list):
         last.append(token)
         return last
 
-    def style(self, style_type, indent=0):
-        for item in self:
-            for s in item.style(style_type, indent):
+    def style(self, style_type, indent=0, section=None):
+        if not section:
+            for item in self:
+                for s in item.style(style_type, indent):
+                    yield s
+        else:
+            for s in self.sections[section].style(style_type, indent):
                 yield s
 
     def run(self, glob, data):

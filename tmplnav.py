@@ -153,13 +153,13 @@ La ruta se especifica al estilo del sistema operativo, por ej.:
 C:\\ruta1;C:\\ruta2 (en windows)
 /ruta1:/ruta2 (en linux)""")
 parser.add_option("-g", "--geometry", dest="geometry", metavar="WxH+X+Y",
+        default="800x600",
         help="""Geometria inicial de la ventana (ej: 800x600+0+0)""")
 parser.add_option("-d", "--debug",
         action="store_true", dest="debug", default=False,
         help="Vuelca los mensajes de debug en stderr")
-parser.add_option("-s", "--style",
-        action="store_true", dest="style", default=False,
-        help="Aplicar estilos a la plantilla")
+parser.add_option("-s", "--style", dest="section", metavar="* | <seccion>",
+        default="*", help="Aplicar estilos a la plantilla")
 
 (options, args) = parser.parse_args()
 if len(args) < 1:
@@ -170,7 +170,8 @@ if options.debug:
     loglevel = logging.DEBUG
 if options.path:
     path.extend(options.path.split(os.pathsep))
-geometry = "800x600" if not options.geometry else options.geometry
+if options.section == "*":
+    options.section = None
 
 logging.basicConfig(level=loglevel,
         format='%(asctime)s %(levelname)s %(message)s',
@@ -188,7 +189,7 @@ body { font-family: courier new,courier; font-size: small; }
 <body>
 """ % HTMLStyle.css()
     for tree in loader:
-        for s in tree.style(HTMLStyle):
+        for s in tree.style(HTMLStyle, section=options.section):
             print str(s)
     print """
 </body>
@@ -210,7 +211,7 @@ try:
         source = FileSource(finder(fname), finder)
         loader.load(source)
     if not options.style:
-        TmplNav(loader, geometry).mainloop()
+        TmplNav(loader, options.geometry).mainloop()
     else:
         dumpHTML(loader)
 except Exception, detail:
