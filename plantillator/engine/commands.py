@@ -2,6 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
 
+import sys
 import re
 import itertools
 import functools
@@ -105,6 +106,24 @@ class ConditionNotExist(ConditionExist):
     def _style(self, style):
         style.keyword("si no existe")
         style.expression(self.backup_expr)
+
+
+class CommandPython(Command):
+    """Comando "python"
+    """
+
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
+        self.backup_expr = self.expr
+        self.expr = compile(self.expr, '<string>', 'exec')
+
+    def run(self, glob, data):
+        exec self.expr in glob, data
+        return Command.run(self, glob, data)
+
+    def _style(self, style):
+        style.keyword("python")
+        style.expr(self.backup_expr)
 
 
 class CommandElse(Command):
@@ -375,3 +394,32 @@ class CommandSection(Command):
         style.keyword("seccion")
         style.variable(self.label)
 
+
+class CommandDot(PostProcessor):
+    """Comando "Dot"
+    Genera un gráfico en formato dot (Graphviz).
+
+    Bloque lanzado:
+     * graph: texto del gráfico, en formato .dot
+     * outfile: nombre del fichero a generar
+     * program: programa (dot, neato. fdp, circle, twopi)
+    """
+
+    def __init__(self, tree, token, match):
+        PostProcessor.__init__(self, tree, token, match)
+        self.backup_expr = self.expr
+        self.expr = compile(self.expr, '<string>', 'eval')
+        try:
+            self.program = self.program.lower()
+        except AttributeError:
+            self.program = 'dot'
+
+    def postprocess(self, input, glob, data):
+        self.outfile = eval(self.expr, glob, data)
+        self.graph = "".join(input)
+        yield YieldBlock("DOT", self, glob, data)
+
+    def _style(self, style):
+        progname = "dot" if self.program == "dot" else "dot:%s" % self.program
+        style.keyword(progname)
+        style.expression(self.backup_expr)

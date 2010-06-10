@@ -268,3 +268,20 @@ class Literal(object):
         for item in self.tokens:
             yield item.style(style_type(indent))
 
+
+class PostProcessor(Command):
+
+    """Acumula lineas de patron y las post-procesa"""
+
+    def run(self, glob, data):
+        input = list()
+        for item in Command.run(self, glob, data):
+            if type(item) is not str:
+                yield item
+            else:
+                input.append(item)
+        for item in self.postprocess(input, glob, data):
+            yield item
+
+    def postprocess(self, input, glob, data):
+        return input

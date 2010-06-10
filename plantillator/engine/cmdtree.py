@@ -70,7 +70,13 @@ class CommandTree(list):
              CommandRecall),
         # comando SET IF
         # p.e. "var ?= XXXX"
-        (r'^(?P<var>[^=]+)\s*\?=\s*(?P<expr>.+)$' % VARPATTERN, CommandSetIf),        
+        (r'^(?P<var>[^=]+)\s*\?=\s*(?P<expr>.+)$' % VARPATTERN, CommandSetIf),
+        # comando DOT
+        # p.e. "dot:neato 'img/fichero.dot'"
+        (r'^dot(:(?P<program>(dot|neato|fdp|twopi|circo)))?\s*(?P<expr>.+)$', CommandDot),
+        # comando PYTHON
+        # p.e. "python <expr>"
+        (r'^python\s*(?P<expr>.+)$', CommandPython),
         # comando SET
         # ESTE COMANDO DEBE SER EL ULTIMO!
         # p.e. "var = var1 (+ var2)*

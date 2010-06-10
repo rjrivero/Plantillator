@@ -7,6 +7,12 @@ import os.path
 import re
 import sys
 from contextlib import contextmanager
+from itertools import chain
+
+try:
+    import pydot
+except ImportError:
+    print >> sys.stderr, "Warning: PyDOT NOT SUPPORTED!"
 
 from ..data import PathFinder, FileSource, Fallback
 from ..csvread import DataSource
@@ -59,6 +65,7 @@ class Plantillator(object):
         'keep_comments': False,
         'path': [],
         'outpath': "",
+        'outdir': "",
         'overwrite': True,
         'collapse': False,
         'definitions': [],
@@ -76,6 +83,14 @@ class Plantillator(object):
         self._loaddata(data)
         self._addobjects()
         self._loadtmpl(tmpl)
+        # Calcula el directorio de salida en funcion de
+        # outpath y collapse.
+        if self.collapse:
+            self.outdir = os.path.dirname(self.outpath)
+        elif self.outpath:
+            self.outdir = self.outpath
+        else:
+            self.outdir = os.getcwd()
 
     def render(self):
         if self.collapse:
@@ -140,7 +155,7 @@ class Plantillator(object):
             outname = os.path.join(self.outpath, outname)
             if os.path.isfile(outname):
                 os.unlink(outname)
-            outcontext = lambda: open(outname, "w+")
+            outcontext = lambda: open(outname, "a+")
         else:
             @contextmanager
             def stderr_wrapper():
@@ -168,7 +183,20 @@ class Plantillator(object):
                         item = items.next()
                 # si el item no es una cadena de texto, cerramos el fichero
                 # temporalmente y lanzamos el item.
-                yield item
+                if item.opcode == "DOT":
+                    self._dot(item)
+                else:
+                    yield item
         except StopIteration:
             pass
 
+    def _dot(self, yieldblock):
+        """Genera un gráfico dot"""
+        graph = pydot.graph_from_dot_data(yieldblock.command.graph)
+        # El path que me dan generalmente viene en formato UNIX ("/"),
+        # Si lo mezclo con WINDOWS ("\\") puede dar problemas...
+        # Mejor primero lo separo en trozos, y luego lo uno todo con
+        # os.path.join.
+        pathelems = os.path.split(yieldblock.command.outfile)
+        outpath = os.path.join(self.outdir, *pathelems)
+        graph.write_png(outpath, prog=yieldblock.command.program)

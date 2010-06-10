@@ -13,9 +13,10 @@ class RestrictedBuiltins(dict):
 
     """Restringe el acceso a propiedades built-in de python"""
 
-    RESTRICTED = ('__class__', '__import__', '__package__', 'compile',
-                  'eval', 'execfile', 'exit', 'file', 'input', 'open',
-                  'quit', 'raw_input', 'reload')
+#    RESTRICTED = ('__class__', '__import__', '__package__', 'compile',
+#                  'eval', 'execfile', 'exit', 'file', 'input', 'open',
+#                  'quit', 'raw_input', 'reload')
+    RESTRICTED = tuple()
 
     def __init__(self):
         """Filtra los builtins accesibles"""
