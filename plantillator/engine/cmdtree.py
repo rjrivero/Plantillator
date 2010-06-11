@@ -72,8 +72,8 @@ class CommandTree(list):
         # p.e. "var ?= XXXX"
         (r'^(?P<var>[^=]+)\s*\?=\s*(?P<expr>.+)$' % VARPATTERN, CommandSetIf),
         # comando DOT
-        # p.e. "dot:neato 'img/fichero.dot'"
-        (r'^dot(:(?P<program>(dot|neato|fdp|twopi|circo)))?\s*(?P<expr>.+)$', CommandDot),
+        # p.e. "dot png cmapx 'img/fichero.png'"
+        (r'^dot(:(?P<program>(dot|neato|fdp|sfdp|twopi|circo)))?\s+(?P<formats>((png|jpg|dot|cmapx)\s+)*)(?P<expr>.+)$' % VARPATTERN, CommandDot),
         # comando PYTHON
         # p.e. "python <expr>"
         (r'^python\s*(?P<expr>.+)$', CommandPython),
@@ -94,6 +94,7 @@ class CommandTree(list):
         list.__init__(self)
         self.source = source
         self.sections = dict()
+        self.blocks = dict()
         last = None
         for token in tokens:
             last = self.build(self, token, last)
@@ -142,10 +143,10 @@ class CommandTree(list):
                 yield s
 
     def run(self, glob, data):
-        for item in self:
+        for cmd in self:
             try:
-                for block in item.run(glob, data):
-                    yield block
+                for item in cmd.run(glob, data):
+                    yield item
             except CommandError as details:
                 # en el caso de un CommandInclude, se puede levantar un
                 # CommandError con una fuente distinta a la de este cmdtree.
@@ -153,4 +154,4 @@ class CommandTree(list):
                 details.source = details.source or self.source
                 raise details
             except:
-                raise CommandError(self.source, item.token, glob, data)
+                raise CommandError(self.source, cmd.token, glob, data)

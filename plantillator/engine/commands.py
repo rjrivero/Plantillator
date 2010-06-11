@@ -251,6 +251,7 @@ class CommandDefine(Command):
             if not CommandDefine.VALID(item):
                 raise ParseError(None, token,
                                  _WRONG_PARAMS % {'params': str(self.params)})
+        tree.blocks[self.blockname] = self
 
     def invoke(self, glob, data, params):
         if len(params) != len(self.params):
@@ -260,7 +261,6 @@ class CommandDefine(Command):
         return Command.run(self, glob, data)
 
     def run(self, glob, data):
-        #self.run = lambda glob, data: tuple()
         data.setdefault("_blocks", {})[self.blockname] = self
         return tuple()
 
@@ -289,15 +289,22 @@ class CommandRecall(Command):
         # si el cuerpo de la llamada tiene un solo argumento, evaluarlo
         # no devolveria una tupla y la ejecucion del comando fallaria.
         self.backup_params = self.params
+        self.blocks = tree.blocks
         if self.params:
             self.params = self.params.strip()[1:-1].strip()
             self.params = "(%s,)" % self.params if self.params else None
             self.params = compile(self.params, '<string>', 'eval')
 
     def run(self, glob, data):
-        try:
-            block = data._blocks[self.blockname]
-        except (AttributeError, KeyError):
+        """Busca el bloque en data._blocks o en el cmdtree.
+        Ejecuta el cuerpo del primero que encuentre.
+        """
+        blockset, block = data.get("_blocks"), None
+        if blockset:
+            block = blockset.get(self.blockname)
+        if not block:
+            block = self.blocks.get(self.blockname)
+        if not block:
             raise ValueError(_UNDEFINED_BLOCK % {'blockname': self.blockname})
         params = eval(self.params, glob, data) if self.params else tuple()
         return itertools.chain(Command.run(self, glob, data),
@@ -368,16 +375,40 @@ class CommandAppend(Command):
     """comando "append"
     Coloca un fichero en la lista de proceso, para ser procesado
     despues del fichero actual.
+
+    El path especificado en el comando puede indicar un nombre de fichero
+    de salida usando la sintaxis
+
+    path -> expresion
+
+    La expresion se evalua y el resultado de ejecutar el patron se
+    guarda en el fichero cuyo nombre resulte de la expresion, relativo
+    al directorio de salida.
     """
 
+    def __init__(self, tree, token, match):
+        Command.__init__(self, tree, token, match)
+        self.subdir = None
+        self.backup_dir = None
+        self.outpath = None
+        path = self.path.split("->")
+        self.path = path.pop(0).strip()
+        if path:
+            self.backup_dir = path[0].strip()
+            self.subdir = compile(self.backup_dir, '<string>', 'eval')
+
     def run(self, glob, data):
+        self.outpath = None if not self.subdir else eval(self.subdir, glob, data)
         yield YieldBlock("APPEND", self, glob, data)
         # no sustituyo el run, para que el comando sea repetible.
         # self.run = lambda glob, data: tuple()
 
     def _style(self, style):
         style.keyword("procesar")
-        style.expression(self.path)
+        style.variable(self.path)
+        if self.subdir:
+            style.keyword("->")
+            style.expression(self.backup_dir)
 
 
 class CommandSection(Command):
@@ -407,19 +438,44 @@ class CommandDot(PostProcessor):
 
     def __init__(self, tree, token, match):
         PostProcessor.__init__(self, tree, token, match)
-        self.backup_expr = self.expr
-        self.expr = compile(self.expr, '<string>', 'eval')
         try:
+            # Recupero el programa, por defecto "dot".
             self.program = self.program.lower()
         except AttributeError:
             self.program = 'dot'
+        try:
+            # Recupero la lista de formatos, por defecto ("png",)
+            self.formats = set(x.strip() for x in self.formats.lower().split())
+        except AttributeError:
+            self.formats = set("png",)
+        #
+        # Dividimos la expresion en expresion propiamente dicha, y posible
+        # destino para el cmapx
+        #
+        expr = self.expr.split("->")
+        self.backup_expr = expr.pop(0).strip()
+        self.expr = compile(self.backup_expr, '<string>', 'eval')
+        cmapname = expr[0].strip() if expr else ""
+        if cmapname.isalnum():
+            self.cmapname = cmapname
+            self.formats.add("cmapx")
 
     def postprocess(self, input, glob, data):
         self.outfile = eval(self.expr, glob, data)
+        # Si el nombre de fichero me lo dan con una extension que coincida
+        # con algun formato, se la quito.
+        for f in self.formats:
+            f = ".%s" % f
+            if self.outfile.endswith(f):
+                self.outfile = self.outfile[:-len(f)]
         self.graph = "".join(input)
         yield YieldBlock("DOT", self, glob, data)
+        if self.cmapname:
+            data[self.cmapname] = self.cmapx
 
     def _style(self, style):
         progname = "dot" if self.program == "dot" else "dot:%s" % self.program
         style.keyword(progname)
+        for f in self.formats:
+            style.keyword(f)
         style.expression(self.backup_expr)

@@ -198,5 +198,14 @@ class Plantillator(object):
         # Mejor primero lo separo en trozos, y luego lo uno todo con
         # os.path.join.
         pathelems = os.path.split(yieldblock.command.outfile)
-        outpath = os.path.join(self.outdir, *pathelems)
-        graph.write_png(outpath, prog=yieldblock.command.program)
+        filename = pathelems[-1]
+        filepath = os.path.join(self.outdir, *pathelems[:-1])
+        for f in yieldblock.command.formats:
+            outpath = os.path.join(filepath, filename + "." + f)
+            graph.write(outpath, format=f, prog=yieldblock.command.program)
+            # Si hay un mapa de cliente, lo cargo en el bloque para que este
+            # accesible
+            if f == "cmapx":
+                with open(outpath, "r") as cmapx:
+                    yieldblock.command.cmapx = cmapx.read()
+
