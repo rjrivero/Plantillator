@@ -457,8 +457,8 @@ class CommandDot(PostProcessor):
         self.expr = compile(self.backup_expr, '<string>', 'eval')
         cmapname = expr[0].strip() if expr else ""
         if cmapname.isalnum():
-            self.cmapname = cmapname
             self.formats.add("cmapx")
+        self.cmapname = cmapname or None
 
     def postprocess(self, input, glob, data):
         self.outfile = eval(self.expr, glob, data)
