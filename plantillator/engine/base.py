@@ -140,7 +140,7 @@ class ParseError(Exception):
                 os.path.basename(self.source.id) if self.source else "<>",
                 self.token.lineno),
             "Error interpretando %s" % str(self.token),
-            self.errmsg
+            str(self.errmsg)
         ]
         #error.extend(traceback.format_exception(*self.exc_info))
         return "\n".join(error)
