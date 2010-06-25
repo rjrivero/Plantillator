@@ -97,12 +97,9 @@ class Plantillator(object):
             # borro el fichero de salida combinado
             if os.path.isfile(self.outpath) and self.overwrite:
                 os.unlink(self.outpath)
-        glob = self.dataloader.glob
-        #data = FallbackDict(self.dataloader.data)
-        data = Fallback(self.dataloader.data, depth=1)
-        for tree, outpath in self.tmplloader:
-            outcontext = self._outcontext(tree.source.id, outpath)
-            for block in self._renderfile(tree, glob, data, outcontext):
+        for runtree in self.tmplloader:
+            outcontext = self._outcontext(runtree.cmdtree.source.id, runtree.outpath)
+            for block in self._renderfile(runtree, outcontext):
                 yield block
 
     def _outcontext(self, sourceid, outpath):
@@ -156,7 +153,8 @@ class Plantillator(object):
                 execfile(init, glob, loc)
         glob.update(loc)
         for source in tmpl_sources:
-            self.tmplloader.load(source)
+            data = Fallback(self.dataloader.data, depth=1)
+            self.tmplloader.load(source, self.dataloader.glob, data)
 
     def _addobjects(self):
         """Carga objetos predefinidos e indicados en la linea de comandos."""
@@ -167,7 +165,7 @@ class Plantillator(object):
                 raise SyntaxError, "\"%s\" NO es un nombre valido" % var
             self.dataloader.data[var] = self.dataloader.evaluate(expr)
 
-    def _renderfile(self, cmdtree, glob, data, outcontext):
+    def _renderfile(self, runtree, outcontext):
         """Ejecuta un patron.
 
         Ejecuta el patron y va grabando los resultados al fichero de salida
@@ -176,7 +174,7 @@ class Plantillator(object):
         Si se encuentra con un bloque que no sabe interpretar (cualquier cosa
         que no sea texto), lo lanza.
         """
-        items = self.tmplloader.run(cmdtree, glob, data)
+        items = self.tmplloader.run(runtree)
         try:
             while True:
                 with outcontext() as f:
