@@ -100,9 +100,31 @@ class Plantillator(object):
         glob = self.dataloader.glob
         #data = FallbackDict(self.dataloader.data)
         data = Fallback(self.dataloader.data, depth=1)
-        for tree in self.tmplloader:
-            for block in self._renderfile(tree, glob, data):
+        for tree, outpath in self.tmplloader:
+            outcontext = self._outcontext(tree.source.id, outpath)
+            for block in self._renderfile(tree, glob, data, outcontext):
                 yield block
+
+    def _outcontext(self, sourceid, outpath):
+        """Genera un context que abre y cierra el fichero de salida adecuado"""
+        if self.collapse:
+            outcontext = lambda: open(self.outpath, "a+")
+        elif self.outpath:
+            # Si no hay ninguna sugerencia, el fichero de salida se
+            # llama igual que el de entrada, pero con la extension cambiada.
+            if not outpath:
+                outpath = os.path.basename(sourceid)
+                outpath = os.path.splitext(outpath)[0] + self.ext
+            outpath = os.path.join(self.outpath, outpath)
+            if os.path.isfile(outpath):
+                os.unlink(outpath)
+            outcontext = lambda: open(outpath, "w+")
+        else:
+            @contextmanager
+            def stderr_wrapper():
+                yield sys.stdout
+            outcontext = stderr_wrapper
+        return outcontext
 
     def _classify(self):
         """divide los ficheros en datos y patrones"""
@@ -145,25 +167,7 @@ class Plantillator(object):
                 raise SyntaxError, "\"%s\" NO es un nombre valido" % var
             self.dataloader.data[var] = self.dataloader.evaluate(expr)
 
-    def _outcontext(self, sourceid):
-        """Genera un context que abre y cierra el fichero de salida adecuado"""
-        if self.collapse:
-            outcontext = lambda: open(self.outpath, "a+")
-        elif self.outpath:
-            outname = os.path.basename(sourceid)
-            outname = os.path.splitext(outname)[0] + self.ext
-            outname = os.path.join(self.outpath, outname)
-            if os.path.isfile(outname):
-                os.unlink(outname)
-            outcontext = lambda: open(outname, "a+")
-        else:
-            @contextmanager
-            def stderr_wrapper():
-                yield sys.stdout
-            outcontext = stderr_wrapper
-        return outcontext
-
-    def _renderfile(self, cmdtree, glob, data):
+    def _renderfile(self, cmdtree, glob, data, outcontext):
         """Ejecuta un patron.
 
         Ejecuta el patron y va grabando los resultados al fichero de salida
@@ -172,7 +176,6 @@ class Plantillator(object):
         Si se encuentra con un bloque que no sabe interpretar (cualquier cosa
         que no sea texto), lo lanza.
         """
-        outcontext = self._outcontext(cmdtree.source.id)
         items = self.tmplloader.run(cmdtree, glob, data)
         try:
             while True:

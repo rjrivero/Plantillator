@@ -52,7 +52,7 @@ class CommandTree(list):
         # p.e. "incluir file"
         (r'^(include|incluir|insertar)\s+(?P<path>.*)$', CommandInclude),
         # Comando APPEND
-        # p.e. "procesar file"
+        # p.e. "procesar file (-> output.txt)?"
         (r'^procesar\s+(?P<path>.*)$', CommandAppend),
         # Comando SECTION
         # p.e. "seccion dhcp"

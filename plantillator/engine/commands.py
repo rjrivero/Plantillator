@@ -388,17 +388,17 @@ class CommandAppend(Command):
 
     def __init__(self, tree, token, match):
         Command.__init__(self, tree, token, match)
-        self.subdir = None
-        self.backup_dir = None
+        self.outpath_expr = None
+        self.outpath_backup = None
         self.outpath = None
         path = self.path.split("->")
         self.path = path.pop(0).strip()
         if path:
-            self.backup_dir = path[0].strip()
-            self.subdir = compile(self.backup_dir, '<string>', 'eval')
+            self.outpath_backup = path[0].strip()
+            self.outpath_expr = compile(self.outpath_backup, '<string>', 'eval')
 
     def run(self, glob, data):
-        self.outpath = None if not self.subdir else eval(self.subdir, glob, data)
+        self.outpath = None if not self.outpath_expr else eval(self.outpath_expr, glob, data)
         yield YieldBlock("APPEND", self, glob, data)
         # no sustituyo el run, para que el comando sea repetible.
         # self.run = lambda glob, data: tuple()
@@ -406,9 +406,9 @@ class CommandAppend(Command):
     def _style(self, style):
         style.keyword("procesar")
         style.variable(self.path)
-        if self.subdir:
+        if self.outpath_expr:
             style.keyword("->")
-            style.expression(self.backup_dir)
+            style.expression(self.outpath_backup)
 
 
 class CommandSection(Command):
