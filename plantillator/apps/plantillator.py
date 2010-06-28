@@ -115,7 +115,7 @@ class Plantillator(object):
             outpath = os.path.join(self.outpath, outpath)
             if os.path.isfile(outpath):
                 os.unlink(outpath)
-            outcontext = lambda: open(outpath, "w+")
+            outcontext = lambda: open(outpath, "a+")
         else:
             @contextmanager
             def stderr_wrapper():
