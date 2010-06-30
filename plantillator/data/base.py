@@ -113,6 +113,8 @@ def asList(varlist):
     Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
     es un conjunto de valores separados por ','.
     """
+    if not isinstance(varlist, basestring):
+        return BaseList((varlist,))
     return BaseList(normalize(i) for i in str(varlist).split(","))
 
 
@@ -122,6 +124,8 @@ def asSet(varlist):
     Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
     es un conjunto de valores separados por ','.
     """
+    if not isinstance(varlist, basestring):
+        return BaseSet((varlist,))
     return BaseSet(normalize(i) for i in str(varlist).split(","))
 
 
@@ -134,6 +138,8 @@ def asRange(varrange):
     La cadena es un rango (numeros separados por '-'), posiblemente
     rodeado de un prefijo y sufijo no numerico.
     """
+    if not isinstance(varrange, basestring):
+        return BaseList((varrange,))
     match, rango = _RANGO.match(str(varrange)), []
     if match:
         start = int(match.group('from'))
