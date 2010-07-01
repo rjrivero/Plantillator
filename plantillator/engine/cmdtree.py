@@ -19,6 +19,9 @@ class CommandTree(list):
     """Convierte un arbol de tokens en un arbol de comandos"""
 
     _COMMANDS = [(re.compile(exp), cmd) for (exp, cmd) in (
+        # comando BREAK
+        # p.e. "break"
+        (r'^break(\s+(?P<breakpoint>%(var)s)\s*)?$' % VARPATTERN, CommandBreak),        
         # comando FOR / sorted
         # p.e. "por cada var de path.to(list) ordenado por var"
         (r'^por cada\s+(?P<var>%(var)s)\s+%(de)s\s+(?P<expr>.*) ordenado por (?P<sortby>%(var)s)\s*$' % VARPATTERN,

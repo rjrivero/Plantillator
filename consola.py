@@ -113,6 +113,12 @@ def select_handler(opcode, command, glob, data):
         data[var] = itemlist[chosen-1][1]
 
 
+def break_handler(opcode, command, glob, data):
+    if options.debug and not options.loop:
+        code.interact("Breakpoint %s" % (command.breakpoint or "<>"),
+                      local={'glob': glob, 'data':data})
+
+
 # manejador para el caso de loop
 
 WASTED, PICKS = dict(), list()
@@ -143,6 +149,7 @@ def handle(item):
     global options
     handlers = {
             "SELECT": select_handler if not options.loop else loop_select,
+            "BREAK": break_handler,
     }
     handler = handlers.get(item.opcode, None)
     if handler:

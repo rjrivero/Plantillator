@@ -169,13 +169,13 @@ class CommandFor(Command):
                 expr = sorted(expr, key=self.sortby)
             else:
                 expr = sorted(expr)
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError) as details:
             return
         forset = OrderedSet()
         for item in expr:
             data[self.var], result = item, list()
             for shot in Command.run(self, glob, data):
-                if type(shot) == str:
+                if isinstance(shot, basestring):
                     result.append(shot)
                 else:
                     yield shot
@@ -332,6 +332,24 @@ class CommandInclude(Command):
     def _style(self, style):
         style.keyword("incluir")
         style.expression(self.path)
+
+
+class CommandBreak(Command):
+    """Causa una interrupción en el programa"""
+
+    def __init__(self, tree, token, match):
+        try:
+            self.breakpoint = self.breakpoint.strip()
+        except AttributeError:
+            self.breakpoint = None
+
+    def run(self, glob, data):
+        yield YieldBlock("BREAK", self, glob, data)
+
+    def _style(self, style):
+        style.keyword("break")
+        if self.breakpoint:
+            style.variable(self.breakpoint)
 
 
 class CommandSelect(Command):

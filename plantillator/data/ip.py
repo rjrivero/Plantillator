@@ -160,5 +160,9 @@ class IPAddress(object):
         return "IPAddress('%s')" % str(self)
 
     def __cmp__(self, other):
+        # Para listas mixtas de IPs, donde algunos elementos sean
+        # una IP como tal, y otros una lista de IPs en formato texto
+        # (por ejemplo, [IP("A.B.C.D/a"), "L.M.N.O/b, P.Q.R.S/c"]
+        if isinstance(other, basestring):
+            return cmp(str(self), other)
         return cmp(self.int, other.int)
-
