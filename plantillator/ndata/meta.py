@@ -59,7 +59,7 @@ class Meta(object):
             return self.subtypes.setdefault(name, Meta(".".join((self.path, name)), self))
 
 
-class RootMeta(object):
+class RootMeta(Meta):
 
     """
     MetaData de primer nivel
