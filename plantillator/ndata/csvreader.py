@@ -7,8 +7,7 @@ from itertools import count, chain
 from copy import copy
 
 import fields
-from meta import Meta, RootMeta, DataSet, DataObject
-from resolver import Resolver
+from meta import Meta, DataObject, DataSet, BaseSet
 
 
 class CSVRow(object):
@@ -55,21 +54,22 @@ class ColumnList(object):
         path: path de la lista, ya procesado (en forma de tuple).
         columns: columnas de la lista, ya procesadas.
         """
-        self.path, self.columns = tuple(path), tuple(columns)
-        self.attribs = tuple(x for x in self.columns if not x.selector)
-        self._expand_selectors()
+        # Por si acaso columns es un iterator (no estaria definido __len__)
+        self.path, columns = tuple(path), tuple(columns)
+        self.selects = tuple(c for c in columns if c.selector)
+        self.attribs = columns[len(self.selects):]
+        self._expand_selectors(tuple(columns))
 
-    def _expand_selectors(self):
+    def _expand_selectors(self, columns):
         """Expande la lista de selectores"""
         # Me aseguro de que todas las columnas con selector estan al principio
         # de la lista
-        selcount = len(self.columns)-len(self.attribs)
-        if any(x.selector for x in self.columns[selcount:]):
+        if any(x.selector for x in self.attribs):
             raise SyntaxError("Orden de cabeceras incorrecto")
         # Comparo los selectores con los elementos del path, y los
         # expando si estan abreviados.
         cursor = self.path[:-1]
-        for column in self.columns[0:selcount]:
+        for column in self.selects:
             # Busco un elemento del path que coincida con el selector
             while cursor and not cursor[0].lower().startswith(column.selector.lower()):
                 cursor.pop(0)
@@ -83,17 +83,17 @@ class ColumnList(object):
         """Devuelve el nivel de anidamiento de la tabla"""
         return len(self.path)
 
-    def _object(self, meta, row_cols):
+    def _object(self, meta, parent, row_cols):
         """Construye un objeto con los datos de una fila"""
-        obj = DataObject(meta)
-        for col in (x for x in self.columns if not x.selector):
+        obj = DataObject(meta, parent)
+        for col in self.attribs:
             value = row_cols[col.index]
             if value is not None:
                 setattr(obj, col.colname, value)
         return obj
 
-    def process(self, normalized_body, meta, data):
-        """Carga los datos, creando los objetos y metadatos necesarios"""
+    def prepare(self, meta):
+        """Prepara la carga de datos, analizando el path"""
         # Creo o accedo al meta y le inserto los nuevos campos.
         # Lo hago en esta fase y no en el constructor, porque aqui
         # ya compruebo que todos los tipos padres existan... eso
@@ -102,10 +102,43 @@ class ColumnList(object):
         for step in self.path[:-1]:
             meta = meta.subtypes[step]
         meta = meta.child(self.path[-1])
-        for col in self.columns:
+        meta.summary = tuple(c.colname for c in self.attribs)[:3]
+        for col in self.attribs:
             meta.fields[col.colname] = col.coltype
-        # Y ahora, aplico los filtros y cargo cada elemento...
-        return DataSet(meta)
+        self.meta = meta
+        # Creo una pila de operaciones, que filtra el dataset raiz
+        # hasta llegar al punto donde tengo que insertar los datos.
+        selects, stack = list(self.selects), list()
+        for step in self.path[:-1]:
+            def getsubtype(dset, vector):
+                return getattr(dset, step)
+            stack.append(getsubtype)
+            while selects and selects[0].selector == step:
+                select = selects.pop(0)
+                def search(dset, vector):
+                    return (dset._index(select.colname) == vector.next())
+                stack.append(search)
+        self.stack = stack
+
+    def addrow(self, row_cols, rootset):
+        """Crea el objeto y lo inserta en la posicion adecuada del rootset"""
+        attrib = self.path[-1]
+        vector = (row_cols[s.index] for s in self.selects)
+        nitems = set()
+        # Desciendo en el rootset hasta llegar al DataSet del que
+        # cuelga el objeto
+        for op in self.stack:
+            rootset = op(rootset, vector)
+        # Creo un objeto con los datos, que luego ire copiando
+        data = ((c.colname, row_cols[c.index]) for c in self.attribs)
+        data = dict((k, v) for (k, v) in data if v is not None)
+        # Inserto el objeto en cada elemento del dataset.
+        for item in rootset:
+            obj = DataObject(self.meta, item if self.stack else None)
+            obj.__dict__.update(data)
+            getattr(item, attrib).add(obj)
+            nitems.add(obj)
+        return None if not nitems else DataSet(self.meta, nitems)
 
 
 class TableBlock(ColumnList):
@@ -123,12 +156,12 @@ class TableBlock(ColumnList):
         super(TableBlock, self).__init__(path, columns)
         self.body = csvrows[2:]
         for row in self.body:
-            row.normalize(self.columns)
+            row.normalize(columns)
 
     def _columns(self, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, coltype, colname in zip(count(1), typeline, headline):
-            if not coltype or not colname:
+            if not coltype or not colname or colname.startswith(u"*"):
                 continue
             selector, nameparts = None, colname.split(u".")
             if len(nameparts) > 1:
@@ -139,7 +172,10 @@ class TableBlock(ColumnList):
                 yield Column(index, selector, coltype, colname)
 
     def process(self, meta, data):
-        return super(TableBlock, self).process(self.body, meta, data)
+        rootset = DataSet(meta, (data,))
+        self.prepare(meta)
+        for row in self.body:
+            self.addrow(row.cols, rootset)
 
 
 class LinkBlock(object):
@@ -155,7 +191,7 @@ class LinkBlock(object):
         headline = csvrows[2].cols[1:]
         self.columns = tuple(self._columns(selectline, typeline, headline))
         self.path = csvrows[2].cols[0][1:].split(u".").pop(0).strip()
-        self.groups = tuple(self._groups(self.columns))
+        self.groups = tuple(self._groups())
         self.peercolumns = tuple(x for x in self.columns if not x.selector)
         self.body = csvrows[3:]
         for row in self.body:
@@ -163,23 +199,55 @@ class LinkBlock(object):
 
     def process(self, meta, data):
         """Procesa los datos"""
-        inserted = list()
+        # Preparo los grupos y descarto los que correspondan a paths
+        # no validos.
+        valid = set()
         for group in self.groups:
-            # proceso los datos en cada uno de los bloques
-            inserted.append(group.process(self.body, meta, data))
-        # Inserto el peering
-        for index, result in enumerate(inserted):
-            if result is None:
-                continue
-            # Creo un subtipo "PEERS"  del tipo insertado.
-            peermeta = result._meta.child("PEERS")
-            for col in self.peercolumns:
-                peermeta.fields[col.colname] = col.coltype
-            # Meto todos los peers creados en cada resultado.
-            if result:
-                peers = DataSet(peermeta, chain(*(r for (i, r) in enumerate(inserted) if r and (i != index))))
-                for item in result:
-                    items.PEERS = peers
+            # Preparo cada uno de los bloques
+            try:
+                group.prepare(meta)
+            except IndexError:
+                # Este error se lanza cuando el path es invalido.
+                # Como cada columna puede tener selectores combinados,
+                # es posible que al demultiplezar haya creado una
+                # combinacion invalida... asi que simplemente la ignoro.
+                pass
+            else:
+                valid.add(group)
+        # A cada grupo valido le incluyo un sub-atributo:
+        # - si solo hay dos grupos, el sub-atributo es "PEER"
+        # - si hay mas de dos grupos, el subatributo es "PEERS"
+        for group in valid:
+            group.meta.fields["PEER" if self.p2p else "PEERS"] = fields.Field()
+            group.meta.fields["POSITION"] = fields.IntField()
+        # Y ahora, voy procesando linea a linea
+        rootset = DataSet(meta, (data,))
+        for row in self.body:
+            # Creo todos los objetos y los agrego a una lista
+            inserted = list()
+            for group in valid:
+                result = group.addrow(row.cols, rootset)
+                if result:
+                    inserted.append((group.position, result))
+            # Y los cruzo para construir los peerings
+            for index, result in enumerate(inserted):
+                # Los peers son el resultado de todos los procesos excepto
+                # el que estamos evaluando.
+                # Los peers pueden ser de distintos tipos, asi que en
+                # general no puedo meterlos en un DataSet... como mucho,
+                # en un BaseSet.
+                attrib = "PEERS"
+                peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
+                peers = BaseSet(chain(*(p[1] for p in peers)))
+                if self.p2p:
+                    # en el caso punto a punto, simplifico el comportamiento
+                    # extrayendo el unico peer en lugar de tener un BaseSet.
+                    attrib = "PEER"
+                    peers = +peers
+                position, items = result
+                for item in items:
+                    setattr(item, attrib, peers)
+                    item.POSITION = position
 
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
@@ -190,13 +258,13 @@ class LinkBlock(object):
             coltype = fields.Map.resolve(coltype)
             yield Column(index, selector, coltype, colname.strip())
 
-    def _groups(self, columns):
+    def _groups(self):
         """Divide la lista de columnas en sub-listas.
 
         Cada sub-lista tiene las columnas comunes y las especificas
         de una parte del enlace.
         """
-        groups, commons, columns = list(), list(), list(columns)
+        groups, commons, columns = list(), list(), list(self.columns)
         while columns:
             # Voy dividiendo las columnas en subgrupos
             sublist = list()
@@ -215,14 +283,20 @@ class LinkBlock(object):
                     sublist.append(column)
             groups.append(sublist)
         # Extiendo cada grupo con los grupos comunes
+        self.p2p = (len(groups) == 2)
         for group in groups:
             group.extend(commons)
         # "des-multiplexo" los selectores y los convierto en ColumnLists.
         self.groups = list()
-        for group in chain(*(self._demux(group) for group in groups)):
-            path = list(x.selector for x in group if x.selector)
-            path.append(self.path)
-            yield ColumnList(path, group)
+        for pos, group in enumerate(groups):
+            for demux in self._demux(group):
+                path = list(x.selector for x in demux if x.selector)
+                path.append(self.path)
+                clist = ColumnList(path, demux)
+                # Marco la posicion del grupo dentro del enlace, para
+                # hacer mas facil de-multiplexarlos si fuera necesario.
+                clist.position = pos
+                yield clist
 
     def _demux(self, columns):
         """Desmultiplexa grupos con selectores combinados"""
@@ -286,10 +360,10 @@ if __name__ == "__main__":
 
     import unittest
     import sys
-    import collections
     import os
     import os.path
     import pprint
+    import code
 
     files   = (x for x in os.listdir(".") if x.lower().endswith(".csv"))
     files   = (f for f in files if os.path.isfile(f))
@@ -297,7 +371,7 @@ if __name__ == "__main__":
     sources = (CSVSource(open(f, "rb").read(), f) for f in files)
     blocks  = chain(*sources)
 
-    meta = RootMeta()
+    meta = Meta("", None)
     data = DataObject(meta)
     nesting = dict()
     for block in blocks:
@@ -306,9 +380,22 @@ if __name__ == "__main__":
         for item in nesting[depth]:
             item.process(meta, data)
 
-    def plain_meta(meta):
-        return {
-            'path'  : meta.path,
-            'types' : dict((x, plain_meta(y)) for x, y in meta.subtypes.iteritems()),
-            'fields': meta.fields.keys()}
-    pprint.pprint(plain_meta(meta))
+##    def plain_data(data):
+##        subfields = dict()
+##        for sf in data._meta.subtypes.keys():
+##            if sf == "PEERS":
+##                # los peers se enlazan unos a otros, tenemos que saltarnoslos
+##                # para evitar bucles.
+##                continue
+##            subfields[sf] = tuple(plain_data(x) for x in data.get(sf))
+##        return {
+##            'summary': unicode(data),
+##            'fields' : dict((i, data.get(i)) for i in data._meta.fields.keys()),
+##            'subfields': subfields,}
+##    pprint.pprint(plain_data(data))
+
+    from resolver import Resolver
+
+    data.x = Resolver("self")
+    DataSet.FREEZE = True
+    code.interact(local = data.__dict__)

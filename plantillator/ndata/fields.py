@@ -4,6 +4,7 @@
 from itertools import chain
 import sys
 import re
+import unicodedata
 
 from ip import IPAddress
 from meta import Field, BaseSet, BaseList
@@ -24,6 +25,11 @@ class StrField(Field):
         super(StrField, self).__init__(defindex)
 
     def convert(self, data):
+        # es increible el p*to excel... la "ntilde" la representa con distintos
+        # caracteres en un mismo fichero, y luego al pasarlo a unicode no
+        # hay forma de recuperarlo, ni siquiera con "normalize". Asi que
+        # cuidado con los identificadores, mejor que sean solo ASCII...
+        #return unicodedata.normalize('NFKC', unicode(data).strip()) or None
         return unicode(data).strip() or None
 
 

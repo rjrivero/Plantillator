@@ -148,10 +148,10 @@ class LogicalResolver(ChainedResolver):
         this, other = self.parent._resolve(symbol_table), self.other
         if hasattr(other, '_resolve'):
             other = other._resolve(symbol_table)
-        if hasattr(this, '__len__'):
+        if hasattr(this, '__iter__'):
             # Los operadores de comparacion no funcionan con listas. En ese
             # caso, lo que comparo es la longitud.
-            this = len(this)
+            this = len((this if hasattr(this, "__len__") else tuple(this)))
         return self.op(this, other)
 
 
@@ -251,6 +251,10 @@ if __name__ == "__main__":
             self.failUnless(self.resolve(self.r.h == 5, h=10) == False)
             self.failUnless(self.resolve(self.r.h == self.r.i, h=5, i=5) == True)
             self.failUnless(self.resolve(self.r.h == self.r.i, h=10, i=9) == False)
+            # comparar strings, comaprten algunos atributos con las listas
+            # (__len__) y no otros (__iter__)
+            self.failUnless(self.resolve(self.r.h == "pepe", h="pepe") == True)
+            self.failUnless(self.resolve(self.r.h == "pepe", h="paco") == False)
             # comparar listas
             self.failUnless(self.resolve(self.r.h == 1, h=(10,)) == True)
             self.failUnless(self.resolve(self.r.h == 5, h=(10,20)) == False)
@@ -260,6 +264,10 @@ if __name__ == "__main__":
             self.failUnless(self.resolve(self.r.h != 5, h=10) == True)
             self.failUnless(self.resolve(self.r.h != self.r.i, h=5, i=5) == False)
             self.failUnless(self.resolve(self.r.h != self.r.i, h=10, i=9) == True)
+            # comparar strings, comaprten algunos atributos con las listas
+            # (__len__) y no otros (__iter__)
+            self.failUnless(self.resolve(self.r.h != "pepe", h="pepe") == False)
+            self.failUnless(self.resolve(self.r.h != "pepe", h="paco") == True)
             # comparar listas
             self.failUnless(self.resolve(self.r.h != 1, h=(9,)) == False)
             self.failUnless(self.resolve(self.r.h != 5, h=(9, 18)) == True)

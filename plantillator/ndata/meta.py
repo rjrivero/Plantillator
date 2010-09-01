@@ -39,17 +39,19 @@ class Meta(object):
     """
     Encapsula los metadatos de un DataObject.
 
-    Tienen cuatro atributos:
+    Tiene los siguientes atributos:
         - up: Objeto Meta "padre" de ste en la jerarquia.
         - path: ID completo del objeto Meta. Es una cadena separada por ".".
         - fields: diccionario { atributo: Field() }
         - subtypes: diccionario { atributo: Meta() }
+        - summary: tupla de atributos para describir un dataobject
     """
     def __init__(self, path, parent=None, fields=None, subtypes=None):
         self.fields = fields if fields is not None else dict()
         self.subtypes = subtypes if subtypes is not None else dict()
         self.path = path
         self.up = parent
+        self.summary = tuple()
 
     def child(self, name):
         """Devuelve un tipo hijo, creandolo si es necesario"""
@@ -57,26 +59,6 @@ class Meta(object):
             return self.subtypes[name]
         except KeyError:
             return self.subtypes.setdefault(name, Meta(".".join((self.path, name)), self))
-
-
-class RootMeta(Meta):
-
-    """
-    MetaData de primer nivel
-    """
-
-    def __init__(self):
-        self.fields = dict()
-        self.subtypes = dict()
-        self.path = ""
-        self.up = None
-
-    def child(self, name):
-        """Devuelve un tipo hijo, creandolo si es necesario"""
-        try:
-            return self.subtypes[name]
-        except KeyError:
-            return self.subtypes.setdefault(name, Meta(name, None))
 
 
 class DataObject(object):
@@ -126,7 +108,11 @@ class DataObject(object):
     @property
     def HAS(self):
         return DataObject.Tester(self)
-        
+
+    def __unicode__(self):
+        summary = (self._get(x) for x in self._meta.summary)
+        return u", ".join(unicode(x) for x in summary if x is not None)
+
 
 def _matches(item, crit):
     """Comprueba si un objeto cumple un criterio.
@@ -295,7 +281,7 @@ class DataSet(object):
             raise AttributeError(attr)
         if attr == "up":
             supertype = self._meta.up
-            value = None if supertype is None else DataSet(supertype, (x.up for x in self._children))
+            value = None if supertype is None else DataSet(supertype, (up for up in (x.up for x in self._children) if up is not None))
         else:
             subtype = self._meta.subtypes.get(attr, None)
             if subtype is not None:
