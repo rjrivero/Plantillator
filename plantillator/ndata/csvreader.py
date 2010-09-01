@@ -217,18 +217,16 @@ class LinkBlock(object):
         # A cada grupo valido le incluyo un sub-atributo:
         # - si solo hay dos grupos, el sub-atributo es "PEER"
         # - si hay mas de dos grupos, el subatributo es "PEERS"
+        attrib = "PEER" if self.p2p else "PEERS"
         for group in valid:
-            group.meta.fields["PEER" if self.p2p else "PEERS"] = fields.Field()
+            group.meta.fields[attrib] = fields.Field()
             group.meta.fields["POSITION"] = fields.IntField()
         # Y ahora, voy procesando linea a linea
         rootset = DataSet(meta, (data,))
         for row in self.body:
             # Creo todos los objetos y los agrego a una lista
-            inserted = list()
-            for group in valid:
-                result = group.addrow(row.cols, rootset)
-                if result:
-                    inserted.append((group.position, result))
+            inserted = ((g.position, g.addrow(row.cols, rootset)) for g in valid)
+            inserted = tuple((p, r) for (p, r) in inserted if r)
             # Y los cruzo para construir los peerings
             for index, result in enumerate(inserted):
                 # Los peers son el resultado de todos los procesos excepto
@@ -236,18 +234,15 @@ class LinkBlock(object):
                 # Los peers pueden ser de distintos tipos, asi que en
                 # general no puedo meterlos en un DataSet... como mucho,
                 # en un BaseSet.
-                attrib = "PEERS"
                 peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
                 peers = BaseSet(chain(*(p[1] for p in peers)))
-                if self.p2p:
-                    # en el caso punto a punto, simplifico el comportamiento
-                    # extrayendo el unico peer en lugar de tener un BaseSet.
-                    attrib = "PEER"
-                    peers = +peers
-                position, items = result
-                for item in items:
-                    setattr(item, attrib, peers)
-                    item.POSITION = position
+                if peers:
+                    if self.p2p:
+                        peers = +peers
+                    position, items = result
+                    for item in items:
+                        setattr(item, attrib, peers)
+                        item.POSITION = position
 
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
@@ -322,9 +317,8 @@ class LinkBlock(object):
 
 class CSVSource(object):
 
-    def __init__(self, data, name, delimiter=";"):
+    def __init__(self, data, name, codec="utf-8", delimiter=";"):
         self.name = name
-        codec = chardet.detect(data)['encoding']
         rows = self._clean(data.splitlines(), delimiter, codec)
         self.blocks = self._split(rows)
 
@@ -364,11 +358,24 @@ if __name__ == "__main__":
     import os.path
     import pprint
     import code
+    from chardet.universaldetector import UniversalDetector
+
 
     files   = (x for x in os.listdir(".") if x.lower().endswith(".csv"))
     files   = (f for f in files if os.path.isfile(f))
     files   = (os.path.abspath(f) for f in files)
-    sources = (CSVSource(open(f, "rb").read(), f) for f in files)
+    files   = tuple((f, open(f, "rb").read()) for f in files)
+
+    # Asumo que todos los ficheros CSV han sido generados
+    # por el mismo editor, y que deben usar el mismo encoding.
+    detector = UniversalDetector()
+    for fname, data in files:
+        detector.feed(data)
+        if detector.done:
+            break
+    detector.close()
+    codec   = detector.result['encoding']
+    sources = (CSVSource(data, f, codec) for (f, data) in files)
     blocks  = chain(*sources)
 
     meta = Meta("", None)
@@ -396,6 +403,8 @@ if __name__ == "__main__":
 
     from resolver import Resolver
 
-    data.x = Resolver("self")
-    DataSet.FREEZE = True
+    symbols  = ("x", "y", "z", "X", "Y", "Z")
+    resolver = Resolver("self")
+    for s in symbols:
+        setattr(data, s, resolver)
     code.interact(local = data.__dict__)

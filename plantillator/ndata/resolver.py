@@ -72,9 +72,21 @@ class Resolver(object):
             return BinaryResolver(self, other, _is_match)
 
     def __lt__(self, other): 
+        # mini-especializacion: cuando se compara con un literal de
+        # cadena, menor significa "endswith")
+        if isinstance(other, basestring):
+            def operation(this, other):
+                return this.lower().endswith(other)
+            return LogicalResolver(self, other.lower(), operation)
         return LogicalResolver(self, other, operator.lt)
 
     def __le__(self, other):
+        # mini-especializacion: cuando se compara con un literal de
+        # cadena, menor significa "endswith")
+        if isinstance(other, basestring):
+            def operation(this, other):
+                return this.lower().endswith(other)
+            return LogicalResolver(self, other.lower(), operation)
         return LogicalResolver(self, other, operator.le)
 
     def __eq__(self, other):
@@ -84,9 +96,21 @@ class Resolver(object):
         return LogicalResolver(self, other, operator.ne)
 
     def __gt__(self, other):
+        # mini-especializacion: cuando se compara con un literal de
+        # cadena, mayor significa "startswith")
+        if isinstance(other, basestring):
+            def operation(this, other):
+                return this.lower().startswith(other)
+            return LogicalResolver(self, other.lower(), operation)
         return LogicalResolver(self, other, operator.gt)
 
     def __ge__(self, other):
+        # mini-especializacion: cuando se compara con un literal de
+        # cadena, mayor significa "startswith")
+        if isinstance(other, basestring):
+            def operation(this, other):
+                return this.lower().startswith(other)
+            return LogicalResolver(self, other.lower(), operation)
         return LogicalResolver(self, other, operator.ge)
 
     def __pos__(self):

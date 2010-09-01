@@ -246,8 +246,6 @@ class DataSet(object):
     # atributo "_children" contiene la lista de elementos del dataset,
     # y el objeto expone los metodos necesarios.
 
-    FREEZE = False
-
     def __init__(self, meta, children=None):
         self._meta = meta
         self._children = set(children) if children is not None else set()
@@ -294,8 +292,7 @@ class DataSet(object):
                     value = BaseSet(items)
                 else:
                     raise AttributeError(attr)
-        if DataSet.FREEZE:
-            setattr(self, attr, value)
+        setattr(self, attr, value)
         return value
 
     def _index(self, attr):
@@ -337,8 +334,6 @@ class DataSet(object):
         return len(self._children)
 
     def update(self, items):
-        if DataSet.FREEZE:
-            raise ValueError("DataSet frozen!")
         difference = set(items).difference(self._children)
         if difference:
             self._children.update(difference)
@@ -346,16 +341,12 @@ class DataSet(object):
                 index.extend(difference)
 
     def add(self, item):
-        if DataSet.FREEZE:
-            raise ValueError("DataSet frozen!")
         if item not in self._children:
             self._children.add(item)
             for index in self._indexes.values():
                 index.append(item)
 
     def pop(self):
-        if DataSet.FREEZE:
-            raise ValueError("DataSet frozen!")
         item = self._children.pop()
         for index in self._indexes.values():
             index.pop(item)
@@ -372,8 +363,7 @@ class DataSet(object):
             self._asc = asc
         def __getattr__(self, attr):
             value = self._dataset._sort(attr, self._asc)
-            if DataSet.FREEZE:
-                setattr(self, attr, value)
+            setattr(self, attr, value)
             return value
 
     @property
@@ -642,15 +632,6 @@ if __name__ == "__main__":
         def testSortDesc(self):
             result = reversed(tuple(x.b for x in self.d1.subfield.SORTDESC.b if x.HAS.b))
             self.failUnless(tuple(result) == ("aabb", "ccdd", "eeff"))
-
-        def testFrozen(self):
-            popped = self.d1.subfield.pop()
-            self.d1.subfield.add(popped)
-            popped = self.d1.subfield.pop()
-            DataSet.FREEZE = True
-            self.assertRaises(ValueError, self.d1.subfield.pop)
-            self.assertRaises(ValueError, self.d1.subfield.add, popped)
-            DataSet.FREEZE = False
 
         def testBaseSetPlain(self):
             """Me aseguro de que los BaseSets se 'picklean' bien"""
