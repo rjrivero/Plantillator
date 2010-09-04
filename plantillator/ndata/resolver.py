@@ -38,38 +38,38 @@ class Resolver(object):
     def __mod__(self, other):
         return BinaryResolver(self, other, operator.mod)
 
-    def _in(self, *arg):
+    def IN(self, *arg):
         def is_in(self, other):
             return self in other
         if len(arg) == 1 and (hasattr(arg[0], '_resolve') or hasattr(arg[0], '__contains__')):
             arg = arg[0]
         return BinaryResolver(self, arg, is_in)
 
-    def _not_in(self, *arg):
-        def is_not_in(self, other):
+    def NOTIN(self, *arg):
+        def isNOTIN(self, other):
             return self not in other
         if len(arg) == 1 and (hasattr(arg[0], '_resolve') or hasattr(arg[0], '__contains__')):
             arg = arg[0]
-        return BinaryResolver(self, arg, is_not_in)
+        return BinaryResolver(self, arg, isNOTIN)
 
-    def _is(self, other):
+    def IS(self, other):
         return BinaryResolver(self, other, operator.is_)
 
-    def _is_not(self, other):
+    def ISNOT(self, other):
         return BinaryResolver(self, other, operator.is_not)
 
-    def _match(self, other):
+    def MATCH(self, other):
         # optimizacion: pre-compilo las regexps que me dan como texto.
         if isinstance(other, basestring):
             regexp = re.compile(other)
-            def _is_match(self):
+            def is_match(self):
                 return bool(regexp.search(self))
-            return UnaryResolver(self, _is_match)
+            return UnaryResolver(self, is_match)
         else:
-            def _is_match(self, other):
+            def is_match(self, other):
                 regexp = re.compile(other)
                 return bool(regexp.search(self))
-            return BinaryResolver(self, other, _is_match)
+            return BinaryResolver(self, other, is_match)
 
     def __lt__(self, other): 
         # mini-especializacion: cuando se compara con un literal de
@@ -237,38 +237,38 @@ if __name__ == "__main__":
             self.failUnless(self.resolve(+self.r.d, d=-5) == -5)
 
         def testIn(self):
-            self.failUnless(self.resolve(self.r.e._in (1, 2, 3), e=5) == False)
-            self.failUnless(self.resolve(self.r.e._in (1, 2, 3), e=1) == True)
-            self.failUnless(self.resolve(self.r.e._in ((1, 2, 3)), e=6) == False)
-            self.failUnless(self.resolve(self.r.e._in ((1, 2, 3)), e=2) == True)
-            self.failUnless(self.resolve(self.r.e._in (self.r.f), e=5, f=(1,2,3)) == False)
-            self.failUnless(self.resolve(self.r.e._in (self.r.f), e=1, f=(1,2,3)) == True)
+            self.failUnless(self.resolve(self.r.e.IN (1, 2, 3), e=5) == False)
+            self.failUnless(self.resolve(self.r.e.IN (1, 2, 3), e=1) == True)
+            self.failUnless(self.resolve(self.r.e.IN ((1, 2, 3)), e=6) == False)
+            self.failUnless(self.resolve(self.r.e.IN ((1, 2, 3)), e=2) == True)
+            self.failUnless(self.resolve(self.r.e.IN (self.r.f), e=5, f=(1,2,3)) == False)
+            self.failUnless(self.resolve(self.r.e.IN (self.r.f), e=1, f=(1,2,3)) == True)
 
         def testNotIn(self):
-            self.failUnless(self.resolve(self.r.e._not_in (1, 2, 3), e=5) == True)
-            self.failUnless(self.resolve(self.r.e._not_in (1, 2, 3), e=1) == False)
-            self.failUnless(self.resolve(self.r.e._not_in ((1, 2, 3)), e=6) == True)
-            self.failUnless(self.resolve(self.r.e._not_in ((1, 2, 3)), e=2) == False)
-            self.failUnless(self.resolve(self.r.e._not_in (self.r.f), e=6, f=(1,2,3)) == True)
-            self.failUnless(self.resolve(self.r.e._not_in (self.r.f), e=2, f=(1,2,3)) == False)
+            self.failUnless(self.resolve(self.r.e.NOTIN (1, 2, 3), e=5) == True)
+            self.failUnless(self.resolve(self.r.e.NOTIN (1, 2, 3), e=1) == False)
+            self.failUnless(self.resolve(self.r.e.NOTIN ((1, 2, 3)), e=6) == True)
+            self.failUnless(self.resolve(self.r.e.NOTIN ((1, 2, 3)), e=2) == False)
+            self.failUnless(self.resolve(self.r.e.NOTIN (self.r.f), e=6, f=(1,2,3)) == True)
+            self.failUnless(self.resolve(self.r.e.NOTIN (self.r.f), e=2, f=(1,2,3)) == False)
 
         def testIs(self):
-            self.failUnless(self.resolve(self.r.f._is(None), f=None) == True)
-            self.failUnless(self.resolve(self.r.f._is(None), f=0) == False)
-            self.failUnless(self.resolve(self.r.f._is(self.r.g), f=None, g=None) == True)
-            self.failUnless(self.resolve(self.r.f._is(self.r.g), f=0, g=None) == False)
+            self.failUnless(self.resolve(self.r.f.IS(None), f=None) == True)
+            self.failUnless(self.resolve(self.r.f.IS(None), f=0) == False)
+            self.failUnless(self.resolve(self.r.f.IS(self.r.g), f=None, g=None) == True)
+            self.failUnless(self.resolve(self.r.f.IS(self.r.g), f=0, g=None) == False)
 
         def testIsNot(self):
-            self.failUnless(self.resolve(self.r.f._is_not(None), f=None) == False)
-            self.failUnless(self.resolve(self.r.f._is_not(None), f=0) == True)
-            self.failUnless(self.resolve(self.r.f._is_not(self.r.g), f=None, g=None) == False)
-            self.failUnless(self.resolve(self.r.f._is_not(self.r.g), f=0, g=None) == True)
+            self.failUnless(self.resolve(self.r.f.ISNOT(None), f=None) == False)
+            self.failUnless(self.resolve(self.r.f.ISNOT(None), f=0) == True)
+            self.failUnless(self.resolve(self.r.f.ISNOT(self.r.g), f=None, g=None) == False)
+            self.failUnless(self.resolve(self.r.f.ISNOT(self.r.g), f=0, g=None) == True)
 
         def testMatch(self):
-            self.failUnless(self.resolve(self.r.g._match("n?ena"), g="antena") == True)
-            self.failUnless(self.resolve(self.r.g._match("pp"), g="luisa") == False)
-            self.failUnless(self.resolve(self.r.g._match(self.r.h), g="antena", h="n?ena") == True)
-            self.failUnless(self.resolve(self.r.g._match(self.r.h), g="luisa", h="pp") == False)
+            self.failUnless(self.resolve(self.r.g.MATCH("n?ena"), g="antena") == True)
+            self.failUnless(self.resolve(self.r.g.MATCH("pp"), g="luisa") == False)
+            self.failUnless(self.resolve(self.r.g.MATCH(self.r.h), g="antena", h="n?ena") == True)
+            self.failUnless(self.resolve(self.r.g.MATCH(self.r.h), g="luisa", h="pp") == False)
 
         def testEq(self):
             self.failUnless(self.resolve(self.r.h == 1, h=1) == True)
