@@ -10,22 +10,16 @@ class Field(object):
     """
     Describe uno de los campos de un DataObject.
 
-    Tiene los siguientes atributos:
-        - defindex: Si el campo es indexable, es el valor por defecto
-            que hay que darle al indice si un objeto no tiene el campo.
-            Si el campo no es indexable, es None.
-            Solo se pueden indexar campos que no sean dinamicos.
-
-    Y los siguientes metodos
+    Tiene los siguientes metodos
         - convert: Un Callable que lee el campo de un string.
         - dynamic: Un Callable que calcula el valor del campo.
 
     "dynamic" solo esta definido para los campos dinamicos. Se invoca
     pasandole como parametro el objeto, y devuelve el valor del campo.
     """
-    
-    def __init__(self, defindex=None):
-        self.defindex = defindex
+
+    def __init__(self, indexable=True):
+        self.indexable = indexable
 
     def convert(self, data):
         return data
@@ -98,16 +92,28 @@ class DataObject(object):
             return default
 
     class Tester(object):
-        def __init__(self, data):
-            self._data = data
         def __getattr__(self, attr):
             if attr.startswith("_"):
                 raise AttributeError(attr)
             return attr in self._data
+        def __init__(self, data, pos=True):
+            self._data = data
+
+    class TesterNot(object):
+        def __getattr__(self, attr):
+            if attr.startswith("_"):
+                raise AttributeError(attr)
+            return attr not in self._data
+        def __init__(self, data, pos=True):
+            self._data = data
 
     @property
     def HAS(self):
         return DataObject.Tester(self)
+
+    @property
+    def HASNOT(self):
+        return DataObject.TesterNot(self)
 
     def __unicode__(self):
         summary = (self._get(x) for x in self._meta.summary)
@@ -153,13 +159,39 @@ class BaseList(tuple):
         return BaseList(chain(self, other))
 
 
+class Linear(object):
+
+    """Realiza una busqueda lineal sobre un DataSet"""
+
+    def __init__(self, items, attr):
+        self._items = items
+        self._attr = attr
+
+    def __eq__(self, index):
+        return tuple(x for x in self._items if x.get(self._attr) == index)
+
+    def __ne__(self, index):
+        return tuple(x for x in self._items if x.get(self._attr) != index)
+
+    def _none(self):
+        return tuple(x for x in self._items if x.get(self._attr) is None)
+
+    def _any(self):
+        return tuple(x for x in self._items if x.get(self._attr) is not None)
+
+    def _sorted(self, asc=True):
+        def key(item):
+            return item.get(self._attr)
+        return tuple(sorted(self._items, key=key, reverse=(not asc)))
+
+
 class IndexItem(object):
     # Cosa curiosa... antes IndexItem era una clase derivada de
     # namedtuple, pero lo he tenido que cambiar porque no se estaba
     # llamando a __cmp__
     __slots__ = ("key", "item")
-    def __init__(self, item, attr, defindex):
-        self.key = item._get(attr, defindex)
+    def __init__(self, key, item):
+        self.key = key
         self.item = item
     def __cmp__(self, other):
         return cmp(self.key, other.key)
@@ -178,57 +210,39 @@ class Index(object):
 
     """Mantiene un indice sobre una columna dada del DataSet"""
 
-    def __init__(self, meta, attr, defindex, items=None):
-        self.meta = meta
-        self.items = list(sorted(IndexItem(x, attr, defindex) for x in items)) if items else list()
-        self.attr = attr
-        self.defindex = defindex
+    def __init__(self, items, attr):
+        # Separo los objetos en dos grupos: los que tienen el
+        # atributo, y los que no.
+        values = tuple(x.get(attr) for x in items)
+        self._empty = tuple(y for (x, y) in zip(values, items) if x is None)
+        self._full  = tuple(sorted(IndexItem(x, y) for (x, y) in zip(values, items) if x is not None))
 
     def _margins(self, index):
         item  = IndexKey(index)
-        first = bisect.bisect_left(self.items, item)
-        last  = bisect.bisect_right(self.items, item)
+        first = bisect.bisect_left(self._full, item)
+        last  = bisect.bisect_right(self._full, item)
         return (first, last)
 
-    def pop(self, item):
-        index = item._get(self.attr, self.defindex)
+    def _eq(self, index):
         first, last = self._margins(index)
-        while first < last:
-            if self.items[first].item is item:
-                del(self.items[first])
-                return
-            first += 1
+        return tuple(x.item for x in self._full[first:last])
 
-    def append(self, item):
-        bisect.insort(self.items, IndexItem(item, self.attr, self.defindex))
-
-    def extend(self, items):
-        for item in items:
-            self.append(item)
-
-    def __eq__(self, index):
+    def _ne(self, index):
         first, last = self._margins(index)
-        return DataSet(self.meta, (x.item for x in self.items[first:last]))
+        return tuple(x.item for x in chain(self._full[:first], self._full[last:]))
 
-    def __ne__(self, index):
-        first, last = self._margins(index)
-        return DataSet(self.meta, (x.item for x in chain(self.items[:first], self.items[last:])))
+    def _none(self):
+        return self._empty
 
-    def __lt__(self, index):
-        first = bisect.bisect_left(self.items, IndexKey(index))
-        return DataSet(self.meta, (x.item for x in self.items[:first]))
+    def _any(self):
+        return tuple(x.item for x in self._full)
 
-    def __le__(self, index):
-        last = bisect.bisect_right(self.items, IndexKey(index))
-        return DataSet(self.meta, (x.item for x in self.items[:last]))
-
-    def __ge__(self, index):
-        first = bisect.bisect_left(self.items, IndexKey(index))
-        return DataSet(self.meta, (x.item for x in self.items[first:]))
-
-    def __gt__(self, index):
-        last = bisect.bisect_right(self.items, IndexKey(index))
-        return DataSet(self.meta, (x.item for x in self.items[last:]))
+    def _sorted(self, asc=True):
+        if asc:
+            items = chain(self._empty, (x.item for x in self._full))
+        else:
+            items = chain((x.item for x in reversed(self._full)), self._empty)
+        return tuple(items)
 
 
 class DataSet(object):
@@ -236,6 +250,12 @@ class DataSet(object):
     """
     Conjunto de objetos DataObject con un _meta comun.
     """
+
+    class NONE(object):
+        pass
+
+    class ANY(object):
+        pass
 
     # Increible... No se por que estupida razon, si heredo "DataSet" de
     # "set" o de "BaseSet", luego pickle no funciona: Ni siquiera llama
@@ -246,10 +266,11 @@ class DataSet(object):
     # atributo "_children" contiene la lista de elementos del dataset,
     # y el objeto expone los metodos necesarios.
 
-    def __init__(self, meta, children=None):
+    def __init__(self, meta, children=None, indexable=True):
         self._meta = meta
         self._children = set(children) if children is not None else set()
         self._indexes = dict()
+        self._indexable = indexable
 
     def __getstate__(self):
         """No permito que se haga pickle de los indices"""
@@ -260,9 +281,37 @@ class DataSet(object):
         self._meta = state[0]
         self._children = state[1]
         self._indexes = dict()
+        self._indexable = True
 
-    def __call__(self, *crit):
-        return DataSet(self._meta, (x for x in self._children if _matches(x, crit)))
+    def __call__(self, *crit, **shortcut):
+        # Mini-especializacion: es muy habitual buscar un objeto
+        # en un dataset a partir de su indice, asi que especializo
+        # el filtro: si el unico parametro es un keyword-arg, se
+        # utiliza el indice para hacer la busqueda:
+        # - Valor == DataSet.NONE: se devuelven elementos sin el atributo.
+        # - Valor == DataSet.ANY: se devuelven elementos con el atributo.
+        # - Valor == cualquier otra cosa: se busca el valor.
+        if shortcut:
+            # Solo admitimos un unico criterio, y ademas debe ser sobre
+            # un campo indexable.
+            key, val = shortcut.popitem()
+            index = self._index(key)
+            assert(index and not crit and not shortcut)
+            # Tres posibles casos: NONE, ANY y un indice a buscar
+            if val is DataSet.NONE:
+                items = index._none()
+            elif val is DataSet.ANY:
+                items = index._any()
+            else:
+                items = index._eq(val)
+        else:
+            # Para los indices compuestos, vamos al caso general.
+            items = tuple(x for x in self._children if _matches(x, crit))
+        if len(items) == len(self._children):
+            # si el resultado del filtro es el dataset entero,
+            # devuelvo el propio dataset para aprovechar los indices.
+            return self
+        return DataSet(self._meta, items, False)
 
     def __getattr__(self, attr):
         """Obtiene el atributo elegido, en funcion de su tipo:
@@ -279,12 +328,24 @@ class DataSet(object):
             raise AttributeError(attr)
         if attr == "up":
             supertype = self._meta.up
-            value = None if supertype is None else DataSet(supertype, (up for up in (x.up for x in self._children) if up is not None))
+            if supertype is None:
+                value = None
+            else:
+                items = (up for up in (x.up for x in self._children) if up is not None)
+                value = DataSet(supertype, items, self._indexable)
         else:
             subtype = self._meta.subtypes.get(attr, None)
             if subtype is not None:
-                items = (x for x in (y._get(attr) for y in self._children) if x is not None)
-                value = DataSet(subtype, chain(*items))
+                items = tuple(x for x in (y._get(attr) for y in self._children) if x is not None)
+                # si el resultado es un unico DataSet, lo devuelvo
+                # directamente, y asi puedo reutilizar el indice.
+                # si son varios DataSets, lo que devuelvo es un agregado
+                # efimero que solo tiene sentido indexar si este objeto
+                # a su vez no es efimero.
+                if len(items) == 1:
+                    value = items[0]
+                else:
+                    value = DataSet(subtype, chain(*items), self._indexable)
             else:
                 field = self._meta.fields.get(attr, None)
                 if field is not None:
@@ -301,10 +362,11 @@ class DataSet(object):
             return self._indexes[attr]
         except KeyError:
             field = self._meta.fields.get(attr, None)
-            if not field or field.defindex is None:
+            if not field or not field.indexable:
                 index = None
             else:
-                index = Index(self._meta, attr, field.defindex, self._children)
+                indextype = Index if self._indexable else Linear
+                index = indextype(self._children, attr)
             return self._indexes.setdefault(attr, index)
 
     class Indexer(object):
@@ -334,37 +396,24 @@ class DataSet(object):
         return len(self._children)
 
     def update(self, items):
-        difference = set(items).difference(self._children)
-        if difference:
-            self._children.update(difference)
-            for index in self._indexes.values():
-                index.extend(difference)
+        assert(not self._indexes)
+        self._children.update(items)
 
     def add(self, item):
-        if item not in self._children:
-            self._children.add(item)
-            for index in self._indexes.values():
-                index.append(item)
+        assert(not self._indexes)
+        self._children.add(item)
 
     def pop(self):
+        assert(not self._indexes)
         item = self._children.pop()
-        for index in self._indexes.values():
-            index.pop(item)
-        return item
 
-    def _sort(self, attr, asc=True):
-        def key(item):
-            return item.get(attr)
-        return tuple(sorted(self._children, key=key, reverse=(not asc)))
-        
     class Sorter(object):
         def __init__(self, dataset, asc=True):
             self._dataset = dataset
             self._asc = asc
         def __getattr__(self, attr):
-            value = self._dataset._sort(attr, self._asc)
-            setattr(self, attr, value)
-            return value
+            value = self._dataset._index(attr)._sorted(self._asc)
+            return self.__dict__.setdefault(attr, value)
 
     @property
     def SORTBY(self):
@@ -447,6 +496,12 @@ if __name__ == "__main__":
             self.failUnless(self.d1.HAS.x)
             self.failIf(self.d1.HAS.y)
             
+        def testDataHasNot(self):
+            """Propiedad 'hasnot'."""
+            self.d1.x = 10
+            self.failUnless(self.d1.HASNOT.y)
+            self.failIf(self.d1.HASNOT.x)
+            
         def testDataGet(self):
             """Funcion get"""
             self.d1.x = -5
@@ -482,9 +537,9 @@ if __name__ == "__main__":
                 }
             self.m2 = self.m1.child("subfield")
             self.m2.fields = {
-                    'a': Field(defindex=-sys.maxint),
-                    'b': Field(defindex=""),
-                    'c': Field(),
+                    'a': Field(),
+                    'b': Field(),
+                    'c': Field(indexable=False),
                 }
 
             self.d1 = DataObject(self.m1, None)
@@ -496,12 +551,14 @@ if __name__ == "__main__":
             d7 = DataObject(self.m2, self.d2)
             d8 = DataObject(self.m2, self.d2)
             empty1 = DataObject(self.m2, self.d1) 
-            empty2 = DataObject(self.m2, self.d2) 
-            self.d1.subfield = DataSet(self.m2, (d3, d4, d5, empty1))
-            self.d2.subfield = DataSet(self.m2, (d6, d7, d8, empty2))
+            empty2 = DataObject(self.m2, self.d1) 
+            self.d1.subfield = DataSet(self.m2, (d3, d4, d5, empty1, empty2))
+            self.d2.subfield = DataSet(self.m2, (d6, d7, d8))
             self.all = DataSet(self.m1, (self.d1, self.d2))
             d3.a, d4.a, d5.a = 3, 4, 5
             d3.b, d4.b, d5.b = "aabb", "ccdd", "eeff"
+            empty1.a = 6
+            empty2.b = "gghh"
             d3.c, d4.c, d5.c = BaseSet((1,2)), BaseSet((2,3)), BaseSet((3,4))
             d6.a, d7.a, d8.a = 6, 7, 8
             d6.b, d7.b, d8.b = "gghh", "iijj", "kkll"
@@ -514,72 +571,40 @@ if __name__ == "__main__":
         def testIndexMissing(self):
             indexA = self.d1.subfield.INDEX.a
             indexB = self.d1.subfield.INDEX.b
-            self.failUnless(len(indexA == -100) == 0)
-            self.failUnless(len(indexB == "ghij") == 0)
-            
+            self.failUnless(len(indexA._eq(-100)) == 0)
+            self.failUnless(len(indexB._eq("ghij")) == 0)
+
         def testIndexEq(self):
             indexA = self.d1.subfield.INDEX.a
             indexB = self.d1.subfield.INDEX.b
-            self.failUnless(+(indexA == 4).a == 4)
-            self.failUnless(+(indexB == "eeff").b == "eeff")
+            self.failUnless(indexA._eq(4)[0].a == 4)
+            self.failUnless(indexB._eq("eeff")[0].b == "eeff")
 
         def testIndexNe(self):
             indexA = self.d1.subfield.INDEX.a
             indexB = self.d1.subfield.INDEX.b
-            self.failUnless(set((indexA != 4).a) == set((3,5)))
-            self.failUnless(set((indexB != "eeff").b) == set(("aabb", "ccdd")))
+            self.failUnless(set(x.a for x in indexA._ne(4)) == set((3,5,6)))
+            self.failUnless(set(x.b for x in indexB._ne("eeff")) == set(("aabb", "ccdd", "gghh")))
 
-        def testIndexGt(self):
+        def testIndexNone(self):
             indexA = self.d1.subfield.INDEX.a
             indexB = self.d1.subfield.INDEX.b
-            self.failUnless(set((indexA > 4).a) == set((5,)))
-            self.failUnless(set((indexB > "aabb").b) == set(("eeff", "ccdd")))
+            self.failUnless(indexA._none()[0].b == "gghh")
+            self.failUnless(indexB._none()[0].a == 6)
 
-        def testIndexGe(self):
+        def testIndexAny(self):
             indexA = self.d1.subfield.INDEX.a
             indexB = self.d1.subfield.INDEX.b
-            self.failUnless(set((indexA >= 4).a) == set((4,5)))
-            self.failUnless(set((indexB >= "aabb").b) == set(("aabb", "ccdd", "eeff")))
-
-        def testIndexLt(self):
-            indexA = self.d1.subfield.INDEX.a
-            indexB = self.d1.subfield.INDEX.b
-            self.failUnless(set((indexA < 5).a) == set((3,4)))
-            self.failUnless(set((indexB < "ccdd").b) == set(("aabb",)))
-
-        def testIndexLe(self):
-            indexA = self.d1.subfield.INDEX.a
-            indexB = self.d1.subfield.INDEX.b
-            self.failUnless(set((indexA <= 5).a) == set((3,4,5)))
-            self.failUnless(set((indexB <= "ccdd").b) == set(("aabb", "ccdd")))
-
-        def testIndexPop(self):
-            indexA = self.d1.subfield.INDEX.a
-            self.d1.subfield.pop()
-            remaining = self.d1.subfield.a
-            self.failUnless(set((indexA <= 1000).a) == remaining)
-            
-        def testIndexAdd(self):
-            anew = DataObject(self.m2, self.d2)
-            anew.a = 10
-            self.d1.subfield.add(anew)
-            indexA = self.d1.subfield.INDEX.a
-            self.failUnless(+(indexA == 10).a == 10)
-            
-        def testIndexUpdate(self):
-            anew1 = DataObject(self.m2, self.d2)
-            anew2 = DataObject(self.m2, self.d2)
-            anew1.a, anew2.a = 10, 11
-            self.d1.subfield.update((anew1, anew2))
-            indexA = self.d1.subfield.INDEX.a
-            self.failUnless(set((indexA >= 10).a) == set((10,11)))
+            self.failUnless(set(x.a for x in indexA._any()) == set((3,4,5,6)))
+            self.failUnless(set(x.b for x in indexB._any()) == set(("aabb", "ccdd", "eeff", "gghh")))
             
         def testFilter(self):
             x = resolver.Resolver("self")
             expected = {"ccdd":0, "eeff":0}
             for item in self.d1.subfield(x.a >= 4):
-                self.failUnless(item.b in expected)
-                del(expected[item.b])
+                if item.HAS.b:
+                    self.failUnless(item.b in expected )
+                    del(expected[item.b])
 
         def testEmptyFilter(self):
             x = resolver.Resolver("self")
@@ -590,11 +615,11 @@ if __name__ == "__main__":
             x = resolver.Resolver("self")
             items = self.d1.subfield(x.a > 0, x.b._match("bb"))
             self.failUnless(len(items) == 1)
-            self.failUnless(items.pop().a == 3)
+            self.failUnless(+(items.a) == 3)
 
         def testAttrib(self):
             items = self.d1.subfield.a
-            self.failUnless(items == set((3, 4, 5)))
+            self.failUnless(items == set((3, 4, 5, 6)))
 
         def testSubtypeAttrib(self):
             items = self.all.subfield
@@ -603,7 +628,7 @@ if __name__ == "__main__":
         def testUp(self):
             first = self.d1.subfield.up
             self.failUnless(len(first) == 1)
-            self.failUnless(first.pop() is self.d1)
+            self.failUnless(+first is self.d1)
 
         def testBothUp(self):
             both = self.all.subfield.up
@@ -623,15 +648,15 @@ if __name__ == "__main__":
 
         def testSortBy(self):
             result = tuple(x.b for x in self.d1.subfield.SORTBY.b if x.HAS.b)
-            self.failUnless(result == ("aabb", "ccdd", "eeff"))
+            self.failUnless(result == ("aabb", "ccdd", "eeff", "gghh"))
 
         def testSortAsc(self):
             result = tuple(x.b for x in self.d1.subfield.SORTASC.b if x.HAS.b)
-            self.failUnless(result == ("aabb", "ccdd", "eeff"))
+            self.failUnless(result == ("aabb", "ccdd", "eeff", "gghh"))
 
         def testSortDesc(self):
             result = reversed(tuple(x.b for x in self.d1.subfield.SORTDESC.b if x.HAS.b))
-            self.failUnless(tuple(result) == ("aabb", "ccdd", "eeff"))
+            self.failUnless(tuple(result) == ("aabb", "ccdd", "eeff", "gghh"))
 
         def testBaseSetPlain(self):
             """Me aseguro de que los BaseSets se 'picklean' bien"""

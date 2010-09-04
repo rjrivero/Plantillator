@@ -116,7 +116,7 @@ class ColumnList(object):
             while selects and selects[0].selector == step:
                 select = selects.pop(0)
                 def search(dset, vector):
-                    return (dset._index(select.colname) == vector.next())
+                    return dset(**{str(select.colname): vector.next()})
                 stack.append(search)
         self.stack = stack
 
@@ -407,4 +407,6 @@ if __name__ == "__main__":
     resolver = Resolver("self")
     for s in symbols:
         setattr(data, s, resolver)
+    data.NONE = DataSet.NONE
+    data.ANY = DataSet.ANY
     code.interact(local = data.__dict__)

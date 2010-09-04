@@ -2,7 +2,6 @@
 
 
 from itertools import chain
-import sys
 import re
 import unicodedata
 
@@ -12,17 +11,11 @@ from meta import Field, BaseSet, BaseList
 
 class IntField(Field):
 
-    def __init__(self, defindex=-sys.maxint):
-        super(IntField, self).__init__(defindex)
-
     def convert(self, data):
         return int(data) if data.strip() else None
 
 
 class StrField(Field):
-
-    def __init__(self, defindex=u""):
-        super(StrField, self).__init__(defindex)
 
     def convert(self, data):
         # es increible el p*to excel... la "ntilde" la representa con distintos
@@ -35,9 +28,6 @@ class StrField(Field):
 
 class IPField(Field):
 
-    def __init__(self, defindex=IPAddress("0.0.0.0/0")):
-        super(IPField, self).__init__(defindex)
-
     def convert(self, data):
         if not data.strip():
             return None
@@ -49,7 +39,7 @@ class IPField(Field):
 class ListField(Field):
 
     def __init__(self, nestedfld):
-        super(ListField, self).__init__()
+        super(ListField, self).__init__(indexable=False)
         self.nestedfld = nestedfld
 
     def convert(self, data):
@@ -66,7 +56,7 @@ class ListField(Field):
 class SetField(Field):
 
     def __init__(self, nestedfld):
-        super(SetField, self).__init__()
+        super(SetField, self).__init__(indexable=False)
         self.nestedfld = nestedfld
 
     def convert(self, data):
@@ -85,7 +75,7 @@ class RangeField(Field):
     _RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
 
     def __init__(self, nestedfld):
-        super(RangeField, self).__init__()
+        super(RangeField, self).__init__(indexable=False)
         self.nestedfld = nestedfld
 
     def convert(self, data):
