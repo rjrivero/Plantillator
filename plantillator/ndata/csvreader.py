@@ -1,10 +1,11 @@
 #/usr/bin/env python
 
-
 import csv
-import chardet
+import os
+import os.path
 from itertools import count, chain
 from copy import copy
+from chardet.universaldetector import UniversalDetector
 
 import fields
 from meta import Meta, DataObject, DataSet, BaseSet
@@ -161,7 +162,7 @@ class TableBlock(ColumnList):
     def _columns(self, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, coltype, colname in zip(count(1), typeline, headline):
-            if not coltype or not colname or colname.startswith(u"*"):
+            if not coltype or not colname or colname.startswith(u"!"):
                 continue
             selector, nameparts = None, colname.split(u".")
             if len(nameparts) > 1:
@@ -247,7 +248,7 @@ class LinkBlock(object):
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, selector, coltype, colname in zip(count(1), selectline, typeline, headline):
-            if not coltype or not colname or colname.strip() == "*":
+            if not coltype or not colname or colname.startswith("!") or colname.strip() == "*":
                 continue
             selector = selector.strip() or None
             coltype = fields.Map.resolve(coltype)
@@ -350,42 +351,89 @@ class CSVSource(object):
         return iter(self.blocks)
 
 
+class CSVShelf(object):
+
+    """Libreria de ficheros CSV"""
+
+    FILES   = "data_files"
+    DATA    = "data_root"
+    VERSION = "data_version"
+    CURRENT = 1
+
+    def __init__(self, path, datashelf):
+        """Busca todos los ficheros CSV en el path.
+
+        Compara la lista de ficheros encontrados con la
+        que hay en el shelf.
+
+        - Si la version del objeto en el shelf es menor que
+          la actual, carga los datos y actualiza el shelf.
+        - Si la lista de ficheros no coincide, carga los
+          datos y actualiza el shelf.
+        - Si algun fichero es mas reciente en disco que
+          en el shelf, carga los datos y actualiza el
+          shelf.
+        """
+        files = dict(chain(*(self._findcsv(dirname) for dirname in path)))
+        try:
+            if datashelf[CSVShelf.VERSION] == CSVShelf.CURRENT:
+                sfiles = datashelf[CSVShelf.FILES]
+                fnames = set(files.keys())
+                snames = set(sfiles.keys())
+                if not fnames.symmetric_difference(snames):
+                    if all(files[name] <= sfiles[name] for name in fnames):
+                        # Todo correcto, los datos estan cargados
+                        self.data = datashelf[CSVShelf.DATA]
+                        return
+        except KeyError:
+            pass
+        self._update(files, datashelf)
+
+    def _findcsv(self, dirname):
+        files = (x for x in os.listdir(dirname) if x.lower().endswith(".csv"))
+        files = (f for f in files if os.path.isfile(f))
+        return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
+
+    def _update(self, files, datashelf):
+        fdata = tuple((f, open(f, "rb").read()) for f in files.keys())
+        # Asumo que todos los ficheros CSV han sido generados
+        # por el mismo editor, y que deben usar el mismo encoding.
+        detector = UniversalDetector()
+        for fname, data in fdata:
+            detector.feed(data)
+            if detector.done:
+                break
+        detector.close()
+        codec   = detector.result['encoding']
+        sources = (CSVSource(data, f, codec) for (f, data) in fdata)
+        blocks  = chain(*sources)
+        meta = Meta("", None)
+        data = DataObject(meta)
+        nesting = dict()
+        for block in blocks:
+            nesting.setdefault(block.depth, list()).append(block)
+        for depth in sorted(nesting.keys()):
+            for item in nesting[depth]:
+                item.process(meta, data)
+        # OK, todo cargado... ahora guardo los datos en el shelf.
+        self.data = data
+        datashelf[CSVShelf.VERSION] = CSVShelf.CURRENT
+        datashelf[CSVShelf.DATA] = data
+        datashelf[CSVShelf.FILES] = files
+        datashelf.sync()
+
+
 if __name__ == "__main__":
 
-    import unittest
-    import sys
-    import os
-    import os.path
     import pprint
     import code
-    from chardet.universaldetector import UniversalDetector
+    import shelve
 
+    from resolver import Resolver
 
-    files   = (x for x in os.listdir(".") if x.lower().endswith(".csv"))
-    files   = (f for f in files if os.path.isfile(f))
-    files   = (os.path.abspath(f) for f in files)
-    files   = tuple((f, open(f, "rb").read()) for f in files)
-
-    # Asumo que todos los ficheros CSV han sido generados
-    # por el mismo editor, y que deben usar el mismo encoding.
-    detector = UniversalDetector()
-    for fname, data in files:
-        detector.feed(data)
-        if detector.done:
-            break
-    detector.close()
-    codec   = detector.result['encoding']
-    sources = (CSVSource(data, f, codec) for (f, data) in files)
-    blocks  = chain(*sources)
-
-    meta = Meta("", None)
-    data = DataObject(meta)
-    nesting = dict()
-    for block in blocks:
-        nesting.setdefault(block.depth, list()).append(block)
-    for depth in sorted(nesting.keys()):
-        for item in nesting[depth]:
-            item.process(meta, data)
+    shelf = shelve.open("data.shelf", protocol=2)
+    data  = CSVShelf((".",), shelf).data
+    shelf.close()
 
 ##    def plain_data(data):
 ##        subfields = dict()
@@ -401,7 +449,6 @@ if __name__ == "__main__":
 ##            'subfields': subfields,}
 ##    pprint.pprint(plain_data(data))
 
-    from resolver import Resolver
 
     symbols  = ("x", "y", "z", "X", "Y", "Z")
     resolver = Resolver("self")
