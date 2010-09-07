@@ -2,7 +2,39 @@
 
 
 import bisect
+import sys
+import traceback
 from itertools import chain
+
+
+class DataException(Exception):
+
+    """
+    Encapsula las excepciones lanzadas durante el analisis de una fuente
+    de datos.
+
+    - self.source: identificador de la fuente de datos que se analiza.
+    - self.index: indice (n. de linea, generalmente) del registro erroneo.
+    - self.exc_info: tupla (tipo, excepcion, traceback)
+    """
+
+    def __init__(self, source, index, exc_info):
+        super(DataException, self).__init__()
+        self.source = source
+        self.index = index
+        self.exc_info = exc_info
+
+    def __unicode__(self):
+        return u"".join(chain(
+            (u"DataException: Error en %s [%s]\n" % (unicode(self.source), unicode(self.index)),),
+            traceback.format_exception(*(self.exc_info))
+            ))
+
+    def __str__(self):
+        return str(unicode(self))
+
+    def __repr__(self):
+        return "DataException(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
 
 
 class Field(object):
@@ -10,7 +42,7 @@ class Field(object):
     """
     Describe uno de los campos de un DataObject.
 
-    Tiene los siguientes metodos
+    Tiene los siguientes metodos:
         - convert: Un Callable que lee el campo de un string.
         - dynamic: Un Callable que calcula el valor del campo.
 
@@ -34,7 +66,7 @@ class Meta(object):
     Encapsula los metadatos de un DataObject.
 
     Tiene los siguientes atributos:
-        - up: Objeto Meta "padre" de ste en la jerarquia.
+        - up: Objeto Meta "padre" de este en la jerarquia.
         - path: ID completo del objeto Meta. Es una cadena separada por ".".
         - fields: diccionario { atributo: Field() }
         - subtypes: diccionario { atributo: Meta() }
@@ -65,9 +97,6 @@ class DataObject(object):
         self._meta = meta
         self.up = parent
 
-    def __contains__(self, attr):
-        return attr in self.__dict__
-
     def __getattr__(self, attr):
         if attr.startswith("_"):
             raise AttributeError(attr)
@@ -85,17 +114,14 @@ class DataObject(object):
         except AttributeError:
             return default
 
-    def _get(self, attr, default = None):
-        try:
-            return self.__dict__[attr]
-        except KeyError:
-            return default
+    def _get(self, attr, default=None):
+        return self.__dict__.get(attr, default)
 
     class Tester(object):
         def __getattr__(self, attr):
             if attr.startswith("_"):
                 raise AttributeError(attr)
-            return attr in self._data
+            return self._data._get(attr) is not None
         def __init__(self, data, pos=True):
             self._data = data
 
@@ -103,7 +129,7 @@ class DataObject(object):
         def __getattr__(self, attr):
             if attr.startswith("_"):
                 raise AttributeError(attr)
-            return attr not in self._data
+            return self._data._get(attr) is None
         def __init__(self, data, pos=True):
             self._data = data
 
@@ -115,12 +141,73 @@ class DataObject(object):
     def HASNOT(self):
         return DataObject.TesterNot(self)
 
+    @property
+    def fb(self):
+        return Fallback(self)
+
     def __unicode__(self):
         summary = (self._get(x) for x in self._meta.summary)
         return u", ".join(unicode(x) for x in summary if x is not None)
 
 
-def _matches(item, crit):
+class Fallback(dict):
+
+    """
+    Objeto Fallback.
+    """
+
+    def __init__(self, back, depth=sys.maxint):
+        super(Fallback, self).__init__()
+        # Para que "back" sea accesible desde los templates
+        self['back'] = back
+        # Utilizo self.__dict__ en lugar de poner el atributo directamente,
+        # para no disparar setattr.
+        self.__dict__['_back'] = back
+        self.__dict__['_depth'] = depth
+
+    def _get(self, attr, default=None):
+        try:
+            return self[attr]
+        except KeyError:
+            return default
+
+    def get(self, attr, default=None):
+        return self._get(attr, default)
+    
+    def __setattr__(self, attr, val):
+        self[attr] = val
+
+    def __getattr__(self, attr):
+        if attr.startswith("_"):
+            raise AttributeError(attr)
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError(attr)
+
+    def __missing__(self, attr):
+        back, depth = self._back, self._depth
+        while back and depth:
+            value = back.get(attr)
+            if value is not None:
+                return self.setdefault(attr, value)
+            depth -= 1
+            back = back.up
+        raise KeyError(attr)
+
+    @property
+    def HAS(self):
+        return DataObject.Tester(self)
+
+    @property
+    def HASNOT(self):
+        return DataObject.TesterNot(self)
+
+    def __unicode__(self):
+        return unicode(self._back)
+
+
+def matches(item, crit):
     """Comprueba si un objeto cumple un criterio.
 
     Si la evaluacion del criterio lanza una exception durante la
@@ -139,7 +226,7 @@ class BaseSet(frozenset):
         assert(len(self) == 1)
         return tuple(self)[0]
     def __call__(self, *arg):
-        return BaseSet(x for x in self if _matches(x, arg))
+        return BaseSet(x for x in self if matches(x, arg))
     def __add__(self, other):
         return BaseSet(chain(self, other))
     @property
@@ -154,7 +241,7 @@ class BaseList(tuple):
         assert(len(self) == 1)
         return self[0]
     def __call__(self, *arg):
-        return BaseList(x for x in self if _matches(x, arg))
+        return BaseList(x for x in self if matches(x, arg))
     def __add__(self, other):
         return BaseList(chain(self, other))
 
@@ -220,7 +307,7 @@ class Index(object):
     def _margins(self, index):
         item  = IndexKey(index)
         first = bisect.bisect_left(self._full, item)
-        last  = bisect.bisect_right(self._full, item)
+        last  = bisect.bisect_right(self._full, item, lo=first)
         return (first, last)
 
     def _eq(self, index):
@@ -306,7 +393,7 @@ class DataSet(object):
                 items = index._eq(val)
         else:
             # Para los indices compuestos, vamos al caso general.
-            items = tuple(x for x in self._children if _matches(x, crit))
+            items = tuple(x for x in self._children if matches(x, crit))
         if len(items) == len(self._children):
             # si el resultado del filtro es el dataset entero,
             # devuelvo el propio dataset para aprovechar los indices.
@@ -327,6 +414,10 @@ class DataSet(object):
         if attr.startswith("_"):
             raise AttributeError(attr)
         if attr == "up":
+            # "up" lo pongo como un atributo dinamico y no como una
+            # propiedad para que solo tenga que ser calculado una vez,
+            # la primera vez que se utiliza (lyego se almacena como
+            # atributo normal y no llega a llamarse a __getattr__)
             supertype = self._meta.up
             if supertype is None:
                 value = None
@@ -484,12 +575,6 @@ if __name__ == "__main__":
             self.failUnless(self.d1.up is None)
             self.failUnless(self.d2.up is self.d1)
 
-        def testDataContains(self):
-            """Funcion __contains__"""
-            self.d1.x = 5
-            self.failUnless("x" in self.d1)
-            self.failIf("y" in self.d1)
-
         def testDataHas(self):
             """Propiedad 'has'."""
             self.d1.x = 10
@@ -510,12 +595,11 @@ if __name__ == "__main__":
             self.failUnless(type(self.d1.get("subfield")) == DataSet)
     
         def testData_Get(self):
-            """Funcion get"""
+            """Funcion _get"""
             self.d1.x = -8
             self.failUnless(self.d1._get("x") == -8)
             self.failUnless(self.d1._get("y", "testpassed") == "testpassed")
             self.failUnless(self.d1._get("subfield") is None)
-
 
     class TestPickledData(TestData):
 
@@ -525,6 +609,78 @@ if __name__ == "__main__":
             self.d1 = self.d2.up
             self.m2 = self.d2._meta
             self.m1 = self.m2.up
+
+    class TestFallback(unittest.TestCase):
+
+        def setUp(self):
+            self.m1 = Meta("data")
+            self.m1.fields = {
+                    'a': Field(),
+                    'b': Field(),
+                    'c': Field(),
+                }
+            self.m2 = self.m1.child("subfield")
+            self.m2.fields = {
+                    'a': Field(),
+                    'b': Field(),
+                    'd': Field(),
+                }
+
+            self.d1 = DataObject(self.m1, None)
+            self.d2 = DataObject(self.m2, self.d1).fb
+
+        def testDataAttrib(self):
+            """Acceso a una variable valida"""
+            self.assertRaises(AttributeError, getattr, self.d2, "a")
+            self.d1.b = 5
+            self.failUnless(self.d2.b == 5)
+
+        def testDataDynamic(self):
+            """Acceso a una variable valida"""
+            class Decrementor(Field):
+                def dynamic(self, attr, item):
+                    return item.a - 1
+            self.m1.fields['b'] = Decrementor()
+            self.d1.a = 10
+            self.failUnless(self.d2.b == 9)
+
+        def testDataUp(self):
+            """Acceso al atributo up"""
+            self.failUnless(self.d2.up is self.d1)
+
+        def testDataHas(self):
+            """Propiedad 'has'."""
+            self.d2.a = 10
+            self.d1.b = 12
+            self.failUnless(self.d2.HAS.a)
+            self.failUnless(self.d2.HAS.b)
+            self.failIf(self.d2.HAS.y)
+
+        def testDataHasNot(self):
+            """Propiedad 'hasnot'."""
+            self.d2.a = 10
+            self.d1.b = 12
+            self.failIf(self.d2.HASNOT.a)
+            self.failIf(self.d2.HASNOT.b)
+            self.failUnless(self.d2.HASNOT.x)
+
+        def testDataGet(self):
+            """Funcion get"""
+            self.d1.a = -10
+            self.d2.b = -5
+            self.failUnless(self.d2.get("a") == -10)
+            self.failUnless(self.d2.get("b") == -5)
+            self.failUnless(self.d2.get("x", "testpassed") == "testpassed")
+            self.failUnless(type(self.d2.get("subfield")) == DataSet)
+
+        def testData_Get(self):
+            """Funcion _get"""
+            self.d1.a = -9
+            self.d2.b = -4
+            self.failUnless(self.d2._get("a") == -9)
+            self.failUnless(self.d2._get("b") == -4)
+            self.failUnless(self.d2._get("x", "testpassed") == "testpassed")
+            self.failUnless(type(self.d2._get("subfield")) == DataSet)
 
     class TestDataSet(unittest.TestCase):
 
@@ -613,7 +769,7 @@ if __name__ == "__main__":
 
         def testCombinedFilter(self):
             x = resolver.Resolver("self")
-            items = self.d1.subfield(x.a > 0, x.b._match("bb"))
+            items = self.d1.subfield(x.a > 0, x.b.MATCH("bb"))
             self.failUnless(len(items) == 1)
             self.failUnless(+(items.a) == 3)
 

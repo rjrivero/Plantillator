@@ -3,12 +3,15 @@
 import csv
 import os
 import os.path
+import sys
+
+from contextlib import contextmanager
 from itertools import count, chain
 from copy import copy
 from chardet.universaldetector import UniversalDetector
 
 import fields
-from meta import Meta, DataObject, DataSet, BaseSet
+from meta import DataException, Meta, DataObject, DataSet, BaseSet
 
 
 class CSVRow(object):
@@ -49,17 +52,23 @@ class ColumnList(object):
 
     """Lista de columnas asociada a un path"""
 
-    def __init__(self, path, columns):
+    def __init__(self, source, index, path, columns):
         """Construye la lista de columnas.
 
+        source: origen del bloque
         path: path de la lista, ya procesado (en forma de tuple).
         columns: columnas de la lista, ya procesadas.
+
+        En caso de excepcion al construir el objeto, el constructor
+        lanza la excepcion desnuda, sin envolver en un DataException.
         """
         # Por si acaso columns es un iterator (no estaria definido __len__)
-        self.path, columns = tuple(path), tuple(columns)
-        self.selects = tuple(c for c in columns if c.selector)
-        self.attribs = columns[len(self.selects):]
-        self._expand_selectors(tuple(columns))
+        self.source = source
+        self.index = index
+        self.path, self.columns = tuple(path), tuple(columns)
+        self.selects = tuple(c for c in self.columns if c.selector)
+        self.attribs = self.columns[len(self.selects):]
+        self._expand_selectors(self.columns)
 
     def _expand_selectors(self, columns):
         """Expande la lista de selectores"""
@@ -93,7 +102,7 @@ class ColumnList(object):
                 setattr(obj, col.colname, value)
         return obj
 
-    def prepare(self, meta):
+    def _prepare(self, meta):
         """Prepara la carga de datos, analizando el path"""
         # Creo o accedo al meta y le inserto los nuevos campos.
         # Lo hago en esta fase y no en el constructor, porque aqui
@@ -121,7 +130,7 @@ class ColumnList(object):
                 stack.append(search)
         self.stack = stack
 
-    def addrow(self, row_cols, rootset):
+    def _addrow(self, row_cols, rootset):
         """Crea el objeto y lo inserta en la posicion adecuada del rootset"""
         attrib = self.path[-1]
         vector = (row_cols[s.index] for s in self.selects)
@@ -142,22 +151,33 @@ class ColumnList(object):
         return None if not nitems else DataSet(self.meta, nitems)
 
 
+@contextmanager
+def wrap_exception(source, index):
+    """Envuelve una excepcion normal en un DataException"""
+    try:
+        yield
+    except Exception:
+        raise DataException(source, index, sys.exc_info())
+
+
 class TableBlock(ColumnList):
 
     """Bloque de lineas de CSV representando una tabla"""
 
     HEADERS = 1
 
-    def __init__(self, csvrows):
-        """Analiza la cabecera y prepara la carga de los datos"""
+    def __init__(self, source, index, csvrows):
+        """Analiza la cabecera y prepara la carga de los datos
+
+        En caso de excepcion al construir el objeto, el constructor
+        lanza la excepcion desnuda, sin envolver en un DataException.
+        """
         typeline = csvrows[0].cols[1:]
         headline = csvrows[1].cols[1:]
         columns = tuple(self._columns(typeline, headline))
         path = tuple(x.strip() for x in csvrows[1].cols[0].split(u"."))
-        super(TableBlock, self).__init__(path, columns)
+        super(TableBlock, self).__init__(source, index, path, columns)
         self.body = csvrows[2:]
-        for row in self.body:
-            row.normalize(columns)
 
     def _columns(self, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
@@ -173,10 +193,18 @@ class TableBlock(ColumnList):
                 yield Column(index, selector, coltype, colname)
 
     def process(self, meta, data):
+        """Procesa las lineas del bloque actualizando los datos.
+
+        En caso de excepcion al procesar los objetos, la excepcion se
+        lanza envuelta en un DataException.
+        """
         rootset = DataSet(meta, (data,))
-        self.prepare(meta)
+        with wrap_exception(self.source, self.index):
+            self._prepare(meta)
         for row in self.body:
-            self.addrow(row.cols, rootset)
+            with wrap_exception(self.source, row.lineno):
+                row.normalize(self.columns)
+                self._addrow(row.cols, rootset)
 
 
 class LinkBlock(object):
@@ -185,28 +213,36 @@ class LinkBlock(object):
 
     HEADERS = 2
 
-    def __init__(self, csvrows):
-        """Analiza la cabecera y prepara la carga de los datos"""
+    def __init__(self, source, index, csvrows):
+        """Analiza la cabecera y prepara la carga de los datos.
+
+        En caso de excepcion al construir el objeto, el constructor
+        lanza la excepcion desnuda, sin envolver en un DataException.
+        """
         selectline = csvrows[0].cols[1:]
         typeline = csvrows[1].cols[1:]
         headline = csvrows[2].cols[1:]
+        self.source = source
+        self.index = index
         self.columns = tuple(self._columns(selectline, typeline, headline))
         self.path = csvrows[2].cols[0][1:].split(u".").pop(0).strip()
         self.groups = tuple(self._groups())
         self.peercolumns = tuple(x for x in self.columns if not x.selector)
         self.body = csvrows[3:]
-        for row in self.body:
-            row.normalize(self.columns)
 
     def process(self, meta, data):
-        """Procesa los datos"""
+        """Procesa los datos.
+
+        En caso de excepcion al procesar los objetos, la excepcion se
+        lanza envuelta en un DataException.
+        """
         # Preparo los grupos y descarto los que correspondan a paths
         # no validos.
         valid = set()
         for group in self.groups:
             # Preparo cada uno de los bloques
             try:
-                group.prepare(meta)
+                group._prepare(meta)
             except IndexError:
                 # Este error se lanza cuando el path es invalido.
                 # Como cada columna puede tener selectores combinados,
@@ -215,6 +251,11 @@ class LinkBlock(object):
                 pass
             else:
                 valid.add(group)
+        # Si no hay combinaciones validas, habra que lanzar un error,
+        # digo yo...
+        with wrap_exception(self.source, self.index):
+            if not valid:
+                raise SyntaxError(u"Ningun enlace valido")
         # A cada grupo valido le incluyo un sub-atributo:
         # - si solo hay dos grupos, el sub-atributo es "PEER"
         # - si hay mas de dos grupos, el subatributo es "PEERS"
@@ -225,25 +266,27 @@ class LinkBlock(object):
         # Y ahora, voy procesando linea a linea
         rootset = DataSet(meta, (data,))
         for row in self.body:
-            # Creo todos los objetos y los agrego a una lista
-            inserted = ((g.position, g.addrow(row.cols, rootset)) for g in valid)
-            inserted = tuple((p, r) for (p, r) in inserted if r)
-            # Y los cruzo para construir los peerings
-            for index, result in enumerate(inserted):
-                # Los peers son el resultado de todos los procesos excepto
-                # el que estamos evaluando.
-                # Los peers pueden ser de distintos tipos, asi que en
-                # general no puedo meterlos en un DataSet... como mucho,
-                # en un BaseSet.
-                peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
-                peers = BaseSet(chain(*(p[1] for p in peers)))
-                if peers:
-                    if self.p2p:
-                        peers = +peers
-                    position, items = result
-                    for item in items:
-                        setattr(item, attrib, peers)
-                        item.POSITION = position
+            with wrap_exception(self.source, row.lineno):
+                row.normalize(self.columns)
+                # Creo todos los objetos y los agrego a una lista
+                inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
+                inserted = tuple((p, r) for (p, r) in inserted if r)
+                # Y los cruzo para construir los peerings
+                for index, result in enumerate(inserted):
+                    # Los peers son el resultado de todos los procesos excepto
+                    # el que estamos evaluando.
+                    # Los peers pueden ser de distintos tipos, asi que en
+                    # general no puedo meterlos en un DataSet... como mucho,
+                    # en un BaseSet.
+                    peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
+                    peers = BaseSet(chain(*(p[1] for p in peers)))
+                    if peers:
+                        if self.p2p:
+                            peers = +peers
+                        position, items = result
+                        for item in items:
+                            setattr(item, attrib, peers)
+                            item.POSITION = position
 
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
@@ -288,7 +331,7 @@ class LinkBlock(object):
             for demux in self._demux(group):
                 path = list(x.selector for x in demux if x.selector)
                 path.append(self.path)
-                clist = ColumnList(path, demux)
+                clist = ColumnList(self.source, self.index, path, demux)
                 # Marco la posicion del grupo dentro del enlace, para
                 # hacer mas facil de-multiplexarlos si fuera necesario.
                 clist.position = pos
@@ -318,23 +361,23 @@ class LinkBlock(object):
 
 class CSVSource(object):
 
-    def __init__(self, data, name, codec="utf-8", delimiter=";"):
-        self.name = name
-        rows = self._clean(data.splitlines(), delimiter, codec)
-        self.blocks = self._split(rows)
+    def __init__(self, data, source, codec="utf-8", delimiter=";"):
+        rows = self._clean(source, data.splitlines(), delimiter, codec)
+        self.blocks = self._split(source, rows)
 
-    def _clean(self, lines, delimiter, codec):
+    def _clean(self, source, lines, delimiter, codec):
         reader = csv.reader(lines, delimiter=delimiter)
         for lineno, row in enumerate(reader):
-            # decodifico despues de reconocer el csv, porque por lo
-            # visto, el csv.reader no se lleva muy bien con el texto
-            # unicode.
-            for index, item in enumerate(row):
-                row[index] = item.decode(codec).strip()
-            if len(row) >= 2 and (row[0] or row[1]) and row[0] != u"!":
-                yield CSVRow(lineno, row)
+            with wrap_exception(source, lineno):
+                # decodifico despues de reconocer el csv, porque por lo
+                # visto, el csv.reader no se lleva muy bien con el texto
+                # unicode.
+                for index, item in enumerate(row):
+                    row[index] = item.decode(codec).strip()
+                if len(row) >= 2 and (row[0] or row[1]) and row[0] != u"!":
+                    yield CSVRow(lineno, row)
 
-    def _split(self, rows):
+    def _split(self, source, rows):
         labels, rows = list(), tuple(rows)
         # Busco todas las lineas que marcan un inicio de tabla
         for index, row in ((i, r) for (i, r) in enumerate(rows) if r.cols[0]):
@@ -345,7 +388,8 @@ class CSVSource(object):
         labels.append((len(rows), None))
         # Divido la entrada en bloques
         for (i, blk), (j, skip) in zip(labels, labels[1:]):
-            yield blk(rows[i:j])
+            with wrap_exception(source, i):
+                yield blk(source, i, rows[i:j])
 
     def __iter__(self):
         return iter(self.blocks)
@@ -428,32 +472,23 @@ if __name__ == "__main__":
     import pprint
     import code
     import shelve
-
     from resolver import Resolver
 
+    os.unlink("data.shelf")
     shelf = shelve.open("data.shelf", protocol=2)
-    data  = CSVShelf((".",), shelf).data
-    shelf.close()
-
-##    def plain_data(data):
-##        subfields = dict()
-##        for sf in data._meta.subtypes.keys():
-##            if sf == "PEERS":
-##                # los peers se enlazan unos a otros, tenemos que saltarnoslos
-##                # para evitar bucles.
-##                continue
-##            subfields[sf] = tuple(plain_data(x) for x in data.get(sf))
-##        return {
-##            'summary': unicode(data),
-##            'fields' : dict((i, data.get(i)) for i in data._meta.fields.keys()),
-##            'subfields': subfields,}
-##    pprint.pprint(plain_data(data))
-
-
+    try:
+        data = CSVShelf((".",), shelf).data
+    except DataException as details:
+        print details
+        sys.exit(-1)
+    finally:
+        shelf.close()
     symbols  = ("x", "y", "z", "X", "Y", "Z")
-    resolver = Resolver("self")
     for s in symbols:
-        setattr(data, s, resolver)
+        setattr(data, s, Resolver("self"))
     data.NONE = DataSet.NONE
     data.ANY = DataSet.ANY
-    code.interact(local = data.__dict__)
+    if len(sys.argv) > 1:
+        code.interact(local = data.__dict__)
+    else:
+        print "USO: %s <cualquier cosa>" % sys.argv[0]
