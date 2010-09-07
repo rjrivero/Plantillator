@@ -35,7 +35,7 @@ class Column(object):
     """Columna del fichero CSV
 
     - index: indice de la columna en la fila del CSV.
-    - selector: si la columna es parte de un filtro o selector, nombre de
+    - selector: si la columna es parte de un filtro o selector, nombre
         de la tabla que filtra.
     - coltype: objeto Field que identifica el tipo de columna.
     - colname: nombre de la columna.
@@ -55,7 +55,7 @@ class ColumnList(object):
     def __init__(self, source, index, path, columns):
         """Construye la lista de columnas.
 
-        source: origen del bloque
+        source: origen del bloque (nombre de fichero)
         path: path de la lista, ya procesado (en forma de tuple).
         columns: columnas de la lista, ya procesadas.
 
@@ -107,7 +107,7 @@ class ColumnList(object):
         # Creo o accedo al meta y le inserto los nuevos campos.
         # Lo hago en esta fase y no en el constructor, porque aqui
         # ya compruebo que todos los tipos padres existan... eso
-        # solo funcionara si el proceso se hace por orden, del nivel
+        # solo funciona si el proceso se hace por orden, del nivel
         # mas alto al mas bajo.
         for step in self.path[:-1]:
             meta = meta.subtypes[step]
@@ -230,64 +230,6 @@ class LinkBlock(object):
         self.peercolumns = tuple(x for x in self.columns if not x.selector)
         self.body = csvrows[3:]
 
-    def process(self, meta, data):
-        """Procesa los datos.
-
-        En caso de excepcion al procesar los objetos, la excepcion se
-        lanza envuelta en un DataException.
-        """
-        # Preparo los grupos y descarto los que correspondan a paths
-        # no validos.
-        valid = set()
-        for group in self.groups:
-            # Preparo cada uno de los bloques
-            try:
-                group._prepare(meta)
-            except IndexError:
-                # Este error se lanza cuando el path es invalido.
-                # Como cada columna puede tener selectores combinados,
-                # es posible que al demultiplezar haya creado una
-                # combinacion invalida... asi que simplemente la ignoro.
-                pass
-            else:
-                valid.add(group)
-        # Si no hay combinaciones validas, habra que lanzar un error,
-        # digo yo...
-        with wrap_exception(self.source, self.index):
-            if not valid:
-                raise SyntaxError(u"Ningun enlace valido")
-        # A cada grupo valido le incluyo un sub-atributo:
-        # - si solo hay dos grupos, el sub-atributo es "PEER"
-        # - si hay mas de dos grupos, el subatributo es "PEERS"
-        attrib = "PEER" if self.p2p else "PEERS"
-        for group in valid:
-            group.meta.fields[attrib] = fields.Field()
-            group.meta.fields["POSITION"] = fields.IntField()
-        # Y ahora, voy procesando linea a linea
-        rootset = DataSet(meta, (data,))
-        for row in self.body:
-            with wrap_exception(self.source, row.lineno):
-                row.normalize(self.columns)
-                # Creo todos los objetos y los agrego a una lista
-                inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
-                inserted = tuple((p, r) for (p, r) in inserted if r)
-                # Y los cruzo para construir los peerings
-                for index, result in enumerate(inserted):
-                    # Los peers son el resultado de todos los procesos excepto
-                    # el que estamos evaluando.
-                    # Los peers pueden ser de distintos tipos, asi que en
-                    # general no puedo meterlos en un DataSet... como mucho,
-                    # en un BaseSet.
-                    peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
-                    peers = BaseSet(chain(*(p[1] for p in peers)))
-                    if peers:
-                        if self.p2p:
-                            peers = +peers
-                        position, items = result
-                        for item in items:
-                            setattr(item, attrib, peers)
-                            item.POSITION = position
-
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, selector, coltype, colname in zip(count(1), selectline, typeline, headline):
@@ -341,7 +283,7 @@ class LinkBlock(object):
         """Desmultiplexa grupos con selectores combinados"""
         # Para salir de la recursion: si la lista esta vacia, la devolvemos.
         if not columns or not columns[0].selector:
-            yield tuple(columns)
+            yield columns
         else:
             # Demultiplexamos el primer elemento
             column = columns.pop(0)
@@ -353,6 +295,65 @@ class LinkBlock(object):
                 for subdemux in self._demux(columns):
                     yield tuple(chain((newcol,), subdemux))
 
+    def process(self, meta, data):
+        """Procesa los datos.
+
+        En caso de excepcion al procesar los objetos, la excepcion se
+        lanza envuelta en un DataException.
+        """
+        # Preparo los grupos y descarto los que correspondan a paths
+        # no validos.
+        valid = set()
+        with wrap_exception(self.source, self.index):
+            for group in self.groups:
+                # Preparo cada uno de los bloques
+                try:
+                    group._prepare(meta)
+                except IndexError:
+                    # Este error se lanza cuando el path es invalido.
+                    # Como cada columna puede tener selectores
+                    # combinados, es posible que al demultiplezar haya
+                    # creado una combinacion invalida... asi que
+                    # simplemente la ignoro.
+                    pass
+                else:
+                    valid.add(group)
+            # Si no hay combinaciones validas, habra que lanzar un
+            # error, digo yo...
+            if not valid:
+                raise SyntaxError(u"Ningun enlace valido")
+        # A cada grupo valido le incluyo un sub-atributo:
+        # - si solo hay dos grupos, el sub-atributo es "PEER"
+        # - si hay mas de dos grupos, el subatributo es "PEERS"
+        attrib = "PEER" if self.p2p else "PEERS"
+        for group in valid:
+            group.meta.fields[attrib] = fields.Field()
+            group.meta.fields["POSITION"] = fields.IntField()
+        # Y ahora, voy procesando linea a linea
+        rootset = DataSet(meta, (data,))
+        for row in self.body:
+            with wrap_exception(self.source, row.lineno):
+                row.normalize(self.columns)
+                # Creo todos los objetos y los agrego a una lista
+                inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
+                inserted = tuple((p, r) for (p, r) in inserted if r)
+                # Y los cruzo para construir los peerings
+                for index, result in enumerate(inserted):
+                    # Los peers son el resultado de todos los procesos
+                    # excepto el que estamos evaluando.
+                    # Los peers pueden ser de distintos tipos, asi que
+                    # en general no puedo meterlos en un DataSet...
+                    # como mucho, en un BaseSet.
+                    peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
+                    peers = BaseSet(chain(*(p[1] for p in peers)))
+                    if peers:
+                        if self.p2p:
+                            peers = +peers
+                        position, items = result
+                        for item in items:
+                            setattr(item, attrib, peers)
+                            item.POSITION = position
+
     @property
     def depth(self):
         """Devuelve el nivel de anidamiento de la tabla"""
@@ -361,11 +362,19 @@ class LinkBlock(object):
 
 class CSVSource(object):
 
-    def __init__(self, data, source, codec="utf-8", delimiter=";"):
-        rows = self._clean(source, data.splitlines(), delimiter, codec)
+    def __init__(self, data, source, codec="utf-8"):
+        # Auto-detecto el separador de campos... en funcion del
+        # programa que exporte a CSV, algunos utilizan "," y otros ";".
+        lines, delim = data.splitlines(), ";"
+        for line in lines:
+            if line and line[0] in (",", ";"):
+                delimiter = line[0]
+                break
+        rows = self._clean(source, lines, delimiter, codec)
         self.blocks = self._split(source, rows)
 
     def _clean(self, source, lines, delimiter, codec):
+        """Elimina las columnas comentario o vacias"""
         reader = csv.reader(lines, delimiter=delimiter)
         for lineno, row in enumerate(reader):
             with wrap_exception(source, lineno):
@@ -378,6 +387,7 @@ class CSVSource(object):
                     yield CSVRow(lineno, row)
 
     def _split(self, source, rows):
+        """Divide el fichero en tablas"""
         labels, rows = list(), tuple(rows)
         # Busco todas las lineas que marcan un inicio de tabla
         for index, row in ((i, r) for (i, r) in enumerate(rows) if r.cols[0]):
@@ -399,10 +409,11 @@ class CSVShelf(object):
 
     """Libreria de ficheros CSV"""
 
-    FILES   = "data_files"
-    DATA    = "data_root"
-    VERSION = "data_version"
-    CURRENT = 1
+    VARTABLE = "variables"
+    FILES    = "data_files"
+    DATA     = "data_root"
+    VERSION  = "data_version"
+    CURRENT  = 1
 
     def __init__(self, path, datashelf):
         """Busca todos los ficheros CSV en el path.
@@ -439,7 +450,7 @@ class CSVShelf(object):
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
     def _update(self, files, datashelf):
-        fdata = tuple((f, open(f, "rb").read()) for f in files.keys())
+        fdata = tuple((f, open(f, "r").read()) for f in files.keys())
         # Asumo que todos los ficheros CSV han sido generados
         # por el mismo editor, y que deben usar el mismo encoding.
         detector = UniversalDetector()
@@ -448,9 +459,11 @@ class CSVShelf(object):
             if detector.done:
                 break
         detector.close()
-        codec   = detector.result['encoding']
-        sources = (CSVSource(data, f, codec) for (f, data) in fdata)
-        blocks  = chain(*sources)
+        self.codec = detector.result['encoding']
+        # Leo todos los ficheros y proceso los bloques en orden
+        # de profundidad
+        sources = (CSVSource(data, f, self.codec) for (f, data) in fdata)
+        blocks = chain(*sources)
         meta = Meta("", None)
         data = DataObject(meta)
         nesting = dict()
@@ -459,6 +472,22 @@ class CSVShelf(object):
         for depth in sorted(nesting.keys()):
             for item in nesting[depth]:
                 item.process(meta, data)
+        # proceso la tabla especial "variables"
+        vartab = tuple((t, s) for (t, s) in meta.subtypes.iteritems() if t.lower() == CSVShelf.VARTABLE)
+        if vartab:
+            table, submeta = vartab[0]
+            key, typ, val = submeta.summary[:3]
+            vartab = getattr(data, str(table))
+            for item in vartab:
+                vname = item._get(key)
+                vtyp  = item._get(typ)
+                vval  = item._get(val)
+                if all(x is not None for x in (vname, vtyp, vval)):
+                    vtyp = fields.Map.resolve(vtyp)
+                    vval = vtyp.convert(vval)
+                    setattr(data, str(vname), vval)
+            delattr(data, str(table))
+            del(meta.subtypes[table])
         # OK, todo cargado... ahora guardo los datos en el shelf.
         self.data = data
         datashelf[CSVShelf.VERSION] = CSVShelf.CURRENT
@@ -474,15 +503,21 @@ if __name__ == "__main__":
     import shelve
     from resolver import Resolver
 
-    os.unlink("data.shelf")
-    shelf = shelve.open("data.shelf", protocol=2)
+    shelfname = "data.shelf"
+    csvpath = (".",)
+
+    if os.path.isfile(shelfname):
+        os.unlink(shelfname)
+    shelf = shelve.open(shelfname, protocol=2)
     try:
-        data = CSVShelf((".",), shelf).data
+        csvshelf = CSVShelf(csvpath, shelf)
+        data = csvshelf.data
     except DataException as details:
         print details
         sys.exit(-1)
     finally:
         shelf.close()
+    print "DETECTADO CODEC %s" % csvshelf.codec
     symbols  = ("x", "y", "z", "X", "Y", "Z")
     for s in symbols:
         setattr(data, s, Resolver("self"))
