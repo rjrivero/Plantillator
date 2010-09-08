@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
+# -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 from __future__ import with_statement
 import os

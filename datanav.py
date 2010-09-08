@@ -131,6 +131,9 @@ parser.add_option("-g", "--geometry", dest="geometry", metavar="WxH+X+Y",
 parser.add_option("-d", "--debug",
         action="store_true", dest="debug", default=False,
         help="Vuelca los mensajes de debug en stderr")
+parser.add_option("-x", "--profile",
+        action="store_true", dest="profile", default=False,
+        help="Ejecutar en modo profile (solo carga datos)")
 
 (options, args) = parser.parse_args()
 if len(args) < 1:
@@ -173,12 +176,9 @@ def shelf_wrapper(fname):
     finally:
         shelf.close
 
-with shelf_wrapper(shelfname) as shelf:
-    data = loader.load(finder, shelf)
-DataNav(data, geometry).mainloop()
-sys.exit(0)
-    
 try:
+    if options.profile and os.path.isfile(shelfname):
+        os.unlink(shelfname)
     with shelf_wrapper(shelfname) as shelf:
         data = loader.load(finder, shelf)
     # Cosas muy feas... no se por que, esto funciona:
@@ -201,7 +201,8 @@ try:
     #
     # - pongo data como globals
     # - pongo un diccionario vacio como locals.
-    DataNav(data, dict(), geometry).mainloop()
+    if not options.profile:
+        DataNav(data, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

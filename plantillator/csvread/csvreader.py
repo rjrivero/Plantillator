@@ -4,14 +4,85 @@ import csv
 import os
 import os.path
 import sys
+import codecs
+import chardet
+
+try:
+    from codecs import BOM_UTF8
+except ImportError:
+    # only available since Python 2.3
+    BOM_UTF8 = '\xef\xbb\xbf'
+
+# Try setting the locale, so that we can find out
+# what encoding to use
+try:
+    import locale
+    locale.setlocale(locale.LC_CTYPE, "")
+except (ImportError, locale.Error):
+    pass
 
 from contextlib import contextmanager
 from itertools import count, chain
 from copy import copy
-from chardet.universaldetector import UniversalDetector
 
 from ..data import DataException, Meta, DataObject, DataSet, PeerSet
 from ..data import FieldMap, ObjectField, IntField
+
+
+encoding = "ascii"
+if sys.platform == 'win32':
+    # On Windows, we could use "mbcs". However, to give the user
+    # a portable encoding name, we need to find the code page
+    try:
+        encoding = locale.getdefaultlocale()[1]
+        codecs.lookup(encoding)
+    except LookupError:
+        pass
+else:
+    try:
+        # Different things can fail here: the locale module may not be
+        # loaded, it may not offer nl_langinfo, or CODESET, or the
+        # resulting codeset may be unknown to Python. We ignore all
+        # these problems, falling back to ASCII
+        encoding = locale.nl_langinfo(locale.CODESET)
+        if encoding is None or encoding is '':
+            # situation occurs on Mac OS X
+            encoding = 'ascii'
+        codecs.lookup(encoding)
+    except (NameError, AttributeError, LookupError):
+        # Try getdefaultlocale well: it parses environment variables,
+        # which may give a clue. Unfortunately, getdefaultlocale has
+        # bugs that can cause ValueError.
+        try:
+            encoding = locale.getdefaultlocale()[1]
+            if encoding is None or encoding is '':
+                # situation occurs on Mac OS X
+                encoding = 'ascii'
+            codecs.lookup(encoding)
+        except (ValueError, LookupError):
+            pass
+
+encoding = encoding.lower()
+
+
+def guess_codec(chars):
+    if chars.startswith(BOM_UTF8):
+        return 'utf-8'
+    # If it is default, we need not to record anything
+    try:
+        chars = unicode(chars)
+        return 'ascii'
+    except UnicodeError:
+        pass
+    # Try the locale's encoding.
+    try:
+        chars = unicode(chars, encoding)
+        return encoding
+    except UnicodeError:
+        pass
+    # Last, resort to auto-detection
+    codec = chardet.detect(chars)['encoding']
+    return codec
 
 
 class CSVRow(object):
@@ -27,11 +98,7 @@ class CSVRow(object):
     def normalize(self, columns):
         """Normaliza los datos de las columnas en funcion del tipo"""
         for col in columns:
-            try:
-                value = col.coltype.convert(self.cols[col.index])
-            except:
-                value = None
-            self.cols[col.index] = value
+            self.cols[col.index] = col.coltype.convert(self.cols[col.index])
 
 
 class Column(object):
@@ -97,15 +164,6 @@ class ColumnList(object):
         """Devuelve el nivel de anidamiento de la tabla"""
         return len(self.path)
 
-    def _object(self, meta, parent, row_cols):
-        """Construye un objeto con los datos de una fila"""
-        obj = DataObject(meta, parent)
-        for col in self.attribs:
-            value = row_cols[col.index]
-            if value is not None:
-                setattr(obj, col.colname, value)
-        return obj
-
     def _prepare(self, meta):
         """Prepara la carga de datos, analizando el path"""
         # Creo o accedo al meta y le inserto los nuevos campos.
@@ -122,18 +180,27 @@ class ColumnList(object):
         self.meta = meta
         # Creo una pila de operaciones, que filtra el dataset raiz
         # hasta llegar al punto donde tengo que insertar los datos.
-        selects, stack = list(self.selects), list()
-        for step in self.path[:-1]:
-            def getsubtype(dset, vector):
-                return getattr(dset, step)
-            stack.append(getsubtype)
-            while selects and selects[0].selector == step:
-                select = selects.pop(0)
-                def search(dset, vector):
-                    return dset(**{str(select.colname): vector.next()})
-                stack.append(search)
-        self.stack = stack
+        selects = list(self.selects)
+        ops = (self._consume(selects, step) for step in self.path[:-1])
+        self.stack = tuple(chain(*ops))
 
+    def _consume(self, selects, step):
+        """Genera operaciones para descender un paso con los selectores"""
+        # Primera operacion: descender un nivel.
+        def getsubtype(dset, vector):
+            return getattr(dset, step)
+        yield getsubtype
+        # Segunda operacion: hacer los filtrados
+        indexes = list()
+        while selects and selects[0].selector == step:
+            indexes.append(str(selects.pop(0).colname))
+        if indexes:
+            def search(dset, vector):
+                for key in indexes:
+                    dset = dset(**{key: vector.next()})
+                return dset
+            yield search
+    
     def _addrow(self, row_cols, rootset):
         """Crea el objeto y lo inserta en la posicion adecuada del rootset"""
         attrib = self.path[-1]
@@ -196,15 +263,15 @@ class TableBlock(ColumnList):
                 coltype = FieldMap.resolve(coltype)
                 yield Column(index, selector, coltype, colname)
 
-    def process(self, meta, data):
+    def process(self, data):
         """Procesa las lineas del bloque actualizando los datos.
 
         En caso de excepcion al procesar los objetos, la excepcion se
         lanza envuelta en un DataException.
         """
-        rootset = DataSet(meta, (data,))
+        rootset = DataSet(data._meta, (data,))
         with wrap_exception(self.source, self.index):
-            self._prepare(meta)
+            self._prepare(data._meta)
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
                 row.normalize(self.columns)
@@ -291,7 +358,7 @@ class LinkBlock(object):
         else:
             # Demultiplexamos el primer elemento
             column = columns.pop(0)
-            selectors = (x.strip() for x in column.selector.split(","))
+            selectors = (x.strip() for x in column.selector.split(u","))
             for selector in (x for x in selectors if x):
                 # Creamos un objeto columna con un solo selector
                 newcol = Column(column.index, selector, column.coltype, column.colname)
@@ -299,7 +366,7 @@ class LinkBlock(object):
                 for subdemux in self._demux(columns):
                     yield tuple(chain((newcol,), subdemux))
 
-    def process(self, meta, data):
+    def process(self, data):
         """Procesa los datos.
 
         En caso de excepcion al procesar los objetos, la excepcion se
@@ -307,7 +374,7 @@ class LinkBlock(object):
         """
         # Preparo los grupos y descarto los que correspondan a paths
         # no validos.
-        valid = set()
+        meta, valid = data._meta, set()
         with wrap_exception(self.source, self.index):
             for group in self.groups:
                 # Preparo cada uno de los bloques
@@ -337,8 +404,8 @@ class LinkBlock(object):
         rootset = DataSet(meta, (data,))
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
-                row.normalize(self.columns)
                 # Creo todos los objetos y los agrego a una lista
+                row.normalize(self.columns)
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
                 inserted = tuple((p, r) for (p, r) in inserted if r)
                 # Y los cruzo para construir los peerings
@@ -372,9 +439,9 @@ class CSVSource(object):
         lines, delim = data.splitlines(), ";"
         for line in lines:
             if line and line[0] in (",", ";"):
-                delimiter = line[0]
+                delimiter = str(line[0])
                 break
-        rows = self._clean(source, lines, delimiter, codec)
+        rows = tuple(self._clean(source, lines, delimiter, codec))
         self.blocks = self._split(source, rows)
 
     def _clean(self, source, lines, delimiter, codec):
@@ -392,7 +459,7 @@ class CSVSource(object):
 
     def _split(self, source, rows):
         """Divide el fichero en tablas"""
-        labels, rows = list(), tuple(rows)
+        labels = list()
         # Busco todas las lineas que marcan un inicio de tabla
         for index, row in ((i, r) for (i, r) in enumerate(rows) if r.cols[0]):
             blk = LinkBlock if row.cols[0].startswith("*") else TableBlock
@@ -451,51 +518,58 @@ class CSVShelf(object):
         self._update(files, datashelf)
 
     def _findcsv(self, dirname):
+        """Encuentra todos los ficheros CSV en el path"""
         files = (x for x in os.listdir(dirname) if x.lower().endswith(".csv"))
         files = (f for f in files if os.path.isfile(f))
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
     def _update(self, files, datashelf):
-        fdata = tuple((f, open(f, "r").read()) for f in files.keys())
-        # Asumo que todos los ficheros CSV han sido generados
-        # por el mismo editor, y que deben usar el mismo encoding.
-        detector = UniversalDetector()
-        for fname, data in fdata:
-            detector.feed(data)
-            if detector.done:
-                break
-        detector.close()
-        self.codec = detector.result['encoding']
-        # Leo todos los ficheros y proceso los bloques en orden
-        # de profundidad
-        sources = (CSVSource(data, f, self.codec) for (f, data) in fdata)
-        blocks = chain(*sources)
+        """Procesa los datos y los almacena en el shelf"""
+        nesting = self._read_blocks(files)
         meta = Meta("", None)
         data = DataObject(meta)
+        for depth in sorted(nesting.keys()):
+            for item in nesting[depth]:
+                item.process(data)
+        # Proceso la tabla de variables
+        self._set_vars(data)
+        # OK, todo cargado... ahora guardo los datos en el shelf.
+        self._save(datashelf, files, data.__dict__)
+
+    def _read_blocks(self, files):
+        """Carga los ficheros y genera los bloques de datos"""
+        fdata = tuple((f, open(f, "rb").read()) for f in files.keys())
+        fdata = tuple((f, guess_codec(b), b) for (f, b) in fdata)
+        # Leo todos los ficheros y proceso los bloques en orden
+        # de profundidad
+        sources = (CSVSource(body, fname, codec) for (fname, codec, body) in fdata)
+        blocks = chain(*sources)
         nesting = dict()
         for block in blocks:
             nesting.setdefault(block.depth, list()).append(block)
-        for depth in sorted(nesting.keys()):
-            for item in nesting[depth]:
-                item.process(meta, data)
+        return nesting
+
+    def _set_vars(self, data):
         # proceso la tabla especial "variables"
-        vartab = tuple((t, s) for (t, s) in meta.subtypes.iteritems() if t.lower() == CSVShelf.VARTABLE)
-        if vartab:
-            table, submeta = vartab[0]
+        meta = data._meta
+        keys = dict((k.lower(), k) for k in meta.subtypes)
+        vart = keys.get(CSVShelf.VARTABLE.lower(), None)
+        if vart:
+            submeta = meta.subtypes[keys[vart]]
             key, typ, val = submeta.summary[:3]
-            vartab = getattr(data, str(table))
-            for item in vartab:
-                vname = item._get(key)
+            for item in getattr(data, str(vart)):
+                vname = str(item._get(key))
                 vtyp  = item._get(typ)
                 vval  = item._get(val)
                 if all(x is not None for x in (vname, vtyp, vval)):
                     vtyp = FieldMap.resolve(vtyp)
                     vval = vtyp.convert(vval)
-                    setattr(data, str(vname), vval)
-            delattr(data, str(table))
-            del(meta.subtypes[table])
-        # OK, todo cargado... ahora guardo los datos en el shelf.
-        data = data.__dict__
+                    if vval is not None:
+                        setattr(data, vname, vval)
+            delattr(data, str(vart))
+            del(meta.subtypes[vart])
+
+    def _save(self, datashelf, files, data):
         datashelf[CSVShelf.VERSION] = CSVShelf.CURRENT
         datashelf[CSVShelf.DATA] = data
         datashelf[CSVShelf.FILES] = files
@@ -528,7 +602,6 @@ if __name__ == "__main__":
         sys.exit(-1)
     finally:
         shelf.close()
-    print "DETECTADO CODEC %s" % csvshelf.codec
     symbols  = ("x", "y", "z", "X", "Y", "Z")
     for s in symbols:
         data[s] = Resolver("self")

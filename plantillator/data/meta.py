@@ -291,10 +291,10 @@ class Linear(object):
         self._items = items
         self._attr = attr
 
-    def __eq__(self, index):
+    def _eq(self, index):
         return tuple(x for x in self._items if x.get(self._attr) == index)
 
-    def __ne__(self, index):
+    def _ne(self, index):
         return tuple(x for x in self._items if x.get(self._attr) != index)
 
     def _none(self):
@@ -362,11 +362,25 @@ class Index(object):
         return tuple(x.item for x in self._full)
 
     def _sorted(self, asc=True):
-        if asc:
-            items = chain(self._empty, (x.item for x in self._full))
-        else:
-            items = chain((x.item for x in reversed(self._full)), self._empty)
+        items = chain(self._empty, (x.item for x in self._full))
+        if not asc:
+            items = reversed(items)
         return tuple(items)
+
+
+def index_to_crit(items, key, val):
+    """Convierte un criterio expresado como "key=val" en un Resolver"""
+    crit = Resolver(SYMBOL_SELF)
+    if val is DataSet.NONE:
+        crit = getattr(crit, "HASNOT")
+        crit = getattr(crit, key)
+    elif val is DataSet.ANY:
+        crit = getattr(crit, "HAS")
+        crit = getattr(crit, key)
+    else:
+        crit = getattr(crit, key)
+        crit = (crit == val)
+    return tuple(x for x in items if matches(x, (crit,)))
 
 
 class DataSet(object):
@@ -420,14 +434,18 @@ class DataSet(object):
             # un campo indexable.
             key, val = shortcut.popitem()
             index = self._index(key)
-            assert(index and not crit and not shortcut)
-            # Tres posibles casos: NONE, ANY y un indice a buscar
-            if val is DataSet.NONE:
-                items = index._none()
-            elif val is DataSet.ANY:
-                items = index._any()
+            assert(not crit and not shortcut)
+            if index:
+                # Tres posibles casos: NONE, ANY y un indice a buscar
+                if val is DataSet.NONE:
+                    items = index._none()
+                elif val is DataSet.ANY:
+                    items = index._any()
+                else:
+                    items = index._eq(val)
             else:
-                items = index._eq(val)
+                # El campo no era indexable, hacemos una busqueda normal
+                items = index_to_crit(self._children, key, val)
         else:
             # Para los indices compuestos, vamos al caso general.
             items = tuple(x for x in self._children if matches(x, crit))
@@ -477,8 +495,8 @@ class DataSet(object):
             else:
                 field = self._meta.fields.get(attr, None)
                 if field is not None:
-                    items = (x for x in (y.get(attr) for y in self._children) if x is not None)
-                    value = field.collect(items)
+                    items = (x.get(attr) for x in self._children)
+                    value = field.collect(x for x in items if x is not None)
                 else:
                     raise AttributeError(attr)
         setattr(self, attr, value)
@@ -568,19 +586,10 @@ class PeerSet(frozenset):
         if shortcut:
             key, val = shortcut.popitem()
             assert(not crit and not shortcut)
-            # Tres posibles casos: NONE, ANY y un indice a buscar
-            crit = Resolver(SYMBOL_SELF)
-            if val is DataSet.NONE:
-                crit = getattr(crit, "HASNOT")
-                crit = getattr(crit, key)
-            elif val is DataSet.ANY:
-                crit = getattr(crit, "HAS")
-                crit = getattr(crit, key)
-            else:
-                crit = getattr(crit, key)
-                crit = (crit == val)
-            crit = (crit,)
-        return PeerSet(x for x in self if matches(x, crit))
+            items = index_to_crit(self, key, val)
+        else:
+            items = (x for x in self if matches(x, crit))
+        return PeerSet(items)
 
     def __getattr__(self, attr):
         """Obtiene el atributo elegido, en funcion de su tipo:

@@ -12,7 +12,10 @@ from .meta import Field, BaseSet, BaseList, PeerSet
 class IntField(Field):
 
     def convert(self, data):
-        return int(data) if data.strip() else None
+        try:
+            return int(data) if data.strip() else None
+        except ValueError:
+            return None
 
 
 class StrField(Field):
@@ -23,7 +26,7 @@ class StrField(Field):
         # hay forma de recuperarlo, ni siquiera con "normalize". Asi que
         # cuidado con los identificadores, mejor que sean solo ASCII...
         #return unicodedata.normalize('NFKC', unicode(data).strip()) or None
-        return unicode(data).strip() or None
+        return data.strip() or None
 
 
 class IPField(Field):
@@ -31,9 +34,12 @@ class IPField(Field):
     def convert(self, data):
         if not data.strip():
             return None
-        if data.find(u"/") < 0:
-            data = data + u"/32"
-        return IPAddress(data)
+        try:
+            if data.find(u"/") < 0:
+                data = data + u"/32"
+            return IPAddress(data)
+        except ValueError:
+            return None
 
 
 class ObjectField(Field):
