@@ -78,7 +78,7 @@ class SetField(Field):
 
 class RangeField(Field):
 
-    _RANGO = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
+    RANGE = re.compile(r'^(?P<pref>.*[^\d])?(?P<from>\d+)\s*\-\s*(?P<to>\d+)(?P<suff>[^\d].*)?$')
 
     def __init__(self, nestedfld):
         super(RangeField, self).__init__(indexable=False)
@@ -91,12 +91,12 @@ class RangeField(Field):
         La cadena es un rango (numeros separados por '-'), posiblemente
         rodeado de un prefijo y sufijo no numerico.
         """
-        match, rango = RangeField._RANGO.match(data), []
+        match, rango = RangeField.RANGE.match(data), []
         if match:
             start = int(match.group('from'))
             stop = int(match.group('to'))
-            pref = unicode(match.group('pref')) or u""
-            suff = unicode(match.group('suff')) or u""
+            pref = unicode(match.group('pref') or u"")
+            suff = unicode(match.group('suff') or u"")
             for i in range(start, stop+1):
                 value = self.nestedfld.convert(u"%s%d%s" % (pref, i, suff))
                 if value is not None:
@@ -132,7 +132,7 @@ class FieldMap(object):
         'list': ListField,
         'set': SetField,
         'range': RangeField,
-        'list-range': ListRangeField,
+        'rangelist': ListRangeField,
     }
 
     @classmethod
@@ -147,7 +147,7 @@ class FieldMap(object):
             scalar = cls.ScalarFields[scalar.strip().lower()]
             return scalar() if not vector else vector(scalar())
         except KeyError:
-            return None
+            raise ValueError(filtername)
 
         
 if __name__ == "__main__":
@@ -225,13 +225,15 @@ if __name__ == "__main__":
             self.failUnless(field.convert("  ") is None)
 
         def testListRangeInt(self):
-            field = FieldMap.resolve('list-range.Int')
+            field = FieldMap.resolve('rangelist.Int')
+            self.failUnless(field.convert("1-3") == (1,2,3))
             self.failUnless(field.convert("   1-3, 6-9") == (1,2,3,6,7,8,9))
             self.failUnless(field.convert(" 9, 11  ") == (9, 11))
             self.failUnless(field.convert(" ") is None)
             
         def testListRangeStr(self):
-            field = FieldMap.resolve('list-range.string')
+            field = FieldMap.resolve('rangelist.string')
+            self.failUnless(field.convert("1-3") == (u"1",u"2",u"3"))
             self.failUnless(field.convert("   a1-3, 6-7b") == (u"a1",u"a2",u"a3",u"6b",u"7b"))
             self.failUnless(field.convert(" a9, 11b  ") == (u"a9", u"11b"))
             self.failUnless(field.convert("") is None)

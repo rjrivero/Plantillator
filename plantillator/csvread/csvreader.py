@@ -27,7 +27,11 @@ class CSVRow(object):
     def normalize(self, columns):
         """Normaliza los datos de las columnas en funcion del tipo"""
         for col in columns:
-            self.cols[col.index] = col.coltype.convert(self.cols[col.index])
+            try:
+                value = col.coltype.convert(self.cols[col.index])
+            except:
+                value = None
+            self.cols[col.index] = value
 
 
 class Column(object):
@@ -78,7 +82,7 @@ class ColumnList(object):
             raise SyntaxError("Orden de cabeceras incorrecto")
         # Comparo los selectores con los elementos del path, y los
         # expando si estan abreviados.
-        cursor = self.path[:-1]
+        cursor = list(self.path[:-1])
         for column in self.selects:
             # Busco un elemento del path que coincida con el selector
             while cursor and not cursor[0].lower().startswith(column.selector.lower()):
