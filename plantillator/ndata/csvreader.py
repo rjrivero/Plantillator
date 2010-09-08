@@ -11,7 +11,7 @@ from copy import copy
 from chardet.universaldetector import UniversalDetector
 
 import fields
-from meta import DataException, Meta, DataObject, DataSet, BaseSet
+from meta import DataException, Meta, DataObject, DataSet, PeerSet
 
 
 class CSVRow(object):
@@ -327,7 +327,7 @@ class LinkBlock(object):
         # - si hay mas de dos grupos, el subatributo es "PEERS"
         attrib = "PEER" if self.p2p else "PEERS"
         for group in valid:
-            group.meta.fields[attrib] = fields.Field()
+            group.meta.fields[attrib] = fields.ObjectField()
             group.meta.fields["POSITION"] = fields.IntField()
         # Y ahora, voy procesando linea a linea
         rootset = DataSet(meta, (data,))
@@ -343,9 +343,9 @@ class LinkBlock(object):
                     # excepto el que estamos evaluando.
                     # Los peers pueden ser de distintos tipos, asi que
                     # en general no puedo meterlos en un DataSet...
-                    # como mucho, en un BaseSet.
+                    # como mucho, en un PeerSet.
                     peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
-                    peers = BaseSet(chain(*(p[1] for p in peers)))
+                    peers = PeerSet(chain(*(p[1] for p in peers)))
                     if peers:
                         if self.p2p:
                             peers = +peers
@@ -438,9 +438,11 @@ class CSVShelf(object):
                 if not fnames.symmetric_difference(snames):
                     if all(files[name] <= sfiles[name] for name in fnames):
                         # Todo correcto, los datos estan cargados
-                        self.data = datashelf[CSVShelf.DATA]
+                        self.data = copy(datashelf[CSVShelf.DATA])
                         return
-        except KeyError:
+        except:
+            # Si el pickle falla o no es completo, recargamos los datos
+            # (cualquiera que sea el error)
             pass
         self._update(files, datashelf)
 
@@ -489,11 +491,16 @@ class CSVShelf(object):
             delattr(data, str(table))
             del(meta.subtypes[table])
         # OK, todo cargado... ahora guardo los datos en el shelf.
-        self.data = data
+        data = data.__dict__
         datashelf[CSVShelf.VERSION] = CSVShelf.CURRENT
         datashelf[CSVShelf.DATA] = data
         datashelf[CSVShelf.FILES] = files
         datashelf.sync()
+        self.data = copy(data)
+
+    @staticmethod
+    def loader(path, datashelf):
+        return CSVShelf(path, datashelf).data
 
 
 if __name__ == "__main__":
@@ -520,10 +527,10 @@ if __name__ == "__main__":
     print "DETECTADO CODEC %s" % csvshelf.codec
     symbols  = ("x", "y", "z", "X", "Y", "Z")
     for s in symbols:
-        setattr(data, s, Resolver("self"))
-    data.NONE = DataSet.NONE
-    data.ANY = DataSet.ANY
+        data[s] = Resolver("self")
+    data['NONE'] = DataSet.NONE
+    data['ANY'] = DataSet.ANY
     if len(sys.argv) > 1:
-        code.interact(local = data.__dict__)
+        code.interact(local = data)
     else:
         print "USO: %s <cualquier cosa>" % sys.argv[0]

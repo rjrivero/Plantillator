@@ -6,6 +6,13 @@ import sys
 import traceback
 from itertools import chain
 
+from resolver import Resolver
+
+
+# Simbolos para el resolver
+SYMBOL_SELF   = 1
+SYMBOL_FOLLOW = 2
+
 
 class DataException(Exception):
 
@@ -37,12 +44,52 @@ class DataException(Exception):
         return "DataException(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
 
 
+def matches(item, crit):
+    """Comprueba si un objeto cumple un criterio.
+
+    Si la evaluacion del criterio lanza una exception durante la
+    resolucion, se considera que el criterio no se cumple.
+    """
+    try:
+        return all(c._resolve({SYMBOL_SELF: item}) for c in crit)
+    except (AttributeError, AssertionError):
+        return False
+
+
+class BaseSet(frozenset):
+    # Tienen que ser todo clases globales, por pickle, y ademas
+    # frozen, para que se puedan hashear.
+    def __pos__(self):
+        assert(len(self) == 1)
+        return tuple(self)[0]
+    def __call__(self, *arg):
+        return BaseSet(x for x in self if matches(x, arg))
+    def __add__(self, other):
+        return BaseSet(chain(self, other))
+    @property
+    def PLAIN(self):
+        return BaseSet(chain(*self))
+
+
+class BaseList(tuple):
+    # Tienen que ser todo clases globales, por pickle, y ademas
+    # frozen, para que se puedan hashear
+    def __pos__(self):
+        assert(len(self) == 1)
+        return self[0]
+    def __call__(self, *arg):
+        return BaseList(x for x in self if matches(x, arg))
+    def __add__(self, other):
+        return BaseList(chain(self, other))
+
+
 class Field(object):
 
     """
     Describe uno de los campos de un DataObject.
 
     Tiene los siguientes metodos:
+        - collect: Agrupa una secuencia de objetos en una coleccion.
         - convert: Un Callable que lee el campo de un string.
         - dynamic: Un Callable que calcula el valor del campo.
 
@@ -58,6 +105,9 @@ class Field(object):
 
     def dynamic(self, attr, item):
         raise AttributeError(attr)
+
+    def collect(self, items):
+        return BaseSet(items)
 
 
 class Meta(object):
@@ -86,6 +136,11 @@ class Meta(object):
         except KeyError:
             return self.subtypes.setdefault(name, Meta(".".join((self.path, name)), self))
 
+    @property
+    def valid(self):
+        """Devuelve los nombres de todos los atributos validos"""
+        return chain(self.fields.keys(), self.subtypes.keys())
+
 
 class DataObject(object):
 
@@ -98,6 +153,12 @@ class DataObject(object):
         self.up = parent
 
     def __getattr__(self, attr):
+        """Obtiene o crea el atributo.
+
+        - Si el atributo es dinamico, lo calcula.
+        - Si es un DataSet, crea uno vacio al vuelo en caso de no existir.
+        - En el resto de situaciones, lanza AttributeError.
+        """
         if attr.startswith("_"):
             raise AttributeError(attr)
         subtype = self._meta.subtypes.get(attr, None)
@@ -109,12 +170,14 @@ class DataObject(object):
         return self.__dict__.setdefault(attr, DataSet(subtype))
 
     def get(self, attr, default=None):
+        """Obtiene el atributo o lo genera si es dinamico o subtipo"""
         try:
             return getattr(self, attr)
         except AttributeError:
             return default
 
     def _get(self, attr, default=None):
+        """Obtiene el atributo solo si es estatico y esta definido"""
         return self.__dict__.get(attr, default)
 
     class Tester(object):
@@ -148,6 +211,19 @@ class DataObject(object):
     def __unicode__(self):
         summary = (self._get(x) for x in self._meta.summary)
         return u", ".join(unicode(x) for x in summary if x is not None)
+
+    def __repr__(self):
+        return u"<%s>" % unicode(self)
+
+    def iteritems(self):
+        """Itero sobre los elementos del objeto"""
+        # Los campos los recupero con "get", para que calcule los dinamicos
+        fields = ((k, self.get(k)) for k in self._meta.fields)
+        # Los subtipos los recupero con "_get", para ir solo a los definidos
+        stypes = ((k, self._get(k)) for k in self._meta.subtypes)
+        # incluyo "up" si no es None
+        valid = chain((("up", self.up),), fields, stypes)
+        return (pack for pack in valid if pack[1] is not None)
 
 
 class Fallback(dict):
@@ -205,45 +281,6 @@ class Fallback(dict):
 
     def __unicode__(self):
         return unicode(self._back)
-
-
-def matches(item, crit):
-    """Comprueba si un objeto cumple un criterio.
-
-    Si la evaluacion del criterio lanza una exception durante la
-    resolucion, se considera que el criterio no se cumple.
-    """
-    try:
-        return all(c._resolve({'self': item}) for c in crit)
-    except (AttributeError, AssertionError):
-        return False
-
-
-class BaseSet(frozenset):
-    # Tienen que ser todo clases globales, por pickle, y ademas
-    # frozen, para que se puedan hashear.
-    def __pos__(self):
-        assert(len(self) == 1)
-        return tuple(self)[0]
-    def __call__(self, *arg):
-        return BaseSet(x for x in self if matches(x, arg))
-    def __add__(self, other):
-        return BaseSet(chain(self, other))
-    @property
-    def PLAIN(self):
-        return BaseSet(chain(*self))
-
-
-class BaseList(tuple):
-    # Tienen que ser todo clases globales, por pickle, y ademas
-    # frozen, para que se puedan hashear
-    def __pos__(self):
-        assert(len(self) == 1)
-        return self[0]
-    def __call__(self, *arg):
-        return BaseList(x for x in self if matches(x, arg))
-    def __add__(self, other):
-        return BaseList(chain(self, other))
 
 
 class Linear(object):
@@ -441,7 +478,7 @@ class DataSet(object):
                 field = self._meta.fields.get(attr, None)
                 if field is not None:
                     items = (x for x in (y.get(attr) for y in self._children) if x is not None)
-                    value = BaseSet(items)
+                    value = field.collect(items)
                 else:
                     raise AttributeError(attr)
         setattr(self, attr, value)
@@ -505,6 +542,97 @@ class DataSet(object):
         def __getattr__(self, attr):
             value = self._dataset._index(attr)._sorted(self._asc)
             return self.__dict__.setdefault(attr, value)
+
+    @property
+    def SORTBY(self):
+        return DataSet.Sorter(self, True)
+        
+    @property
+    def SORTASC(self):
+        return DataSet.Sorter(self, True)
+        
+    @property
+    def SORTDESC(self):
+        return DataSet.Sorter(self, False)
+
+
+class PeerSet(frozenset):
+
+    """
+    Conjunto de objetos DataObject sin metadatos comunes
+    """
+
+    def __call__(self, *crit, **shortcut):
+        # Acepta la misma mini-especializacion que un DataSet, aunque
+        # la generaliza.
+        if shortcut:
+            key, val = shortcut.popitem()
+            assert(not crit and not shortcut)
+            # Tres posibles casos: NONE, ANY y un indice a buscar
+            crit = Resolver(SYMBOL_SELF)
+            if val is DataSet.NONE:
+                crit = getattr(crit, "HASNOT")
+                crit = getattr(crit, key)
+            elif val is DataSet.ANY:
+                crit = getattr(crit, "HAS")
+                crit = getattr(crit, key)
+            else:
+                crit = getattr(crit, key)
+                crit = (crit == val)
+            crit = (crit,)
+        return PeerSet(x for x in self if matches(x, crit))
+
+    def __getattr__(self, attr):
+        """Obtiene el atributo elegido, en funcion de su tipo:
+
+        - up: devuelve un DataSet con todos los atributos "up"
+              de todos los elementos del set.
+        - subtipo: devuelve un DataSet con la concatenacion de
+                   todas las sublistas de los elementos del set.
+        - otro atributo: Devuelve un BaseSet con todos los
+                        valores del atributo en todos los elementos
+                        del set.
+        """
+        # Esquivo los atributos "magicos" (empezando por "_") o aquellos
+        # que pueden hacer que me confundan con un DataObject ("iteritems")
+        if attr.startswith("_") or attr=="iteritems":
+            raise AttributeError(attr)
+        if attr == "up":
+            # "up" lo pongo como un atributo dinamico y no como una
+            # propiedad para que solo tenga que ser calculado una vez,
+            # la primera vez que se utiliza (luego se almacena como
+            # atributo normal y no llega a llamarse a __getattr__)
+            value = PeerSet(up for up in (x.up for x in self) if up is not None)
+        else:
+            items = tuple(x for x in (y.get(attr) for y in self) if x is not None)
+            if not items:
+                # El resultado esta vacio, no podemos decidir que hacer
+                # con el... lanzamos AttributeError
+                raise AttributeError(attr)
+            if isinstance(items[0], DataSet):
+                # Asumo que todos los resultados son DataSets,
+                # y los encadeno.
+                value = PeerSet(chain(*(x for x in items if x)))
+            elif isinstance(items[0], DataObject):
+                # Asumo que todos los resultados son DataObjects,
+                # y los encadeno.
+                value = PeerSet(items)
+            else:
+                # En otro caso, los agrupo en un BaseSet.
+                value = BaseSet(items)
+        setattr(self, attr, value)
+        return value
+
+    def __add__(self, other):
+        return PeerSet(chain(self, other))
+    
+    def __pos__(self):
+        assert(len(self) == 1)
+        return tuple(self)[0]
+
+    def _index(self, attr):
+        """Siempre devuelve un indice lineal, lo pongo para poder ordenar"""
+        return Linear(self, attr)
 
     @property
     def SORTBY(self):
@@ -755,7 +883,7 @@ if __name__ == "__main__":
             self.failUnless(set(x.b for x in indexB._any()) == set(("aabb", "ccdd", "eeff", "gghh")))
             
         def testFilter(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             expected = {"ccdd":0, "eeff":0}
             for item in self.d1.subfield(x.a >= 4):
                 if item.HAS.b:
@@ -763,12 +891,12 @@ if __name__ == "__main__":
                     del(expected[item.b])
 
         def testEmptyFilter(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             items = self.d1.subfield(x.a < 0)
             self.failUnless(len(items) == 0)
 
         def testCombinedFilter(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             items = self.d1.subfield(x.a > 0, x.b.MATCH("bb"))
             self.failUnless(len(items) == 1)
             self.failUnless(+(items.a) == 3)
@@ -793,12 +921,12 @@ if __name__ == "__main__":
             self.failUnless(self.d2 in both)
 
         def testPos(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             first = +(self.d1.subfield(x.a==3))
             self.failUnless(first.b == "aabb")
 
         def testInvalidPos(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             self.assertRaises(AssertionError, operator.pos, self.d1.subfield(x.a>=3))
             self.assertRaises(AssertionError, operator.pos, self.d2.subfield(x.a<=3))
 

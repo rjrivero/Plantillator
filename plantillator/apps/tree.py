@@ -18,11 +18,11 @@ class Tagger(object):
         if not name:
             # es un elemento de una lista: lo convierto a string y, si viene
             # con una "cuenta de repeticiones", la incluyo.
-            return "%s (%d)" % (str(data), hint) if hint is not None else str(data)
+            return u"%s (%d)" % (unicode(data), hint) if hint is not None else unicode(data)
         elif not hasattr(data, "__iter__"):
             # Es un atributo de un objeto, un elemento de diccionario.
             # indico su nombre y su valor.
-            return "%s = %s" % (name, str(data)) if name else str(data)
+            return u"%s = %s" % (name, unicode(data)) if name else unicode(data)
         return name or hint or "<>"
 
     def icon(self, item):
@@ -38,14 +38,9 @@ class Tagger(object):
 
     def filter_dict(self, data):
         """Itera sobre los elementos del dict, devolviendo clave y valor"""
-        try:
-            children = data._domd.refs.keys()
-        except (AttributeError, KeyError):
-            return data.iteritems()
-        else:
-            items = ((child, data.get(child)) for child in children if child != "up")
-            items = (x for x in items if x[1])
-            return chain(data.iteritems(), items)
+        # Excluyo "up", "back", "PEER" y "PEERS" para evitar bucles
+        # return (pack for pack in data.iteritems() if pack[0] not in ("up", "back"))
+        return data.iteritems()
 
     def filter_list(self, data):
         """Itera sobre los elementos de la lista/set, devolviendo indice y valor"""
@@ -145,4 +140,3 @@ class TreeCanvas(tk.Canvas):
         node.expand()
         for item in node.children:
             self._expand(item)
-

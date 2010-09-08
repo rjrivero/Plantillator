@@ -8,19 +8,21 @@ import sys
 import logging
 import glob
 import re
+import shelve
 import Tkinter as tk
+
 from traceback import print_exc, format_exception_only
 from optparse import OptionParser
+from contextlib import contextmanager
 
 try:
-    from plantillator.data import PathFinder, FileSource
+    from plantillator.ndata import PathFinder, FileSource, CSVShelf
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.data import PathFinder, FileSource
+    from plantillator.ndata import PathFinder, FileSource, CSVShelf
 
-from plantillator.csvread import DataSource
 from plantillator.apps import DataLoader, TreeCanvas
 
 
@@ -35,10 +37,9 @@ class DataNav(tk.Tk):
             self.top = top
             self.bottom = bottom
 
-    def __init__(self, glob, data, geometry="800x600"):
+    def __init__(self, data, geometry="800x600"):
         tk.Tk.__init__(self)
         self.title("DataNav")
-        self.glob = glob
         self.data = data
         self.hist = list()
         self.cursor = 0
@@ -82,7 +83,7 @@ class DataNav(tk.Tk):
                 if match:
                     exec name in self.data
                     name = match.group("var")
-                data = eval(name, self.glob, self.data)
+                data = eval(name, self.data)
                 if name not in self.hist:
                     self.cursor = 0
                     self.hist.append(name)
@@ -154,23 +155,31 @@ for name in args:
     else:
         inputfiles.append(name)
 
-
-def preload(loader, type, pref, dots):
-    item = type()
-    for k in (x for x in loader if x.startswith(pref) and x.count(".")==dots):
-        attrib = k.split(".").pop()
-        csvset = loader[k](item, attrib)
-        preload(loader, csvset._type, k, dots+1)
-
+try:
+    shelfname = inputfiles[0]
+except IndexError:
+    parser.print_help(sys.stderr)
+    sys.exit(OPTIONS_ERRNO)
     
 finder = PathFinder(path)
-loader = DataLoader(DataSource())
+loader = DataLoader(CSVShelf.loader)
+
+@contextmanager
+def shelf_wrapper(fname):
+    shelf = shelve.open(fname, protocol=2)
+    try:
+        yield shelf
+    finally:
+        shelf.close
+
+with shelf_wrapper(shelfname) as shelf:
+    data = loader.load(finder, shelf)
+DataNav(data, geometry).mainloop()
+sys.exit(0)
+    
 try:
-    for fname in inputfiles:
-        source = FileSource(finder(fname), finder)
-        loader.load(source)
-    # precargo las tablas
-    preload(loader.loader, loader.root, "", 0)
+    with shelf_wrapper(shelfname) as shelf:
+        data = loader.load(finder, shelf)
     # Cosas muy feas... no se por que, esto funciona:
     #
     # def test():
@@ -189,10 +198,9 @@ try:
     # En resumen, usar exec con globals y locals da problemillas, asi que lo que
     # he decidido de momento, al menos para el datanav, es:
     #
-    # - pongo loader.glob como fallback de loader.data
-    # - ejecuto las cosas con "exec EXPR in loader.data"
-    # loader.data._up = loader.glob
-    DataNav(loader.glob, loader.data.fb, geometry).mainloop()
+    # - pongo data como globals
+    # - pongo un diccionario vacio como locals.
+    DataNav(data, dict(), geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

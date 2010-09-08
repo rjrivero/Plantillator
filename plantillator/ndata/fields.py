@@ -6,7 +6,7 @@ import re
 import unicodedata
 
 from ip import IPAddress
-from meta import Field, BaseSet, BaseList
+from meta import Field, BaseSet, BaseList, PeerSet
 
 
 class IntField(Field):
@@ -34,6 +34,12 @@ class IPField(Field):
         if data.find(u"/") < 0:
             data = data + u"/32"
         return IPAddress(data)
+
+
+class ObjectField(Field):
+
+    def collect(self, items):
+        return PeerSet(items)
 
 
 class ListField(Field):
