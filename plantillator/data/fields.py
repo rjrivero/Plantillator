@@ -5,8 +5,8 @@ from itertools import chain
 import re
 import unicodedata
 
-from ip import IPAddress
-from meta import Field, BaseSet, BaseList, PeerSet
+from .ip import IPAddress
+from .meta import Field, BaseSet, BaseList, PeerSet
 
 
 class IntField(Field):
@@ -120,7 +120,7 @@ class ListRangeField(RangeField):
         return BaseList(chain(*ranges)) or None
 
 
-class Map(object):
+class FieldMap(object):
 
     ScalarFields = {
         'int': IntField,
@@ -157,54 +157,54 @@ if __name__ == "__main__":
     class TestField(unittest.TestCase):
 
         def testInt(self):
-            field = Map.resolve('Int')
+            field = FieldMap.resolve('Int')
             self.failUnless(field.convert("  5 ") == 5)
             self.failUnless(field.convert("  ") is None)
             self.assertRaises(ValueError, field.convert, "a")
 
         def testString(self):
-            field = Map.resolve('String')
+            field = FieldMap.resolve('String')
             self.failUnless(field.convert("  abc ") == u"abc")
             self.failUnless(field.convert("   ") is None)
 
         def testIP(self):
-            field = Map.resolve('IP')
+            field = FieldMap.resolve('IP')
             self.failUnless(field.convert("  1.2.3.4 /24 ") == IPAddress("1.2.3.4/24"))
             self.failUnless(field.convert("  10.10.10.1  ") == IPAddress("10.10.10.1/32"))
             self.failUnless(field.convert("") is None)
 
         def testListInt(self):
-            field = Map.resolve('list.Int')
+            field = FieldMap.resolve('list.Int')
             self.assertRaises(ValueError, field.convert, "  a, b, c ")
             self.failUnless(field.convert("  5, 6  ") == (5, 6))
             self.failUnless(field.convert("  ") is None)
 
         def testListStr(self):
-            field = Map.resolve('List. string')
+            field = FieldMap.resolve('List. string')
             self.failUnless(field.convert("  a, b, c ") == (u"a", u"b", u"c"))
             self.failUnless(field.convert("  5  ") == (u"5",))
             self.failUnless(field.convert("  ") is None)
 
         def testListIP(self):
-            field = Map.resolve('list.IP')
+            field = FieldMap.resolve('list.IP')
             self.failUnless(field.convert("  10.1.2.3 ") == (IPAddress("10.1.2.3/32"),))
             self.failUnless(field.convert("  1.1.1.1/10, 2.2.2.2/10  ") == (IPAddress("1.1.1.1/10"), IPAddress("2.2.2.2/10"),))
             self.failUnless(field.convert("") is None)
 
         def testSetInt(self):
-            field = Map.resolve('SET .Int')
+            field = FieldMap.resolve('SET .Int')
             self.assertRaises(ValueError, field.convert, "  a, b, c ")
             self.failUnless(field.convert("  5, 6  ") == frozenset((5, 6)))
             self.failUnless(field.convert("") is None)
 
         def testSetStr(self):
-            field = Map.resolve('SET .String')
+            field = FieldMap.resolve('SET .String')
             self.failUnless(field.convert("  a, b, c ") == frozenset((u"a", u"b", u"c")))
             self.failUnless(field.convert("  5  ") == frozenset((u"5",)))
             self.failUnless(field.convert("  ") is None)
 
         def testSetIP(self):
-            field = Map.resolve('SET .IP')
+            field = FieldMap.resolve('SET .IP')
             f1 = field.convert("  1.1.1.1/10, 2.2.2.2/10  ")
             v1 = (IPAddress("1.1.1.1/10"), IPAddress("2.2.2.2/10"))
             for ip in f1:
@@ -213,25 +213,25 @@ if __name__ == "__main__":
             self.failUnless(+f2 == IPAddress("10.1.2.3/32"))
 
         def testRangeInt(self):
-            field = Map.resolve('range.Int')
+            field = FieldMap.resolve('range.Int')
             self.failUnless(field.convert(" 2 - 5  ") == ((2, 3, 4, 5)))
             self.failUnless(field.convert(" 10  ") == (10,))
             self.failUnless(field.convert("  ") is None)
 
         def testRangeStr(self):
-            field = Map.resolve('range.string')
+            field = FieldMap.resolve('range.string')
             self.failUnless(field.convert("  a 1-3 b") == (u"a 1 b", u"a 2 b", u"a 3 b"))
             self.failUnless(field.convert(" a10b  ") == ("a10b",))
             self.failUnless(field.convert("  ") is None)
 
         def testListRangeInt(self):
-            field = Map.resolve('list-range.Int')
+            field = FieldMap.resolve('list-range.Int')
             self.failUnless(field.convert("   1-3, 6-9") == (1,2,3,6,7,8,9))
             self.failUnless(field.convert(" 9, 11  ") == (9, 11))
             self.failUnless(field.convert(" ") is None)
             
         def testListRangeStr(self):
-            field = Map.resolve('list-range.string')
+            field = FieldMap.resolve('list-range.string')
             self.failUnless(field.convert("   a1-3, 6-7b") == (u"a1",u"a2",u"a3",u"6b",u"7b"))
             self.failUnless(field.convert(" a9, 11b  ") == (u"a9", u"11b"))
             self.failUnless(field.convert("") is None)

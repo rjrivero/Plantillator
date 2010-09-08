@@ -2,7 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-from ..ndata import Resolver, SYMBOL_SELF, DataSet, password, secret
+from ..data import Resolver, SYMBOL_SELF, DataSet, password, secret
 
 
 class DataLoader(object):

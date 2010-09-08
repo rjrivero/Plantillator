@@ -16,13 +16,14 @@ from optparse import OptionParser
 from contextlib import contextmanager
 
 try:
-    from plantillator.ndata import PathFinder, FileSource, CSVShelf
+    from plantillator.data import PathFinder, FileSource
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.ndata import PathFinder, FileSource, CSVShelf
+    from plantillator.data import PathFinder, FileSource
 
+from plantillator.csvread import CSVShelf
 from plantillator.apps import DataLoader, TreeCanvas
 
 

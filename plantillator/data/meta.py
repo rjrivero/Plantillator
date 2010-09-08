@@ -6,7 +6,7 @@ import sys
 import traceback
 from itertools import chain
 
-from resolver import Resolver
+from .resolver import Resolver
 
 
 # Simbolos para el resolver

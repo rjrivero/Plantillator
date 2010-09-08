@@ -10,8 +10,8 @@ from itertools import count, chain
 from copy import copy
 from chardet.universaldetector import UniversalDetector
 
-import fields
-from meta import DataException, Meta, DataObject, DataSet, PeerSet
+from ..data import DataException, Meta, DataObject, DataSet, PeerSet
+from ..data import FieldMap, ObjectField, IntField
 
 
 class CSVRow(object):
@@ -189,7 +189,7 @@ class TableBlock(ColumnList):
                 selector = nameparts.pop(0).strip()
             colname = nameparts.pop(0).strip()
             if colname:
-                coltype = fields.Map.resolve(coltype)
+                coltype = FieldMap.resolve(coltype)
                 yield Column(index, selector, coltype, colname)
 
     def process(self, meta, data):
@@ -236,7 +236,7 @@ class LinkBlock(object):
             if not coltype or not colname or colname.startswith("!") or colname.strip() == "*":
                 continue
             selector = selector.strip() or None
-            coltype = fields.Map.resolve(coltype)
+            coltype = FieldMap.resolve(coltype)
             yield Column(index, selector, coltype, colname.strip())
 
     def _groups(self):
@@ -327,8 +327,8 @@ class LinkBlock(object):
         # - si hay mas de dos grupos, el subatributo es "PEERS"
         attrib = "PEER" if self.p2p else "PEERS"
         for group in valid:
-            group.meta.fields[attrib] = fields.ObjectField()
-            group.meta.fields["POSITION"] = fields.IntField()
+            group.meta.fields[attrib] = ObjectField()
+            group.meta.fields["POSITION"] = IntField()
         # Y ahora, voy procesando linea a linea
         rootset = DataSet(meta, (data,))
         for row in self.body:
@@ -485,7 +485,7 @@ class CSVShelf(object):
                 vtyp  = item._get(typ)
                 vval  = item._get(val)
                 if all(x is not None for x in (vname, vtyp, vval)):
-                    vtyp = fields.Map.resolve(vtyp)
+                    vtyp = FieldMap.resolve(vtyp)
                     vval = vtyp.convert(vval)
                     setattr(data, str(vname), vval)
             delattr(data, str(table))
