@@ -172,10 +172,8 @@ plantillator.keep_comments = options.keep_comments
 try:
     plantillator.prepare()
     if options.shell:
-        local = {
-            'glob': plantillator.dataloader.glob,
-            'data': plantillator.dataloader.data,
-        }
+        local = dict(plantillator.dataloader.glob)
+        local.update(plantillator.dataloader.data)
         code.interact("Shell de pruebas", local=local)
         exit(0)
     if not options.loop:

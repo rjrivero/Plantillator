@@ -10,7 +10,7 @@ class DataLoader(object):
     def __init__(self, loader):
         self.loader = loader
         solv = Resolver(SYMBOL_SELF)
-        self.common = {
+        self.glob = {
             "CISCOPASSWORD": password,
             "CISCOSECRET": secret,
             "cualquiera": DataSet.ANY,
@@ -25,6 +25,6 @@ class DataLoader(object):
         }
 
     def load(self, path, shelf):
-        data = self.loader(path, shelf)
-        data.update(self.common)
-        return data
+        self.data = self.loader(path, shelf)
+        self.data.update(self.glob)
+        return self.data

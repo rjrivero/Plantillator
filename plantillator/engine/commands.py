@@ -10,7 +10,7 @@ from collections import namedtuple
 from gettext import gettext as _
 from operator import attrgetter
 
-from ..data import asIter, Fallback, OrderedSet
+from ..data import Fallback, OrderedSet
 from .base import *
 
 
@@ -22,6 +22,12 @@ _ELSE_WITHOUT_IF = _("\"si no\" desemparejado")
 
 
 YieldBlock = namedtuple("YieldBlock", "opcode, command, glob, data")
+
+
+def asIter(item):
+    if hasattr(item, '__iter__'):
+        return item
+    return (item,)
 
 
 class Condition(Command):

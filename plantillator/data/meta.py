@@ -14,7 +14,7 @@ SYMBOL_SELF   = 1
 SYMBOL_FOLLOW = 2
 
 
-class DataException(Exception):
+class DataError(Exception):
 
     """
     Encapsula las excepciones lanzadas durante el analisis de una fuente
@@ -25,20 +25,20 @@ class DataException(Exception):
     - self.exc_info: tupla (tipo, excepcion, traceback)
     """
 
-    def __init__(self, source, index, exc_info):
-        super(DataException, self).__init__()
+    def __init__(self, source, index):
+        super(DataError, self).__init__()
         self.source = source
         self.index = index
-        self.exc_info = exc_info
+        self.exc_info = sys.exc_info()
 
     def __str__(self):
         return "".join(chain(
-            ("DataException: Error en %s [%s]\n" % (str(self.source), str(self.index)),),
+            ("DataError: Error en %s [%s]\n" % (str(self.source), str(self.index)),),
             traceback.format_exception(*(self.exc_info))
             ))
 
     def __repr__(self):
-        return "DataException(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
+        return "DataError(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
 
 
 def matches(item, crit):
@@ -236,7 +236,17 @@ class Fallback(dict):
         # Utilizo self.__dict__ en lugar de poner el atributo directamente,
         # para no disparar setattr.
         self.__dict__['_back'] = back
-        self.__dict__['_depth'] = depth
+        # Averiguo la profundidad real de la pila de objetos, para evitar que
+        # luego me pueda dar un AttributeError o un IndexError volviendo
+        # atras en la lista.
+        maxdepth = 1
+        try:
+            while back.up:
+                back = back.up
+                maxdepth += 1
+        except AttributeError:
+            back.up = None
+        self.__dict__['_depth'] = min(depth, maxdepth)
 
     def _get(self, attr, default=None):
         try:
@@ -261,7 +271,7 @@ class Fallback(dict):
     def __missing__(self, attr):
         back, depth = self._back, self._depth
         while back and depth:
-            value = back.get(attr)
+            value = back.get(attr, None)
             if value is not None:
                 return self.setdefault(attr, value)
             depth -= 1
@@ -473,7 +483,7 @@ class DataSet(object):
         if attr == "up":
             # "up" lo pongo como un atributo dinamico y no como una
             # propiedad para que solo tenga que ser calculado una vez,
-            # la primera vez que se utiliza (lyego se almacena como
+            # la primera vez que se utiliza (luego se almacena como
             # atributo normal y no llega a llamarse a __getattr__)
             supertype = self._meta.up
             if supertype is None:

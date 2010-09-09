@@ -3,5 +3,5 @@
 
 from .tree import Tagger, TreeCanvas
 from .dataloader import DataLoader
-#from .plantillator import Plantillator
+from .plantillator import Plantillator
 

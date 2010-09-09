@@ -6,6 +6,7 @@ import os
 import os.path
 import re
 import sys
+import shelve
 from contextlib import contextmanager
 from itertools import chain
 
@@ -15,48 +16,23 @@ except ImportError:
     print >> sys.stderr, "Warning: PyDOT NOT SUPPORTED!"
 
 from ..data import PathFinder, FileSource, Fallback
-from ..csvread import DataSource
+from ..csvread import CSVShelf
 from ..engine import Loader as TmplLoader, VARPATTERN
 from .dataloader import DataLoader
 
 
 TMPL_EXT = set(('.txt',))
-DATA_EXT = set(('.csv',))
+DATA_EXT = set(('.shelf',))
 TOOLS_FILE = "tools.py"
 
 
-#class FallbackDict(dict):
-#
-#    """Diccionario que hace Fallback a un DataObject
-#
-#    Lo he definido para usarlo como "locals" en las llamadas a exec
-#    y eval, por si utilizar un tipo basado en diccionario mejoraba algo
-#    el rendimiento comparado con un tipo basado en DataType. Pero la verdad
-#    es que el rendimiento se queda igual.
-#    """
-#
-#    def __init__(self, data):
-#        dict.__init__(self)
-#        self._up = data
-#
-#    def __getitem__(self, index):
-#        try:
-#            return dict.__getitem__(self, index)
-#        except KeyError:
-#            return self.setdefault(index, self._up[index])
-#
-#    @property
-#    def _type(self):
-#        return self._up._type
-#
-#    def __setattr__(self, index, value):
-#        self[index] = value
-#
-#    def __getattr__(self, attr):
-#        try:
-#            return self[attr]
-#        except KeyError as details:
-#            raise AttributeError(details)
+@contextmanager
+def shelf_wrapper(fname):
+    shelf = shelve.open(fname, protocol=2)
+    try:
+        yield shelf
+    finally:
+        shelf.close
 
 
 class Plantillator(object):
@@ -77,7 +53,7 @@ class Plantillator(object):
         self.__dict__.update(self.OPTIONS)
 
     def prepare(self):
-        self.dataloader = DataLoader(DataSource())
+        self.dataloader = DataLoader(CSVShelf.loader)
         self.tmplloader = TmplLoader(self.keep_comments)
         data, tmpl = self._classify()
         self._loaddata(data)
@@ -141,8 +117,10 @@ class Plantillator(object):
 
     def _loaddata(self, data_sources):
         """carga los ficheros de datos"""
-        for source in data_sources:
-            self.dataloader.load(source)
+        mtimes = dict((os.stat(f.id).st_mtime, f) for f in data_sources)
+        newer  = mtimes[max(mtimes.keys())]
+        with shelf_wrapper(newer.id) as shelf:
+            self.dataloader.load(self.path, shelf)
 
     def _loadtmpl(self, tmpl_sources):
         """carga los patrones de texto"""

@@ -10,7 +10,7 @@ from sys import exc_info
 from gettext import gettext as _
 from itertools import chain
 
-from ..data.base import normalize
+from ..data import IPAddress
 
 
 DELIMITER = "?"
@@ -30,6 +30,18 @@ VARPATTERN = {
 
 _INVALID_LITERAL = _("Texto no terminado ('%s' desbalanceados)" % DELIMITER)
 _LITERAL_TEXT = _("Texto (%(linenum)d lineas)" )
+
+
+def normalize(item):
+    item = item.strip()
+    if item.isdigit():
+        return int(item)
+    if item.find("/") > 0:
+        try:
+            return IPAddress(item)
+        except:
+            pass
+    return item
 
 
 class Token(object):

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+
 import sys, re, copy, traceback, ast
 from collections import namedtuple
 from itertools import izip, cycle, chain
@@ -20,10 +21,10 @@ class ParseException(Exception):
     - self.exc_info: tupla (tipo, excepcion, traceback)
     """
 
-    def __init__(self, template, exc_info):
+    def __init__(self, template):
         super(ParseException, self).__init__()
         self.template = template
-        self.exc_info = exc_info
+        self.exc_info = sys.exc_info()
 
     def __str__(self):
         return "".join(traceback.format_exception(*(self.exc_info)))
@@ -43,17 +44,63 @@ class TemplateException(Exception):
     - self.exc_info: tupla (tipo, excepcion, traceback)
     """
 
-    def __init__(self, template, local, exc_info):
+    def __init__(self, template, local):
         super(TemplateException, self).__init__()
         self.template = template
         self.local = local
-        self.exc_info = exc_info
+        self.exc_info = sys.exc_info()
 
     def __str__(self):
         return "".join(traceback.format_exception(*(self.exc_info)))
 
     def __repr__(self):
         return "TemplateException(%s, %s, %s)" % (repr(self.template), repr(self.local), repr(self.exc_info))
+
+
+class Accumulator(object):
+
+    """Acumulador de cadenas de texto"""
+
+    def __init__(self):
+        self.stack = list()
+        self.group = list()
+        self.current = list()
+
+    def push(self):
+        """Empezamos un bloque nuevo.
+
+        Salvamos el grupo actual, y empezamos otro grupo
+        """
+        self.group.append(self.current)
+        self.stack.append(self.group)
+        self.group = list()
+        self.current = list()
+
+    def refresh(self):
+        """Iniciamos otra iteracion dentro del mismo grupo"""
+        if self.current:
+            self.group.append(self.current)
+            self.current = list()
+
+    def collect(self):
+        """Obtiene el grupo actual de datos"""
+        group = ("".join(x) for x in self.group if x)
+        if self.current:
+            group = chain(group, ("".join(self.current),))
+        # Instancio el iterador porque esto generalmente se invoca antes
+        # de llamar a pop(), y no quiero problemas de que llamen a pop y
+        # luego se itere sobre algo equivocado.
+        return tuple(group)
+
+    def pop(self):
+        """Cerramos un bloque"""
+        result = self.collect()
+        self.group = self.stack.pop()
+        self.current = self.group.pop()
+        return result
+
+    def add(self, string):
+        self.current.append(string)
 
 
 class Templite(object):
@@ -77,7 +124,7 @@ class Templite(object):
 
         Hola, ?"mundo"? !
         Hola, ?"mun" + "do"? !
-        Hola, ?"".join(("m", "", "n", "d", "o"))?
+        Hola, ?"".join(("m", "u", "n", "d", "o"))?
         Los dedos de la mano son ?4+1?
 
     El delimitador debe ser de longitud 1 y se escapa repitiendolo:
@@ -120,7 +167,7 @@ class Templite(object):
             Dedo ?i+1?: ?mensaje?
         {{:end for
             El bloque de cierre puede contener cualquier cosa,
-            se ignora a menos que sea un :else:
+            se ignora a menos que sea un :else:,  :elif:, :default: ...
         }}
 
     Cuidado! no se recomienda tener mas de un nivel de indentacion
@@ -147,6 +194,27 @@ class Templite(object):
                 i, j: ?i?, ?j?
             {{:end for}}
         {{:end for}}
+
+    Tambien se admite el uso de filtros, que son funciones que permiten
+    pos-procesar la salida de un bloque.
+    
+        - Los filtros reciben como parametro una lista con todas las cadenas
+            que se han generado en el bloque
+
+        - Deben devolver una unica cadena de texto.
+
+        - Los filtros se indican en el bloque de cierre, detras de ">>"
+
+    Por ejemplo:
+
+    {{  # Ordena y elimina resultados repetidos
+        def UNIQ(strings):
+            return "".join(sorted(set(strings)))
+    }}
+    {{nombres = ("Rosa", "Marta", "Pedro", "Luis", "Rosa")}}
+    {{for nombre in nombres:}}
+        Hola, ?nombre?
+    {{:endfor >> UNIQ}}
     
     Las plantillas se compilan y se ejecutan mediante el paso de
     mensajes a un consumidor. Un consumidor es una corutina, es decir,
@@ -218,7 +286,7 @@ class Templite(object):
         """
 
         def __init__(self, part, start, end):
-            first, offset, body = part.strip(), 0, 0
+            first, offset, body, filt = part.strip(), 0, 0, '"".join'
             # si el primer caracter no espacio es ":", es un bloque de
             # continuacion
             if first.startswith(":"):
@@ -232,6 +300,10 @@ class Templite(object):
                 body = 1
             elif offset < 0:
                 # Un fin de bloque que no inicie otro, se descarta
+                # Eso si, comprobamos si tiene un filter
+                parts = first.split(">>")
+                if len(parts) > 1:
+                    filt = parts[1].strip()
                 first, lines = None, None
             # Dedentamos las lineas que siguen a la primera.
             if lines:
@@ -244,20 +316,53 @@ class Templite(object):
                 return tuple(l[level:].rstrip() for l in lines)
             
         def __iter__(self):
+            """Genera una secuencia de offsets y ordenes"""
+            # Tenemos cuatro posibles tipos de bloque:
+            # (a) {{xxxx}}   --> offset  0, body 0
+            # (b) {{xxxx:}}  --> offset  0, body 1
+            # (c) {{:xxxx}}  --> offset -1, body 0
+            # (d) {{:xxxx:}} --> offset -1, body 1
+            # - Caso (a): no modificamos nada del buffering.
+            # - Caso (b): Estamos abriendo un nuevo bloque, asi que
+            #             queremos salvar el output que llevamos hasta ahora,
+            #             y empezar a meter el output del bloque en una
+            #             nueva lista.
+            # - Caso (c): Cerramos el bloque, queremos consumir el output
+            #             que haya generado y recuperar lo que habiamos
+            #             salvado.
+            # - Caso (d): Cerramos un bloque y abrimos otro enlazado (como
+            #             un "if" y un "else", un "for" y un "default", etc).
+            #             queremos conservar la misma lista externa, pero usar
+            #             una lista interna diferente.
+            if self.offset == 0 and self.body == 1:
+                yield 0
+                yield ("_accumulator.push()",)
             yield self.offset
             if self.first:
                 yield (self.first,)
+                # Incluyo el if en las construcciones que refrescan el
+                # accumulator porque de todas formas, los :else: o :elif:
+                # tambien lo van a refrescar
+                is_loop = any(self.first.startswith(x)
+                    for x in ("for ", "while ", "if "))
+                if self.body == 1 and (self.offset == -1 or is_loop):
+                    self.lines = tuple(chain((
+                            "_accumulator.refresh()",
+                        ), self.lines or tuple()))
                 yield self.body
                 if self.lines:
                     yield self.lines
+            else:
+                # El filtro por defecto es '"".join'
+                yield ("_accumulator.add(%s(_accumulator.pop()))" % self.filt,)
 
     def do_literal(self, part, start, end, delim, indent):
         """Procesa un trozo de plantilla fuera de bloques"""
         indent = self.offset * indent
         def odd(subpart):
-            return indent + ("_consumer.send(%s)" % repr(subpart))
+            return indent + ("_accumulator.add(%s)" % repr(subpart))
         def even(subpart):
-            return indent + ("_consumer.send(str(%s))" % subpart)
+            return indent + ("_accumulator.add(str(%s))" % subpart)
         actions = cycle((odd, even))
         for subpart in Templite.Literal(part, delim):
             yield actions.next()(subpart)
@@ -308,7 +413,8 @@ class Templite(object):
             tree = ast.parse(translated, "<templite %r>" % template[:20], 'exec')
             return Templite.State(timestamp, translated, tree)
         except Exception as details:
-            raise ParseException(template, sys.exc_info())
+            print "Error compilando %s" % translated
+            raise ParseException(template)
 
     # ----------------
     # Parte "publica"
@@ -348,17 +454,20 @@ class Templite(object):
 
         El consumidor es una corutina. Cada vez que la plantilla genera
         un trozo de texto (bien por tener texto literal, o por una
-        expresion), ese texto se alimenta al consumidor a traves del metodo
+        expresion), ese texto se acumula. Una vez acumulado todo el texto,
+        se le envia al consumidor a traves del metodo
         "send". Por ejemplo, la plantilla:
 
             {{nombre = "Pedro"}}
             Hola, ?nombre? !
 
-        Se convierte en la siguiente secuencia de llamadas:
+        Se convierte (aproximadamente) en la siguiente secuencia de llamadas:
+
             consumer.next()
-            consumer.send("Hola, ")
-            consumer.send("Pedro")
-            consumer.send(" !")
+            accumulator.add("Hola, ")
+            accumulator.add("Pedro")
+            accumulator.add(" !")
+            consumer.send("".join(accumulator))
             consumer.close()
 
         Al terminar la ejecucion, el scope local se analiza y se traspasan
@@ -378,12 +487,15 @@ class Templite(object):
         if loc is None:
             loc = dict()
         glob["_consumer"] = consumer
+        glob["_accumulator"] = Accumulator()
         consumer.next()
         try:
             exec self.code in glob, loc
+            result = "".join("".join(x) for x in glob["_accumulator"].collect())
+            consumer.send(result)
         except Exception:
             try:
-                consumer.throw(TemplateException(self.translated, loc, sys.exc_info()))
+                consumer.throw(TemplateException(self.translated, loc))
             except StopIteration:
                 # No tengo ni idea de por que me lanza un StopIteration
                 # despues de hacer el throw... me parece una tonteria, pero

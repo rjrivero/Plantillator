@@ -26,7 +26,7 @@ from contextlib import contextmanager
 from itertools import count, chain, repeat
 from copy import copy
 
-from ..data import DataException, Meta, DataObject, DataSet, PeerSet
+from ..data import DataError, Meta, DataObject, DataSet, PeerSet
 from ..data import FieldMap, ObjectField, IntField
 
 
@@ -80,7 +80,7 @@ class ColumnList(object):
         columns: columnas de la lista, ya procesadas.
 
         En caso de excepcion al construir el objeto, el constructor
-        lanza la excepcion desnuda, sin envolver en un DataException.
+        lanza la excepcion desnuda, sin envolver en un DataError.
         """
         # Por si acaso columns es un iterator (no estaria definido __len__)
         self.source = source
@@ -173,11 +173,11 @@ class ColumnList(object):
 
 @contextmanager
 def wrap_exception(source, index):
-    """Envuelve una excepcion normal en un DataException"""
+    """Envuelve una excepcion normal en un DataError"""
     try:
         yield
     except Exception:
-        raise DataException(source, index, sys.exc_info())
+        raise DataError(source, index)
 
 
 class TableBlock(ColumnList):
@@ -190,7 +190,7 @@ class TableBlock(ColumnList):
         """Analiza la cabecera y prepara la carga de los datos
 
         En caso de excepcion al construir el objeto, el constructor
-        lanza la excepcion desnuda, sin envolver en un DataException.
+        lanza la excepcion desnuda, sin envolver en un DataError.
         """
         typeline   = csvrows[0].cols[1:]
         headline   = csvrows[1].cols[1:]
@@ -218,7 +218,7 @@ class TableBlock(ColumnList):
         """Procesa las lineas del bloque actualizando los datos.
 
         En caso de excepcion al procesar los objetos, la excepcion se
-        lanza envuelta en un DataException.
+        lanza envuelta en un DataError.
         """
         rootset = DataSet(data._meta, (data,))
         with wrap_exception(self.source, self.index):
@@ -239,7 +239,7 @@ class LinkBlock(object):
         """Analiza la cabecera y prepara la carga de los datos.
 
         En caso de excepcion al construir el objeto, el constructor
-        lanza la excepcion desnuda, sin envolver en un DataException.
+        lanza la excepcion desnuda, sin envolver en un DataError.
         """
         selectline = csvrows[0].cols[1:]
         typeline = csvrows[1].cols[1:]
@@ -322,7 +322,7 @@ class LinkBlock(object):
         """Procesa los datos.
 
         En caso de excepcion al procesar los objetos, la excepcion se
-        lanza envuelta en un DataException.
+        lanza envuelta en un DataError.
         """
         # Preparo los grupos y descarto los que correspondan a paths
         # no validos.
@@ -588,7 +588,7 @@ if __name__ == "__main__":
     try:
         csvshelf = CSVShelf(csvpath, shelf)
         data = csvshelf.data
-    except DataException as details:
+    except DataError as details:
         print details
         sys.exit(-1)
     finally:
