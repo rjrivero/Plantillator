@@ -31,9 +31,9 @@ class DataException(Exception):
         self.index = index
         self.exc_info = exc_info
 
-    def __unicode__(self):
-        return u"".join(chain(
-            (u"DataException: Error en %s [%s]\n" % (unicode(self.source), unicode(self.index)),),
+    def __str__(self):
+        return "".join(chain(
+            ("DataException: Error en %s [%s]\n" % (str(self.source), str(self.index)),),
             traceback.format_exception(*(self.exc_info))
             ))
 
@@ -205,12 +205,12 @@ class DataObject(object):
     def fb(self):
         return Fallback(self)
 
-    def __unicode__(self):
+    def __str__(self):
         summary = (self._get(x) for x in self._meta.summary)
-        return u", ".join(unicode(x) for x in summary if x is not None)
+        return ", ".join(str(x) for x in summary if x is not None)
 
     def __repr__(self):
-        return u"<%s>" % unicode(self)
+        return "<%s>" % str(self)
 
     def iteritems(self):
         """Itero sobre los elementos del objeto"""
@@ -276,8 +276,8 @@ class Fallback(dict):
     def HASNOT(self):
         return DataObject.TesterNot(self)
 
-    def __unicode__(self):
-        return unicode(self._back)
+    def __str__(self):
+        return str(self._back)
 
 
 class Linear(object):

@@ -6,34 +6,34 @@ from itertools import chain
 from IPy import IP
 
 
-BYTES_LIST = (u'255',u'127',u'63',u'31',u'15',u'7',u'3',u'1')
+BYTES_LIST = ('255','127','63','31','15','7','3','1')
 NIBBLES_LIST = (
-    u'ffff', u'7fff', u'3fff', u'1fff',
-    u'0fff', u'07ff', u'03ff', u'01ff',
-    u'00ff', u'007f', u'003f', u'001f',
-    u'000f', u'0007', u'0003', u'0001',
+    'ffff', '7fff', '3fff', '1fff',
+    '0fff', '07ff', '03ff', '01ff',
+    '00ff', '007f', '003f', '001f',
+    '000f', '0007', '0003', '0001',
 )
 
 
 class IPAddress(object):
 
     WILDMASK_IPV4 = tuple(chain(
-        (u"%s.255.255.255" % a for a in BYTES_LIST),
-        (u"0.%s.255.255" % a for a in BYTES_LIST),
-        (u"0.0.%s.255" % a for a in BYTES_LIST),
-        (u"0.0.0.%s" % a for a in BYTES_LIST),
-        (u"0.0.0.0",)))
+        ("%s.255.255.255" % a for a in BYTES_LIST),
+        ("0.%s.255.255" % a for a in BYTES_LIST),
+        ("0.0.%s.255" % a for a in BYTES_LIST),
+        ("0.0.0.%s" % a for a in BYTES_LIST),
+        ("0.0.0.0",)))
 
     WILDMASK_IPV6 = tuple(chain(
-        (u"%s:ffff:ffff:ffff:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
-        (u"::%s:ffff:ffff:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
-        (u"::%s:ffff:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
-        (u"::%s:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
-        (u"::%s:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
-        (u"::%s:ffff:ffff" % a for a in NIBBLES_LIST),
-        (u"::%s:ffff" % a for a in NIBBLES_LIST),
-        (u"::%s" % a for a in NIBBLES_LIST),
-        (u"::0",)))
+        ("%s:ffff:ffff:ffff:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
+        ("::%s:ffff:ffff:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
+        ("::%s:ffff:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
+        ("::%s:ffff:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
+        ("::%s:ffff:ffff:ffff" % a for a in NIBBLES_LIST),
+        ("::%s:ffff:ffff" % a for a in NIBBLES_LIST),
+        ("::%s:ffff" % a for a in NIBBLES_LIST),
+        ("::%s" % a for a in NIBBLES_LIST),
+        ("::0",)))
 
     ATTRIBS = set((
         'raw_network',  # el objeto IPy.IP que representa a la red
@@ -110,15 +110,15 @@ class IPAddress(object):
 
     def _ip(self):
         """Direccion IP en formato texto"""
-        return unicode(self.raw_network[self.host].strNormal(0))
+        return self.raw_network[self.host].strNormal(0)
 
     def _mascara(self):
         """Mascara de la red en formato texto"""
-        return unicode(self.raw_network.netmask().strNormal(0))
+        return self.raw_network.netmask().strNormal(0)
 
     def _red(self):
         """Direccion de la red en formato texto"""
-        return unicode(self.raw_network.strNormal(0))
+        return self.raw_network.strNormal(0)
 
     def _bits(self):
         """Bits de la mascara"""
@@ -126,7 +126,7 @@ class IPAddress(object):
 
     def _broadcast(self):
         """Direccion de broadcast"""
-        return unicode(self.raw_network.broadcast.strNormal(0))
+        return self.raw_network.broadcast.strNormal(0)
 
     def _wildmask(self):
         """Mascara invertida, estilo ACL Cisco"""
@@ -146,13 +146,13 @@ class IPAddress(object):
     def __add__(self, num):
         return IPAddress(self.raw_network, self.host + num)
 
-    def __unicode__(self):
+    def __str__(self):
         if self.bits == self.bitsize:
-            return unicode(self.ip)
-        return u" /".join((unicode(self.ip), unicode(self.bits)))
+            return str(self.ip)
+        return " /".join((str(self.ip), str(self.bits)))
 
     def __repr__(self):
-        return u"IPAddress('%s')" % unicode(self)
+        return "IPAddress('%s')" % str(self)
 
     def __cmp__(self, other):
         # Para listas mixtas de IPs, donde algunos elementos sean

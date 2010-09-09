@@ -3,7 +3,6 @@
 
 from itertools import chain
 import re
-#import unicodedata
 
 
 from .ip import IPAddress
@@ -36,8 +35,8 @@ class IPField(Field):
         if not data.strip():
             return None
         try:
-            if data.find(u"/") < 0:
-                data = data + u"/32"
+            if data.find("/") < 0:
+                data = data + "/32"
             return IPAddress(data)
         except ValueError:
             return None
@@ -61,7 +60,7 @@ class ListField(Field):
         Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
         es un conjunto de valores separados por ','.
         """
-        value = (self.nestedfld.convert(i) for i in data.split(u","))
+        value = (self.nestedfld.convert(i) for i in data.split(","))
         value = BaseList(x for x in value if x is not None)
         return value or None
 
@@ -78,7 +77,7 @@ class SetField(Field):
         Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
         es un conjunto de valores separados por ','.
         """
-        value = (self.nestedfld.convert(i) for i in data.split(u","))
+        value = (self.nestedfld.convert(i) for i in data.split(","))
         value = BaseSet(x for x in value if x is not None)
         return value or None
 
@@ -102,10 +101,10 @@ class RangeField(Field):
         if match:
             start = int(match.group('from'))
             stop = int(match.group('to'))
-            pref = match.group('pref') or u""
-            suff = match.group('suff') or u""
+            pref = match.group('pref') or ""
+            suff = match.group('suff') or ""
             for i in range(start, stop+1):
-                value = self.nestedfld.convert(u"%s%d%s" % (pref, i, suff))
+                value = self.nestedfld.convert("%s%d%s" % (pref, i, suff))
                 if value is not None:
                     rango.append(value)
         else:
@@ -122,7 +121,7 @@ class ListRangeField(RangeField):
 
     def convert(self, data):
         """Interpreta una cadena de caracteres como una lista de rangos"""
-        ranges = (super(ListRangeField, self).convert(x) for x in data.split(u","))
+        ranges = (super(ListRangeField, self).convert(x) for x in data.split(","))
         ranges = (x for x in ranges if x is not None)
         return BaseList(chain(*ranges)) or None
 
@@ -171,7 +170,7 @@ if __name__ == "__main__":
 
         def testString(self):
             field = FieldMap.resolve('String')
-            self.failUnless(field.convert("  abc ") == u"abc")
+            self.failUnless(field.convert("  abc ") == "abc")
             self.failUnless(field.convert("   ") is None)
 
         def testIP(self):
@@ -188,8 +187,8 @@ if __name__ == "__main__":
 
         def testListStr(self):
             field = FieldMap.resolve('List. string')
-            self.failUnless(field.convert("  a, b, c ") == (u"a", u"b", u"c"))
-            self.failUnless(field.convert("  5  ") == (u"5",))
+            self.failUnless(field.convert("  a, b, c ") == ("a", "b", "c"))
+            self.failUnless(field.convert("  5  ") == ("5",))
             self.failUnless(field.convert("  ") is None)
 
         def testListIP(self):
@@ -206,8 +205,8 @@ if __name__ == "__main__":
 
         def testSetStr(self):
             field = FieldMap.resolve('SET .String')
-            self.failUnless(field.convert("  a, b, c ") == frozenset((u"a", u"b", u"c")))
-            self.failUnless(field.convert("  5  ") == frozenset((u"5",)))
+            self.failUnless(field.convert("  a, b, c ") == frozenset(("a", "b", "c")))
+            self.failUnless(field.convert("  5  ") == frozenset(("5",)))
             self.failUnless(field.convert("  ") is None)
 
         def testSetIP(self):
@@ -227,7 +226,7 @@ if __name__ == "__main__":
 
         def testRangeStr(self):
             field = FieldMap.resolve('range.string')
-            self.failUnless(field.convert("  a 1-3 b") == (u"a 1 b", u"a 2 b", u"a 3 b"))
+            self.failUnless(field.convert("  a 1-3 b") == ("a 1 b", "a 2 b", "a 3 b"))
             self.failUnless(field.convert(" a10b  ") == ("a10b",))
             self.failUnless(field.convert("  ") is None)
 
@@ -240,9 +239,9 @@ if __name__ == "__main__":
             
         def testListRangeStr(self):
             field = FieldMap.resolve('rangelist.string')
-            self.failUnless(field.convert("1-3") == (u"1",u"2",u"3"))
-            self.failUnless(field.convert("   a1-3, 6-7b") == (u"a1",u"a2",u"a3",u"6b",u"7b"))
-            self.failUnless(field.convert(" a9, 11b  ") == (u"a9", u"11b"))
+            self.failUnless(field.convert("1-3") == ("1","2","3"))
+            self.failUnless(field.convert("   a1-3, 6-7b") == ("a1","a2","a3","6b","7b"))
+            self.failUnless(field.convert(" a9, 11b  ") == ("a9", "11b"))
             self.failUnless(field.convert("") is None)
 
     unittest.main()

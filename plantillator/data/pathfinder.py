@@ -28,8 +28,8 @@ class InputSource(object):
         """Devuelve una nueva fuente correspondiente al nombre dado"""
         raise NotImplementedError, "%s.resolve" % self.__class.__name__
 
-    def __unicode__(self):
-        return unicode(self.id)
+    def __str__(self):
+        return str(self.id)
 
 
 class FileSource(InputSource):

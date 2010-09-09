@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
+# -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent coding=utf-8
 
 
 import Tkinter as tk
@@ -13,17 +13,19 @@ class Tagger(object):
         """Intenta dar nombre a un item, en funcion de su tipo.
         "hint" es una pista para crear el nombre (por ejemplo, la clave si el
         item ha salido de un diccionario, el indice si el item ha salido de
-        una lista)
+        una lista) 
         """
         if not name:
             # es un elemento de una lista: lo convierto a string y, si viene
             # con una "cuenta de repeticiones", la incluyo.
-            return u"%s (%d)" % (unicode(data), hint) if hint is not None else unicode(data)
+            name = "%s (%d)" % (str(data), hint) if hint is not None else str(data)
         elif not hasattr(data, "__iter__"):
             # Es un atributo de un objeto, un elemento de diccionario.
             # indico su nombre y su valor.
-            return u"%s = %s" % (name, unicode(data)) if name else unicode(data)
-        return name or hint or "<>"
+            name = "%s = %s" % (name, str(data)) if name else str(data)
+        else:
+            name = name or hint or "<>"
+        return unicode(name, "utf-8")
 
     def icon(self, item):
         """Devuelve el nombre del icono a usar"""
@@ -38,17 +40,11 @@ class Tagger(object):
 
     def filter_dict(self, data):
         """Itera sobre los elementos del dict, devolviendo clave y valor"""
-        # Excluyo "up", "back", "PEER" y "PEERS" para evitar bucles
-        # return (pack for pack in data.iteritems() if pack[0] not in ("up", "back"))
         return data.iteritems()
 
     def filter_list(self, data):
         """Itera sobre los elementos de la lista/set, devolviendo indice y valor"""
-        try:
-            return enumerate(sorted(data))
-        except TypeError:
-            # la lista tiene elementos de distintos tipos, no se puede ordenar
-            return enumerate(data)
+        return enumerate(data)
 
     def filter_orderedset(self, data):
         """Itera sobre los elementos del orderedset, devolviendo valor y repeticiones"""
@@ -96,11 +92,11 @@ class Item(TreeItem):
         return self.tagger.selicon(self)
 
     def _orderedset(self):
-        return list(self.tagger.item(x, hint=count)
+        return sorted(self.tagger.item(x, hint=count)
                       for x, count in self.tagger.filter_orderedset(self.data))
 
     def _list(self):
-        return list(self.tagger.item(x)
+        return sorted(self.tagger.item(x)
                       for index, x in self.tagger.filter_list(self.data))
 
     def _dict(self):

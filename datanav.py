@@ -93,6 +93,10 @@ class DataNav(tk.Tk):
             except Exception as details:
                 print "Exception: %s" % str(details)
                 return
+        # filtro de "data" los elementos que no quiero que se vean
+        data = dict((x, y) for (x, y) in data.iteritems()
+            if not any (y.__class__.__name__.endswith(s)
+                for s in ("ANY", "NONE", "Meta", "Resolver")))
         self.canvas.show(name, data)
 
     def keyup(self, *skip):
@@ -136,9 +140,6 @@ parser.add_option("-x", "--profile",
         help="Ejecutar en modo profile (solo carga datos)")
 
 (options, args) = parser.parse_args()
-if len(args) < 1:
-    parser.print_help(sys.stderr)
-    sys.exit(OPTIONS_ERRNO)
 
 if options.debug:
     loglevel = logging.DEBUG
@@ -162,8 +163,7 @@ for name in args:
 try:
     shelfname = inputfiles[0]
 except IndexError:
-    parser.print_help(sys.stderr)
-    sys.exit(OPTIONS_ERRNO)
+    shelfname = "data.shelf"
     
 finder = PathFinder(path)
 loader = DataLoader(CSVShelf.loader)

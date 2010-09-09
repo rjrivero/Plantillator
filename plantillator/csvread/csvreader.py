@@ -13,11 +13,6 @@ except ImportError:
     # only available since Python 2.3
     BOM_UTF8 = '\xef\xbb\xbf'
 
-#try:
-    #from multiprocessing import Process, Queue
-#except ImportError:
-    #print "Vaya full de sistema operativo!"
-    #sys.exit(-1)
 
 # Try setting the locale, so that we can find out
 # what encoding to use
@@ -35,65 +30,9 @@ from ..data import DataException, Meta, DataObject, DataSet, PeerSet
 from ..data import FieldMap, ObjectField, IntField
 
 
-encoding = "ascii"
-if sys.platform == 'win32':
-    # On Windows, we could use "mbcs". However, to give the user
-    # a portable encoding name, we need to find the code page
-    try:
-        encoding = locale.getdefaultlocale()[1]
-        codecs.lookup(encoding)
-    except LookupError:
-        pass
-else:
-    try:
-        # Different things can fail here: the locale module may not be
-        # loaded, it may not offer nl_langinfo, or CODESET, or the
-        # resulting codeset may be unknown to Python. We ignore all
-        # these problems, falling back to ASCII
-        encoding = locale.nl_langinfo(locale.CODESET)
-        if encoding is None or encoding is '':
-            # situation occurs on Mac OS X
-            encoding = 'ascii'
-        codecs.lookup(encoding)
-    except (NameError, AttributeError, LookupError):
-        # Try getdefaultlocale well: it parses environment variables,
-        # which may give a clue. Unfortunately, getdefaultlocale has
-        # bugs that can cause ValueError.
-        try:
-            encoding = locale.getdefaultlocale()[1]
-            if encoding is None or encoding is '':
-                # situation occurs on Mac OS X
-                encoding = 'ascii'
-            codecs.lookup(encoding)
-        except (ValueError, LookupError):
-            pass
-
-encoding = encoding.lower()
-
-
-def guess_codec(chars):
-    if chars.startswith(BOM_UTF8):
-        return 'utf-8'
-    # If it is default, we need not to record anything
-    try:
-        chars = unicode(chars)
-        return 'ascii'
-    except UnicodeError:
-        pass
-    # Try the locale's encoding.
-    try:
-        chars = unicode(chars, encoding)
-        return encoding
-    except UnicodeError:
-        pass
-    # Last, resort to auto-detection
-    codec = chardet.detect(chars)['encoding']
-    return codec
-
-
 class CSVRow(object):
 
-    """Fila de un fichero CSV, en unicode"""
+    """Fila de un fichero CSV"""
 
     __slots__ = ("lineno", "cols")
 
@@ -101,13 +40,10 @@ class CSVRow(object):
         self.lineno = lineno
         self.cols = cols
 
-    def normalize(self, columns, codec):
+    def normalize(self, columns):
         """Normaliza los datos de las columnas en funcion del tipo"""
         for col in columns:
-            # UNIHACK
-            value = self.cols[col.index].decode(codec)
-            #value = self.cols[col.index]
-            self.cols[col.index] = col.coltype.convert(value)
+            self.cols[col.index] = col.coltype.convert(self.cols[col.index])
 
     def __repr__(self):
         return " (%s) " % ", ".join(self.cols)
@@ -250,7 +186,7 @@ class TableBlock(ColumnList):
 
     HEADERS = 1
 
-    def __init__(self, source, index, csvrows, codec):
+    def __init__(self, source, index, csvrows):
         """Analiza la cabecera y prepara la carga de los datos
 
         En caso de excepcion al construir el objeto, el constructor
@@ -258,23 +194,14 @@ class TableBlock(ColumnList):
         """
         typeline   = csvrows[0].cols[1:]
         headline   = csvrows[1].cols[1:]
-        self.codec = codec
         self.body  = csvrows[2:]
-        # Convierto el path a unicode
-        # UNIHACK
-        path       = csvrows[1].cols[0].decode(codec).encode()
-        #path       = csvrows[1].cols[0]
-        path       = tuple(x.strip() for x in path.split("."))
+        path       = tuple(x.strip() for x in csvrows[1].cols[0].split("."))
         columns    = tuple(self._columns(typeline, headline))
         super(TableBlock, self).__init__(source, index, path, columns)
 
     def _columns(self, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, coltype, colname in zip(count(1), typeline, headline):
-            # Me aseguro de que coltype y colname son ASCII"
-            #UNIHACK
-            coltype = coltype.decode(self.codec).encode().strip()
-            colname = colname.decode(self.codec).encode().strip()
             # Me salto las columnas excluidas
             if not coltype or not colname or colname.startswith("!"):
                 continue
@@ -298,7 +225,7 @@ class TableBlock(ColumnList):
             self._prepare(data._meta)
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
-                row.normalize(self.columns, self.codec)
+                row.normalize(self.columns)
                 self._addrow(row.cols, rootset)
 
 
@@ -308,7 +235,7 @@ class LinkBlock(object):
 
     HEADERS = 2
 
-    def __init__(self, source, index, csvrows, codec):
+    def __init__(self, source, index, csvrows):
         """Analiza la cabecera y prepara la carga de los datos.
 
         En caso de excepcion al construir el objeto, el constructor
@@ -317,12 +244,7 @@ class LinkBlock(object):
         selectline = csvrows[0].cols[1:]
         typeline = csvrows[1].cols[1:]
         headline = csvrows[2].cols[1:]
-        # Me aseguro de que el path es ASCII
-        #UNIHACK
-        path = csvrows[2].cols[0].decode(codec).encode().strip()[1:]
-        #path = csvrows[2].cols[0][1:]
-        self.path = path.split(u".").pop(0).strip()
-        self.codec = codec
+        self.path = csvrows[2].cols[0][1:].split(".").pop(0).strip()
         self.source = source
         self.index = index
         self.columns = tuple(self._columns(selectline, typeline, headline))
@@ -333,10 +255,6 @@ class LinkBlock(object):
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, selector, coltype, colname in zip(count(1), selectline, typeline, headline):
-            # Me aseguro de que coltype y colname son ASCII
-            # UNIHACK
-            colname = colname.decode(self.codec).encode().strip()
-            coltype = coltype.decode(self.codec).encode().strip()
             # Me salto las lineas excluidas
             if not coltype or not colname or colname.startswith("!") or colname == "*":
                 continue
@@ -426,7 +344,7 @@ class LinkBlock(object):
             # Si no hay combinaciones validas, habra que lanzar un
             # error, digo yo...
             if not valid:
-                raise SyntaxError(u"Ningun enlace valido")
+                raise SyntaxError("Ningun enlace valido")
         # A cada grupo valido le incluyo un sub-atributo:
         # - si solo hay dos grupos, el sub-atributo es "PEER"
         # - si hay mas de dos grupos, el subatributo es "PEERS"
@@ -439,7 +357,7 @@ class LinkBlock(object):
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
                 # Creo todos los objetos y los agrego a una lista
-                row.normalize(self.columns, self.codec)
+                row.normalize(self.columns)
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
                 inserted = tuple((p, r) for (p, r) in inserted if r)
                 # Y los cruzo para construir los peerings
@@ -468,39 +386,74 @@ class LinkBlock(object):
 
 class CSVSource(object):
 
-    def __init__(self, data, source, codec):
+    @classmethod
+    def get_default_encoding(cls):
+        try:
+            return cls.ENCODING
+        except AttributeError:
+            pass
+        if sys.platform == 'win32':
+            encoding = locale.getdefaultlocale()[1]
+        else:
+            try:
+                encoding = locale.nl_langinfo(locale.CODESET)
+            except (NameError, AttributeError):
+                encoding = locale.getdefaultlocale()[1]
+        try:
+            encoding = encoding.lower() if encoding else 'ascii'
+            codecs.lookup(encoding)
+        except LookupError:
+            encoding = 'ascii'
+        cls.ENCODING = encoding
+        return encoding
+
+    def as_unicode(self, chars):
+        if chars.startswith(BOM_UTF8):
+            return unicode(chars, 'utf-8')
+        try:
+            return unicode(chars)
+        except UnicodeError:
+            pass
+        try:
+            return unicode(chars, CSVSource.get_default_encoding())
+        except UnicodeError:
+            pass
+        codec = chardet.detect(chars)['encoding']
+        return unicode(chars, codec)
+
+    def __init__(self, path):
         # Auto-detecto el separador de campos... en funcion del
         # programa que exporte a CSV, algunos utilizan "," y otros ";".
         # Asumimos que el encoding de entrada es compatible con ASCII:
         # - csv.reader va a ser capaz de leerlo
         # - los caracteres ",", ";", "*" y "!" son iguales que en ASCII.
+        with open(path, "rb") as infile:
+            data = self.as_unicode(infile.read())
+        # Codifico a utf-8 para el csv.reader
+        data = data.encode('utf-8')
         lines, delim = data.splitlines(), ";"
         for line in lines:
             if line and line[0] in (",", ";"):
                 delimiter = str(line[0])
                 break
-        rows = tuple(self._clean(source, lines, delimiter, codec))
-        self.blocks = self._split(source, rows, codec)
+        rows = tuple(self._clean(lines, delimiter))
+        self.blocks = self._split(path, rows)        
 
-    def _clean(self, source, lines, delimiter, codec):
+    def _clean(self, lines, delimiter):
         """Elimina las columnas comentario o vacias"""
         reader = csv.reader(lines, delimiter=delimiter)
         for lineno, row in enumerate(reader):
-            #with wrap_exception(source, lineno):
-                ## decodifico despues de reconocer el csv, porque por lo
-                ## visto, el csv.reader no se lleva muy bien con el texto
-                ## unicode.
-                #for index, item in enumerate(row):
-                    #row[index] = item.decode(codec).strip()
-                #if len(row) >= 2 and (row[0] or row[1]) and row[0] != u"!":
-                    #yield CSVRow(lineno, row)
-            if len(row) >= 2:
-                row[0] = row[0].strip()
-                row[1] = row[1].strip()
-                if (row[0] or row[1]) and row[0] != "!":
-                    yield CSVRow(lineno, row)
+            for index, val in enumerate(row):
+                # No lo volvemos a pasar a unicode, hacemos todo el proceso
+		# en utf-8.
+		# Cuando pasemos a python-3, lo que habra que hacer sera
+		# no convertir la cadena a utf-8 desde el principio, sino
+		# dejarla en unicode.
+                row[index] = row[index].strip()
+            if len(row) >= 2 and (row[0] or row[1]) and row[0] != "!":
+                yield CSVRow(lineno, row)
 
-    def _split(self, source, rows, codec):
+    def _split(self, path, rows):
         """Divide el fichero en tablas"""
         labels = list()
         # Busco todas las lineas que marcan un inicio de tabla
@@ -512,23 +465,11 @@ class CSVSource(object):
         labels.append((len(rows), None))
         # Divido la entrada en bloques
         for (i, blk), (j, skip) in zip(labels, labels[1:]):
-            with wrap_exception(source, i):
-                yield blk(source, i, rows[i:j], codec)
+            with wrap_exception(path, i):
+                yield blk(path, i, rows[i:j])
 
     def __iter__(self):
         return iter(self.blocks)
-
-
-# Pruebas que hice de cargar los archivos en paralelo,
-# no ahorra demasiado.
-#def read_csv(path, queue):
-    #try:
-        #data  = open(path, "rb").read()
-        #codec = guess_codec(data)
-        #data  = CSVSource(data, path, codec)
-        #queue.put(data)
-    #except IOError:
-        #queue.put(None)
 
 
 class CSVShelf(object):
@@ -593,19 +534,7 @@ class CSVShelf(object):
 
     def _read_blocks(self, files):
         """Carga los ficheros y genera los bloques de datos"""
-        #queue = Queue()
-        #procs = tuple(Process(target=read_csv, args=(f, queue)) for f in files.keys())
-        #for p in procs:
-            #p.start()
-        #blocks = chain(*(queue.get() for p in procs))
-        #for p in procs:
-            #p.join()
-        # Leo todos los ficheros y proceso los bloques en orden
-        # de profundidad
-        fdata   = tuple((f, open(f, "rb").read()) for f in files.keys())
-        fdata   = tuple((f, guess_codec(b), b) for (f, b) in fdata)
-        sources = (CSVSource(body, fname, codec) for (fname, codec, body) in fdata)
-        blocks  = chain(*sources)
+        blocks  = chain(*(CSVSource(path) for path in files))
         nesting = dict()
         for block in blocks:
             nesting.setdefault(block.depth, list()).append(block)
@@ -614,7 +543,7 @@ class CSVShelf(object):
     def _set_vars(self, data):
         # proceso la tabla especial "variables"
         meta = data._meta
-        keys = dict((k.lower(), k) for k in meta.subtypes)
+        keys = dict((k.lower(), k) for k in meta.subtypes.keys())
         vart = keys.get(CSVShelf.VARTABLE.lower(), None)
         if vart:
             submeta = meta.subtypes[keys[vart]]

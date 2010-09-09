@@ -37,7 +37,7 @@ XLAT = (
 )
 
 # Tabla de conversion a base64
-ITOA64 = u"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+ITOA64 = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 # Longitud maxima de password.
 PW_MAX = len(XLAT) - 15
@@ -66,8 +66,8 @@ def password(pw, seed=None):
     if len(pw) > PW_MAX:
         raise ValueError(pw)
     seed = seed % 16 if seed is not None else randint(0, 15)
-    data = "".join(u"%02X" % (ord(a)^b) for a, b in zip(pw, XLAT[seed:]))
-    return u"%02d%s" % (seed, data)
+    data = "".join("%02X" % (ord(a)^b) for a, b in zip(pw, XLAT[seed:]))
+    return "%02d%s" % (seed, data)
 
 
 def to64(stream, chars):
@@ -82,16 +82,16 @@ def to64(stream, chars):
     return "".join(ITOA64[(data >> b) & 0x3F] for b in bits)
 
 
-def secret(pw, salt=None, magic=u"$1$"):
+def secret(pw, salt=None, magic="$1$"):
     """Cifra el password con la salt dada, y MD5"""
     # Validamos la salt.
     if salt is None:
         # usamos una salt de 24 bits
-        salt = u"".join(chr(randint(0, 255)) for x in xrange(0, 3))
+        salt = "".join(chr(randint(0, 255)) for x in xrange(0, 3))
         salt = to64(salt, (0, 1, 2))
     if len(salt) > 4:
         raise ValueError(salt)
-    salt = salt.replace(u"$", u"&")
+    salt = salt.replace("$", "&")
     # calculamos los valores iniciales
     final = md5(pw + salt + pw).digest()
     ctx = pw + magic + salt
@@ -121,6 +121,5 @@ def secret(pw, salt=None, magic=u"$1$"):
         (4, 10, 5),
         (11,),
     )
-    passwd = "".join(to64(final, x) for x in tuples)                            
-    return magic + salt + u'$' + passwd
-
+    passwd = "".join(to64(final, x) for x in tuples)
+    return magic + salt + '$' + passwd

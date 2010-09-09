@@ -25,8 +25,8 @@ class ParseException(Exception):
         self.template = template
         self.exc_info = exc_info
 
-    def __unicode__(self):
-        return u"".join(traceback.format_exception(*(self.exc_info)))
+    def __str__(self):
+        return "".join(traceback.format_exception(*(self.exc_info)))
 
     def __repr__(self):
         return "ParseException(%s, %s)" % (repr(self.template), repr(self.exc_info))
@@ -49,8 +49,8 @@ class TemplateException(Exception):
         self.local = local
         self.exc_info = exc_info
 
-    def __unicode__(self):
-        return u"".join(traceback.format_exception(*(self.exc_info)))
+    def __str__(self):
+        return "".join(traceback.format_exception(*(self.exc_info)))
 
     def __repr__(self):
         return "TemplateException(%s, %s, %s)" % (repr(self.template), repr(self.local), repr(self.exc_info))
@@ -64,7 +64,7 @@ class Templite(object):
     Permite procesar y evaluar plantillas con practicamente todo
     el poder expresivo de python.
 
-    Las plantillas son documentos de texto (unicode) que pueden contener
+    Las plantillas son documentos de texto que pueden contener
     tres tipos de elementos:
 
     - Texto literal (cualquier texto)
@@ -77,7 +77,7 @@ class Templite(object):
 
         Hola, ?"mundo"? !
         Hola, ?"mun" + "do"? !
-        Hola, ?"".join(("m", "u", "n", "d", "o"))?
+        Hola, ?"".join(("m", "", "n", "d", "o"))?
         Los dedos de la mano son ?4+1?
 
     El delimitador debe ser de longitud 1 y se escapa repitiendolo:
@@ -151,7 +151,7 @@ class Templite(object):
     Las plantillas se compilan y se ejecutan mediante el paso de
     mensajes a un consumidor. Un consumidor es una corutina, es decir,
     un generador que acepte los metodos "send" y "close". Los
-    mensajes que se envian al consumidor son cadenas de texto unicode,
+    mensajes que se envian al consumidor son cadenas de texto,
     el resultado de evaluar cada porcion de la plantilla.
 
     Las variables miembros de una plantilla son:
@@ -179,12 +179,12 @@ class Templite(object):
         def __init__(self, part, delim):
             # Para evitar demasiadas newlines, si la primera linea
             # del texto entre bloques esta vacia, la elimino.
-            first = part.find(u"\n")
+            first = part.find("\n")
             if first >= 0:
                 if part[:(first+1)].isspace():
                     part = part[(first+1):]
             self.parts = list()
-            actions, accum = cycle((self.odd, self.even)), u""
+            actions, accum = cycle((self.odd, self.even)), ""
             for subpart in part.split(delim):
                 accum = actions.next()(subpart, accum, delim)
             if accum:
@@ -203,7 +203,7 @@ class Templite(object):
                 return accum + delim
             self.parts.append(accum)
             self.parts.append(subpart)
-            return u""
+            return ""
 
         def __iter__(self):
             return iter(self.parts)
@@ -221,14 +221,14 @@ class Templite(object):
             first, offset, body = part.strip(), 0, 0
             # si el primer caracter no espacio es ":", es un bloque de
             # continuacion
-            if first.startswith(u":"):
+            if first.startswith(":"):
                 first = first[1:]
                 offset = -1
             lines = tuple(l for l in first.splitlines() if not l.isspace())
             first = lines[0].strip()
             # Si la primera linea termina en ":", el cuerpo se indenta
             # un nivel adicional respecto a ella.
-            if first.endswith(u":"):
+            if first.endswith(":"):
                 body = 1
             elif offset < 0:
                 # Un fin de bloque que no inicie otro, se descarta
@@ -255,9 +255,9 @@ class Templite(object):
         """Procesa un trozo de plantilla fuera de bloques"""
         indent = self.offset * indent
         def odd(subpart):
-            return indent + (u"_consumer.send(%s)" % repr(subpart))
+            return indent + ("_consumer.send(%s)" % repr(subpart))
         def even(subpart):
-            return indent + (u"_consumer.send(unicode(%s))" % subpart)
+            return indent + ("_consumer.send(str(%s))" % subpart)
         actions = cycle((odd, even))
         for subpart in Templite.Literal(part, delim):
             yield actions.next()(subpart)
@@ -268,7 +268,7 @@ class Templite(object):
             # Los elementos impares son cambios en el offset: (-1, 0, 1)
             self.offset += offset
             if self.offset < 0:
-                raise SyntaxError(u"No block statement to terminate: ${%s}$" % part)
+                raise SyntaxError("No block statement to terminate: ${%s}$" % part)
             return dummy
         def even(lines):
             # Los elementos pares son listas de lineas sin indentar.
@@ -284,8 +284,8 @@ class Templite(object):
         delimiter = re.compile(r'%s(.*?)%s' % (re.escape(start), re.escape(end)), re.DOTALL | re.UNICODE)
         actions = cycle((self.do_literal, self.do_block))
         for subpart in delimiter.split(template):
-            subpart = subpart.replace(u"\\".join(start), start)
-            subpart = subpart.replace(u"\\".join(end), end)
+            subpart = subpart.replace("\\".join(start), start)
+            subpart = subpart.replace("\\".join(end), end)
             for block in actions.next()(subpart, start, end, delim, indent):
                 yield block
 
@@ -302,10 +302,10 @@ class Templite(object):
     def parse_template(self, template, start, end, delim, indent, timestamp):
         try:
             self.offset = 0
-            translated = u"\n".join(self.do_template(template, start, end, delim, indent))
+            translated = "\n".join(self.do_template(template, start, end, delim, indent))
             if self.offset:
-                raise SyntaxError(u"%i block statement(s) not terminated" % self.offset)
-            tree = ast.parse(translated, u"<templite %r>" % template[:20], 'exec')
+                raise SyntaxError("%i block statement(s) not terminated" % self.offset)
+            tree = ast.parse(translated, "<templite %r>" % template[:20], 'exec')
             return Templite.State(timestamp, translated, tree)
         except Exception as details:
             raise ParseException(template, sys.exc_info())
@@ -314,17 +314,17 @@ class Templite(object):
     # Parte "publica"
     # ----------------
 
-    def __init__(self, template=u"", start=u"{{", end=u"}}", delim=u"?", indent=u"    ", timestamp=None):
+    def __init__(self, template="", start="{{", end="}}", delim="?", indent="    ", timestamp=None):
         """Analiza, valida y construye el template.
 
         En caso de error durante el proceso, lanza una ParseException con
         los detalles del problema.
         """
-        assert(isinstance(template, unicode))
-        assert(isinstance(start, unicode))
-        assert(isinstance(end, unicode))
-        assert(isinstance(delim, unicode))
-        assert(isinstance(indent, unicode))
+        assert(isinstance(template, basestring))
+        assert(isinstance(start, basestring))
+        assert(isinstance(end, basestring))
+        assert(isinstance(delim, basestring))
+        assert(isinstance(indent, basestring))
         assert(len(start) == 2 and len(end) == 2)
         assert(len(delim) == 1)
         assert(indent.isspace())
@@ -337,11 +337,11 @@ class Templite(object):
     def __setstate__(self, state):
         """Restablece el estado del objeto desde un 'pickle'."""
         if state['version'] != self.__class__.CURRENT:
-            raise pickle.UnpicklingError(u"Versions do not match: %s != %s" % (unicode(state['version']), unicode(self.__class__.CURRENT)))
+            raise pickle.UnpicklingError("Versions do not match: %s != %s" % (str(state['version']), str(self.__class__.CURRENT)))
         self.timestamp = state['timestamp']
         self.translated = state['template']
         self.ast = state['ast']
-        self.code = compile(self.ast, u"<templite %r>" % self.translated[:20], 'exec')
+        self.code = compile(self.ast, "<templite %r>" % self.translated[:20], 'exec')
 
     def render(self, consumer, glob=None, loc=None):
         """Ejecuta la plantilla con el consumidor y datos dados.
@@ -356,9 +356,9 @@ class Templite(object):
 
         Se convierte en la siguiente secuencia de llamadas:
             consumer.next()
-            consumer.send(u"Hola, ")
-            consumer.send(u"Pedro")
-            consumer.send(u" !")
+            consumer.send("Hola, ")
+            consumer.send("Pedro")
+            consumer.send(" !")
             consumer.close()
 
         Al terminar la ejecucion, el scope local se analiza y se traspasan
@@ -424,38 +424,38 @@ if __name__ == '__main__':
             except TemplateException as details:
                 self.exc = details
             finally:
-                self.result = u"".join(result)
+                self.result = "".join(result)
 
     class ConstructorTest(unittest.TestCase):
 
         def testTemplateInvalid(self):
-            """Error si el template no es unicode"""
+            """Error si el template no es str"""
             self.assertRaises(AssertionError, Templite, 100)
 
         def testDelimInvalid(self):
-            """Error si delim no es unicode o len() != 1"""
-            self.assertRaises(AssertionError, Templite, u"", delim=u"")
-            self.assertRaises(AssertionError, Templite, u"", delim=u"abc")
-            self.assertRaises(AssertionError, Templite, u"", delim=100)
+            """Error si delim no es str o len() != 1"""
+            self.assertRaises(AssertionError, Templite, "", delim="")
+            self.assertRaises(AssertionError, Templite, "", delim="abc")
+            self.assertRaises(AssertionError, Templite, "", delim=100)
 
         def testBlockDelimInvalid(self):
-            """Error si los inicio y fin de bloque no son unicode o len() != 2"""
-            self.assertRaises(AssertionError, Templite, u"", start=u"abc")
-            self.assertRaises(AssertionError, Templite, u"", end=u"abc")
-            self.assertRaises(AssertionError, Templite, u"", start=u"")
-            self.assertRaises(AssertionError, Templite, u"", end=u"")
-            self.assertRaises(AssertionError, Templite, u"", start=100)
-            self.assertRaises(AssertionError, Templite, u"", end=100)
+            """Error si los inicio y fin de bloque no son str o len() != 2"""
+            self.assertRaises(AssertionError, Templite, "", start="abc")
+            self.assertRaises(AssertionError, Templite, "", end="abc")
+            self.assertRaises(AssertionError, Templite, "", start="")
+            self.assertRaises(AssertionError, Templite, "", end="")
+            self.assertRaises(AssertionError, Templite, "", start=100)
+            self.assertRaises(AssertionError, Templite, "", end=100)
 
         def testIndentInvalid(self):
-            """Error si indent no es unicode o no es whitespace"""
-            self.assertRaises(AssertionError, Templite, u"", indent=100)
-            self.assertRaises(AssertionError, Templite, u"", indent=u"abc")
-            self.assertRaises(AssertionError, Templite, u"", indent=u"")
+            """Error si indent no es str o no es whitespace"""
+            self.assertRaises(AssertionError, Templite, "", indent=100)
+            self.assertRaises(AssertionError, Templite, "", indent="abc")
+            self.assertRaises(AssertionError, Templite, "", indent="")
 
         def testTemplateUnfinished(self):
             """Error si hay bloques sin cerrar"""
-            template = u"""
+            template = """
             {{if 5 > 0:}}
                 5 es mayor que 0
             """
@@ -466,16 +466,16 @@ if __name__ == '__main__':
         def buildTestCases(self, template, result):
             """Genera versiones del patron con distintos delimitadores"""
             sets = (
-                ( u"{{", u"}}", u"?", u"    " ),
-                ( u"${", u"}$", u"%", u"    " )
+                ( "{{", "}}", "?", "    " ),
+                ( "${", "}$", "%", "    " )
             )
             for x in sets:
                 data = dict(zip(('start','end','delim','indent'), x))
                 full = copy.copy(data)
-                full['escaped_start'] = u"\\".join(data['start'])
-                full['escaped_end'] = u"\\".join(data['end'])
+                full['escaped_start'] = "\\".join(data['start'])
+                full['escaped_end'] = "\\".join(data['end'])
                 full['escaped_delim'] = data['delim'] + data['delim']
-                yield (data, template % full, (result or u"") % full)
+                yield (data, template % full, (result or "") % full)
 
         def hookTemplite(self, templite):
             """Un hook para facilitar la evaluacion de pickle y zodb"""
@@ -504,107 +504,107 @@ if __name__ == '__main__':
 
         def testLiteralTemplate(self):
             """Template formado solo por literales"""
-            template = u"  Hello! \n World! "
+            template = "  Hello! \n World! "
             result = template
             self.checkTestCases(template, result)
 
         def testWhitespaceRemoval(self):
             """Template con whitespace al inicio"""
-            template = u"    \n Hello! \nWorld!  "
-            result = u" Hello! \nWorld!  "
+            template = "    \n Hello! \nWorld!  "
+            result = " Hello! \nWorld!  "
             self.checkTestCases(template, result)
 
         def testSimpleEval(self):
             """Un simple eval"""
-            template = u"  %(delim)s 4 + 2 %(delim)s  "
-            result = u"  6  "
+            template = "  %(delim)s 4 + 2 %(delim)s  "
+            result = "  6  "
             self.checkTestCases(template, result)
 
         def testEscapedDelim(self):
             """Delimitador escapado"""
-            template = u" %(escaped_delim)s %(delim)s'hola!'%(delim)s"
-            result = u" %(delim)s hola!"
+            template = " %(escaped_delim)s %(delim)s'hola!'%(delim)s"
+            result = " %(delim)s hola!"
             self.checkTestCases(template, result)
 
         def testSimpleBlock(self):
             """Un bloque simple"""
-            template = u"\n%(start)s x = 5 %(end)s\n%(delim)s x %(delim)s"""
-            result = u"5"
+            template = "\n%(start)s x = 5 %(end)s\n%(delim)s x %(delim)s"""
+            result = "5"
             self.checkTestCases(template, result)
 
         def testIfBlock(self):
             """Un bloque con un if"""
-            template = u"\n%(start)s if 5 > 0: %(end)s\n5 es mayor que 0\n%(start)s :endif %(end)s"""
-            result = u"5 es mayor que 0\n"
+            template = "\n%(start)s if 5 > 0: %(end)s\n5 es mayor que 0\n%(start)s :endif %(end)s"""
+            result = "5 es mayor que 0\n"
             self.checkTestCases(template, result)
             
         def testIfElseBlock(self):
             """Un bloque con un if"""
-            template = u"\n%(start)s if 5 < 0: %(end)s\n5 es menor que 0\n%(start)s :else: %(end)s\n5 no es menor que 0\n%(start)s :endif %(end)s"""
-            result = u"5 no es menor que 0\n"
+            template = "\n%(start)s if 5 < 0: %(end)s\n5 es menor que 0\n%(start)s :else: %(end)s\n5 no es menor que 0\n%(start)s :endif %(end)s"""
+            result = "5 no es menor que 0\n"
             self.checkTestCases(template, result)
 
         def testForBlock(self):
             """Un bloque con un if"""
-            template = u"\n%(start)s for i in range(4): %(end)s\n%(delim)s i %(delim)s\n%(start)s :end for %(end)s"""
-            result = u"0\n1\n2\n3\n"
+            template = "\n%(start)s for i in range(4): %(end)s\n%(delim)s i %(delim)s\n%(start)s :end for %(end)s"""
+            result = "0\n1\n2\n3\n"
             self.checkTestCases(template, result)
 
         def testDefBlock(self):
             """Un bloque con def"""
-            template = u"\n%(start)s def test(a):\n    return a %(end)s\n%(start)s :end def %(end)s\n%(delim)s test(1) %(delim)s"""
-            result = u"1"
+            template = "\n%(start)s def test(a):\n    return a %(end)s\n%(start)s :end def %(end)s\n%(delim)s test(1) %(delim)s"""
+            result = "1"
             self.checkTestCases(template, result)
 
         def testEscapedStart(self):
             """Un start escapado"""
-            template = u"\n%(escaped_start)s %(start)s x = '%(escaped_start)s' %(end)s\n%(delim)s x %(delim)s"""
-            result = u"%(start)s %(start)s"
+            template = "\n%(escaped_start)s %(start)s x = '%(escaped_start)s' %(end)s\n%(delim)s x %(delim)s"""
+            result = "%(start)s %(start)s"
             self.checkTestCases(template, result)
             
         def testEscapedEnd(self):
             """Un end escapado"""
-            template = u"\n%(escaped_end)s %(start)s x = '%(escaped_end)s' %(end)s\n%(delim)s x %(delim)s"""
-            result = u"%(end)s %(end)s"
+            template = "\n%(escaped_end)s %(start)s x = '%(escaped_end)s' %(end)s\n%(delim)s x %(delim)s"""
+            result = "%(end)s %(end)s"
             self.checkTestCases(template, result)
 
         def testException(self):
             """Lanzamiento de una excepcion"""
-            template = u"\n%(start)s x = 1/0 %(end)s\n%(delim)s x %(delim)s"""
+            template = "\n%(start)s x = 1/0 %(end)s\n%(delim)s x %(delim)s"""
             self.checkTestCases(template, exc=ZeroDivisionError)
 
         def testVariable(self):
             """Los diccionarios proporcionados son accesibles"""
-            template = u"%(delim)s d+1 %(delim)s"""
-            result = u"6"
+            template = "%(delim)s d+1 %(delim)s"""
+            result = "6"
             self.checkTestCases(template, result, glob={'d':5})
             
         def testVariableInjection(self):
             """Las variables normales no pasan al scope global"""
-            template = u"\n%(start)s x = 1 %(end)s\n%(delim)s x %(delim)s"""
-            result = u"1"
+            template = "\n%(start)s x = 1 %(end)s\n%(delim)s x %(delim)s"""
+            result = "1"
             data = self.checkTestCases(template, result)
             self.failIf('x' in data.glob)
             self.failUnless('x' in data.loc)
 
         def testDefInjection(self):
             """Las funciones pasan al scope global"""
-            template = u"\n%(start)s def test(a): return a %(end)s\n%(delim)s test(10) %(delim)s"""
-            result = u"10"
+            template = "\n%(start)s def test(a): return a %(end)s\n%(delim)s test(10) %(delim)s"""
+            result = "10"
             data = self.checkTestCases(template, result)
             self.failUnless('test' in data.glob)
 
         def testImportInjection(self):
             """Los modulos pasan al scope global"""
-            template = u"\n%(start)s import os %(end)s\n%(delim)s 20 %(delim)s"""
-            result = u"20"
+            template = "\n%(start)s import os %(end)s\n%(delim)s 20 %(delim)s"""
+            result = "20"
             data = self.checkTestCases(template, result)
             self.failUnless('os' in data.glob)
 
         def testClassInjection(self):
             """Las clases pasan al scope global"""
-            template = u"\n%(start)s class dummy(object): pass %(end)s\n%(delim)s 30 %(delim)s"""
-            result = u"30"
+            template = "\n%(start)s class dummy(object): pass %(end)s\n%(delim)s 30 %(delim)s"""
+            result = "30"
             data = self.checkTestCases(template, result)
             self.failUnless('dummy' in data.glob)
 
@@ -624,8 +624,8 @@ if __name__ == '__main__':
                 templite.__class__.CURRENT = (sys.maxint, sys.version_info)
                 return pickle.loads(pickled)
             self.hookTemplite = hookPatch
-            template = u"  %(delim)s 4 + 2 %(delim)s  "
-            result = u"  6  "
+            template = "  %(delim)s 4 + 2 %(delim)s  "
+            result = "  6  "
             self.assertRaises(pickle.UnpicklingError, self.checkTestCases, template, result)
 
     unittest.main()
