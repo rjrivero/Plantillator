@@ -13,6 +13,12 @@ except ImportError:
     # only available since Python 2.3
     BOM_UTF8 = '\xef\xbb\xbf'
 
+#try:
+    #from multiprocessing import Process, Queue
+#except ImportError:
+    #print "Vaya full de sistema operativo!"
+    #sys.exit(-1)
+
 # Try setting the locale, so that we can find out
 # what encoding to use
 try:
@@ -22,7 +28,7 @@ except (ImportError, locale.Error):
     pass
 
 from contextlib import contextmanager
-from itertools import count, chain
+from itertools import count, chain, repeat
 from copy import copy
 
 from ..data import DataException, Meta, DataObject, DataSet, PeerSet
@@ -95,10 +101,16 @@ class CSVRow(object):
         self.lineno = lineno
         self.cols = cols
 
-    def normalize(self, columns):
+    def normalize(self, columns, codec):
         """Normaliza los datos de las columnas en funcion del tipo"""
         for col in columns:
-            self.cols[col.index] = col.coltype.convert(self.cols[col.index])
+            # UNIHACK
+            value = self.cols[col.index].decode(codec)
+            #value = self.cols[col.index]
+            self.cols[col.index] = col.coltype.convert(value)
+
+    def __repr__(self):
+        return " (%s) " % ", ".join(self.cols)
 
 
 class Column(object):
@@ -126,7 +138,8 @@ class ColumnList(object):
     def __init__(self, source, index, path, columns):
         """Construye la lista de columnas.
 
-        source: origen del bloque (nombre de fichero)
+        source: origen del bloque (nombre de fichero).
+        index: numero de linea de la cabecera en el fichero.
         path: path de la lista, ya procesado (en forma de tuple).
         columns: columnas de la lista, ya procesadas.
 
@@ -237,25 +250,36 @@ class TableBlock(ColumnList):
 
     HEADERS = 1
 
-    def __init__(self, source, index, csvrows):
+    def __init__(self, source, index, csvrows, codec):
         """Analiza la cabecera y prepara la carga de los datos
 
         En caso de excepcion al construir el objeto, el constructor
         lanza la excepcion desnuda, sin envolver en un DataException.
         """
-        typeline = csvrows[0].cols[1:]
-        headline = csvrows[1].cols[1:]
-        columns = tuple(self._columns(typeline, headline))
-        path = tuple(x.strip() for x in csvrows[1].cols[0].split(u"."))
+        typeline   = csvrows[0].cols[1:]
+        headline   = csvrows[1].cols[1:]
+        self.codec = codec
+        self.body  = csvrows[2:]
+        # Convierto el path a unicode
+        # UNIHACK
+        path       = csvrows[1].cols[0].decode(codec).encode()
+        #path       = csvrows[1].cols[0]
+        path       = tuple(x.strip() for x in path.split("."))
+        columns    = tuple(self._columns(typeline, headline))
         super(TableBlock, self).__init__(source, index, path, columns)
-        self.body = csvrows[2:]
 
     def _columns(self, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, coltype, colname in zip(count(1), typeline, headline):
-            if not coltype or not colname or colname.startswith(u"!"):
+            # Me aseguro de que coltype y colname son ASCII"
+            #UNIHACK
+            coltype = coltype.decode(self.codec).encode().strip()
+            colname = colname.decode(self.codec).encode().strip()
+            # Me salto las columnas excluidas
+            if not coltype or not colname or colname.startswith("!"):
                 continue
-            selector, nameparts = None, colname.split(u".")
+            # Divido el nombre en selector y atributo
+            selector, nameparts = None, colname.split(".")
             if len(nameparts) > 1:
                 selector = nameparts.pop(0).strip()
             colname = nameparts.pop(0).strip()
@@ -274,7 +298,7 @@ class TableBlock(ColumnList):
             self._prepare(data._meta)
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
-                row.normalize(self.columns)
+                row.normalize(self.columns, self.codec)
                 self._addrow(row.cols, rootset)
 
 
@@ -284,7 +308,7 @@ class LinkBlock(object):
 
     HEADERS = 2
 
-    def __init__(self, source, index, csvrows):
+    def __init__(self, source, index, csvrows, codec):
         """Analiza la cabecera y prepara la carga de los datos.
 
         En caso de excepcion al construir el objeto, el constructor
@@ -293,10 +317,15 @@ class LinkBlock(object):
         selectline = csvrows[0].cols[1:]
         typeline = csvrows[1].cols[1:]
         headline = csvrows[2].cols[1:]
+        # Me aseguro de que el path es ASCII
+        #UNIHACK
+        path = csvrows[2].cols[0].decode(codec).encode().strip()[1:]
+        #path = csvrows[2].cols[0][1:]
+        self.path = path.split(u".").pop(0).strip()
+        self.codec = codec
         self.source = source
         self.index = index
         self.columns = tuple(self._columns(selectline, typeline, headline))
-        self.path = csvrows[2].cols[0][1:].split(u".").pop(0).strip()
         self.groups = tuple(self._groups())
         self.peercolumns = tuple(x for x in self.columns if not x.selector)
         self.body = csvrows[3:]
@@ -304,7 +333,12 @@ class LinkBlock(object):
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, selector, coltype, colname in zip(count(1), selectline, typeline, headline):
-            if not coltype or not colname or colname.startswith("!") or colname.strip() == "*":
+            # Me aseguro de que coltype y colname son ASCII
+            # UNIHACK
+            colname = colname.decode(self.codec).encode().strip()
+            coltype = coltype.decode(self.codec).encode().strip()
+            # Me salto las lineas excluidas
+            if not coltype or not colname or colname.startswith("!") or colname == "*":
                 continue
             selector = selector.strip() or None
             coltype = FieldMap.resolve(coltype)
@@ -358,7 +392,7 @@ class LinkBlock(object):
         else:
             # Demultiplexamos el primer elemento
             column = columns.pop(0)
-            selectors = (x.strip() for x in column.selector.split(u","))
+            selectors = (x.strip() for x in column.selector.split(","))
             for selector in (x for x in selectors if x):
                 # Creamos un objeto columna con un solo selector
                 newcol = Column(column.index, selector, column.coltype, column.colname)
@@ -405,7 +439,7 @@ class LinkBlock(object):
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
                 # Creo todos los objetos y los agrego a una lista
-                row.normalize(self.columns)
+                row.normalize(self.columns, self.codec)
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
                 inserted = tuple((p, r) for (p, r) in inserted if r)
                 # Y los cruzo para construir los peerings
@@ -415,15 +449,16 @@ class LinkBlock(object):
                     # Los peers pueden ser de distintos tipos, asi que
                     # en general no puedo meterlos en un DataSet...
                     # como mucho, en un PeerSet.
+                    position, items = result
+                    for item in items:
+                        item.POSITION = position
                     peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
                     peers = PeerSet(chain(*(p[1] for p in peers)))
                     if peers:
                         if self.p2p:
                             peers = +peers
-                        position, items = result
                         for item in items:
                             setattr(item, attrib, peers)
-                            item.POSITION = position
 
     @property
     def depth(self):
@@ -433,36 +468,44 @@ class LinkBlock(object):
 
 class CSVSource(object):
 
-    def __init__(self, data, source, codec="utf-8"):
+    def __init__(self, data, source, codec):
         # Auto-detecto el separador de campos... en funcion del
         # programa que exporte a CSV, algunos utilizan "," y otros ";".
+        # Asumimos que el encoding de entrada es compatible con ASCII:
+        # - csv.reader va a ser capaz de leerlo
+        # - los caracteres ",", ";", "*" y "!" son iguales que en ASCII.
         lines, delim = data.splitlines(), ";"
         for line in lines:
             if line and line[0] in (",", ";"):
                 delimiter = str(line[0])
                 break
         rows = tuple(self._clean(source, lines, delimiter, codec))
-        self.blocks = self._split(source, rows)
+        self.blocks = self._split(source, rows, codec)
 
     def _clean(self, source, lines, delimiter, codec):
         """Elimina las columnas comentario o vacias"""
         reader = csv.reader(lines, delimiter=delimiter)
         for lineno, row in enumerate(reader):
-            with wrap_exception(source, lineno):
-                # decodifico despues de reconocer el csv, porque por lo
-                # visto, el csv.reader no se lleva muy bien con el texto
-                # unicode.
-                for index, item in enumerate(row):
-                    row[index] = item.decode(codec).strip()
-                if len(row) >= 2 and (row[0] or row[1]) and row[0] != u"!":
+            #with wrap_exception(source, lineno):
+                ## decodifico despues de reconocer el csv, porque por lo
+                ## visto, el csv.reader no se lleva muy bien con el texto
+                ## unicode.
+                #for index, item in enumerate(row):
+                    #row[index] = item.decode(codec).strip()
+                #if len(row) >= 2 and (row[0] or row[1]) and row[0] != u"!":
+                    #yield CSVRow(lineno, row)
+            if len(row) >= 2:
+                row[0] = row[0].strip()
+                row[1] = row[1].strip()
+                if (row[0] or row[1]) and row[0] != "!":
                     yield CSVRow(lineno, row)
 
-    def _split(self, source, rows):
+    def _split(self, source, rows, codec):
         """Divide el fichero en tablas"""
         labels = list()
         # Busco todas las lineas que marcan un inicio de tabla
         for index, row in ((i, r) for (i, r) in enumerate(rows) if r.cols[0]):
-            blk = LinkBlock if row.cols[0].startswith("*") else TableBlock
+            blk = LinkBlock if row.cols[0].strip().startswith("*") else TableBlock
             labels.append((index-blk.HEADERS, blk))
         if not labels:
             raise GeneratorExit()
@@ -470,10 +513,22 @@ class CSVSource(object):
         # Divido la entrada en bloques
         for (i, blk), (j, skip) in zip(labels, labels[1:]):
             with wrap_exception(source, i):
-                yield blk(source, i, rows[i:j])
+                yield blk(source, i, rows[i:j], codec)
 
     def __iter__(self):
         return iter(self.blocks)
+
+
+# Pruebas que hice de cargar los archivos en paralelo,
+# no ahorra demasiado.
+#def read_csv(path, queue):
+    #try:
+        #data  = open(path, "rb").read()
+        #codec = guess_codec(data)
+        #data  = CSVSource(data, path, codec)
+        #queue.put(data)
+    #except IOError:
+        #queue.put(None)
 
 
 class CSVShelf(object):
@@ -538,12 +593,19 @@ class CSVShelf(object):
 
     def _read_blocks(self, files):
         """Carga los ficheros y genera los bloques de datos"""
-        fdata = tuple((f, open(f, "rb").read()) for f in files.keys())
-        fdata = tuple((f, guess_codec(b), b) for (f, b) in fdata)
+        #queue = Queue()
+        #procs = tuple(Process(target=read_csv, args=(f, queue)) for f in files.keys())
+        #for p in procs:
+            #p.start()
+        #blocks = chain(*(queue.get() for p in procs))
+        #for p in procs:
+            #p.join()
         # Leo todos los ficheros y proceso los bloques en orden
         # de profundidad
+        fdata   = tuple((f, open(f, "rb").read()) for f in files.keys())
+        fdata   = tuple((f, guess_codec(b), b) for (f, b) in fdata)
         sources = (CSVSource(body, fname, codec) for (fname, codec, body) in fdata)
-        blocks = chain(*sources)
+        blocks  = chain(*sources)
         nesting = dict()
         for block in blocks:
             nesting.setdefault(block.depth, list()).append(block)

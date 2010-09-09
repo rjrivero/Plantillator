@@ -37,9 +37,6 @@ class DataException(Exception):
             traceback.format_exception(*(self.exc_info))
             ))
 
-    def __str__(self):
-        return str(unicode(self))
-
     def __repr__(self):
         return "DataException(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
 
@@ -340,6 +337,7 @@ class Index(object):
         values = tuple(x.get(attr) for x in items)
         self._empty = tuple(y for (x, y) in zip(values, items) if x is None)
         self._full  = tuple(sorted(IndexItem(x, y) for (x, y) in zip(values, items) if x is not None))
+        self._cache = dict()
 
     def _margins(self, index):
         item  = IndexKey(index)
@@ -348,8 +346,12 @@ class Index(object):
         return (first, last)
 
     def _eq(self, index):
-        first, last = self._margins(index)
-        return tuple(x.item for x in self._full[first:last])
+        try:
+            return self._cache[index]
+        except KeyError:
+            first, last = self._margins(index)
+            result = tuple(x.item for x in self._full[first:last])
+            return self._cache.setdefault(index, result)
 
     def _ne(self, index):
         first, last = self._margins(index)
@@ -528,8 +530,16 @@ class DataSet(object):
     def __add__(self, other):
         assert(self._meta == other._meta)
         if not hasattr(other, '__iter__'):
-            other = (other,)
-        return DataSet(self._meta, self._children.union(other))
+            other = DataSet(other._meta, (other,))
+        # Si uno de los dos datasets esta vacio, devolvemos
+        # el otro (en lugar de la suma) para poder aprovechar
+        # los indices.
+        if not other._children:
+            return self
+        if not self._children:
+            return other
+        # Si los dos tiene datos, devolvemos un dataset no indexable.
+        return DataSet(self._meta, self._children.union(other), False)
 
     def __pos__(self):
         assert(len(self._children) == 1)

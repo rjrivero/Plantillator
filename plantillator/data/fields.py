@@ -3,7 +3,8 @@
 
 from itertools import chain
 import re
-import unicodedata
+#import unicodedata
+
 
 from .ip import IPAddress
 from .meta import Field, BaseSet, BaseList, PeerSet
@@ -25,7 +26,7 @@ class StrField(Field):
         # caracteres en un mismo fichero, y luego al pasarlo a unicode no
         # hay forma de recuperarlo, ni siquiera con "normalize". Asi que
         # cuidado con los identificadores, mejor que sean solo ASCII...
-        #return unicodedata.normalize('NFKC', unicode(data).strip()) or None
+        #return unicodedata.normalize('NFKC', data.strip()) or None
         return data.strip() or None
 
 
@@ -101,8 +102,8 @@ class RangeField(Field):
         if match:
             start = int(match.group('from'))
             stop = int(match.group('to'))
-            pref = unicode(match.group('pref') or u"")
-            suff = unicode(match.group('suff') or u"")
+            pref = match.group('pref') or u""
+            suff = match.group('suff') or u""
             for i in range(start, stop+1):
                 value = self.nestedfld.convert(u"%s%d%s" % (pref, i, suff))
                 if value is not None:

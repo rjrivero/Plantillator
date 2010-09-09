@@ -28,9 +28,6 @@ class ParseException(Exception):
     def __unicode__(self):
         return u"".join(traceback.format_exception(*(self.exc_info)))
 
-    def __str__(self):
-        return str(unicode(self))
-
     def __repr__(self):
         return "ParseException(%s, %s)" % (repr(self.template), repr(self.exc_info))
 
@@ -54,9 +51,6 @@ class TemplateException(Exception):
 
     def __unicode__(self):
         return u"".join(traceback.format_exception(*(self.exc_info)))
-
-    def __str__(self):
-        return str(unicode(self))
 
     def __repr__(self):
         return "TemplateException(%s, %s, %s)" % (repr(self.template), repr(self.local), repr(self.exc_info))
