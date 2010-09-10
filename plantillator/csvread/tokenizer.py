@@ -13,7 +13,7 @@ class Tokenizer(object):
     vacias, y separa las otras en los campos que las componen
     """
 
-    def __init__(self, source, comment):
+    def __init__(self, source, comments):
         """Conecta el tokenizer a un flujo de lineas
 
         Genera los atributos:
@@ -22,7 +22,7 @@ class Tokenizer(object):
         """
         self.source = source
         self.lineno = 0
-        self.comment = comment
+        self.comments = comments
     
     def tokens(self):
         """Iterador que genera un flujo de tokens"""
@@ -33,7 +33,7 @@ class Tokenizer(object):
                 yield (reader.line_num, record)
 
     def _norm(self, record):
-        if not record or record[0].startswith(self.comment):
+        if not record or any(record[0].startswith(x) for x in self.comments)):
             return None
         for item in reversed(record):
             if item and not item.isspace():

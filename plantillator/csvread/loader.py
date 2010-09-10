@@ -9,8 +9,8 @@ from .tokenizer import Tokenizer
 from .parser import TableParser, ValidHeader, DataError
 
 
-DATA_COMMENT = "!"
-DATA_ANNOTATION = "#"
+DATA_COMMENTS = ("!", "#")
+DATA_ANNOTATION = "?"
 ANNOTATIONS = "_annotations"
 
 
@@ -91,7 +91,7 @@ class TableLoader(dict):
 
     def _doread(self, source):
         """Realiza el procesamiento, no filtra excepciones"""
-        tokenizer = Tokenizer(source, DATA_COMMENT)
+        tokenizer = Tokenizer(source, DATA_COMMENTS)
         path, title, lines = None, None, []
         for (self.lineno, line) in tokenizer.tokens():
             head = line.pop(0).strip() or None
