@@ -59,31 +59,51 @@ class TemplateException(Exception):
 
 class Accumulator(object):
 
-    """Acumulador de cadenas de texto"""
+    """Acumulador de cadenas de texto.
 
-    def __init__(self):
-        self.stack = list()
-        self.group = list()
-        self.current = list()
+    Hace buffering de los bloques, para que se puedan filtrar. El texto en
+    el primer nivel se guarda en un buffer; cuando aparece un bloque, el texto
+    acumulado se manda al consumidor y se empieza a hacer buffering del
+    nuevo bloque, en dos niveles:
+
+     - una lista interna, con el texto generado por el cuerpo del bloque.
+     - una lista externa, con el texto generado en cada pasada del bloque
+         (por si era un bucle: cada pasada se guardaria aparte).
+
+    Asi, conseguimos buffering parcial, sin tener que mantener en
+    memoria toda la plantilla completa, que en algunos casos (documentaciones,
+    por ejemplo) puede ser bastante grande.
+    """
+
+    def __init__(self, consumer):
+        self.stack, self.current = list(), list()
+        self.group = None
+        self.consumer = consumer
 
     def push(self):
-        """Empezamos un bloque nuevo.
-
-        Salvamos el grupo actual, y empezamos otro grupo
-        """
-        self.group.append(self.current)
-        self.stack.append(self.group)
+        """Empujamos el bloque actual"""
+        if self.group is None:
+            # Puedo haber estado acumulando cosas en self.current, las despacho
+            if self.current:
+                self.consumer.send("".join(self.current))
+        else:
+            self.group.append(self.current)
+            self.stack.append(self.group)
         self.group = list()
         self.current = list()
-
+        
     def refresh(self):
-        """Iniciamos otra iteracion dentro del mismo grupo"""
-        if self.current:
+        """Refrescamos el bloque actual"""
+        if self.group is None:
+            self.consumer.send("".join(self.current))
+        else:
             self.group.append(self.current)
-            self.current = list()
+        self.current = list()
 
     def collect(self):
         """Obtiene el grupo actual de datos"""
+        if self.group is None:
+            return tuple("".join(self.current),)
         group = ("".join(x) for x in self.group if x)
         if self.current:
             group = chain(group, ("".join(self.current),))
@@ -93,13 +113,21 @@ class Accumulator(object):
         return tuple(group)
 
     def pop(self):
-        """Cerramos un bloque"""
+        """Da por concluido el bloque y vuelve al buffer anterior"""
+        if self.group is None:
+            raise NotImplemented("_idle_pop")
         result = self.collect()
-        self.group = self.stack.pop()
-        self.current = self.group.pop()
+        if self.stack:
+            # Si habia algo en la pila, lo sacamos
+            self.group = self.stack.pop()
+            self.current = self.group.pop()
+        else:
+            self.current = list()
+            self.group = None
         return result
 
     def add(self, string):
+        """manda la cadena al buffer actual"""
         if string:
             self.current.append(string)
 
@@ -326,7 +354,7 @@ class Templite(object):
                 body = 1
             elif offset < 0:
                 # Un fin de bloque que no inicie otro, se descarta
-                # Eso si, comprobamos si tiene un filter
+                # Eso si, comprobamos si tiene un filtro
                 parts = list(first.split(">>")[1:])
                 parts.append('"".join')
                 # Los filtros se aplican en orden inverso
@@ -515,16 +543,27 @@ class Templite(object):
         if loc is None:
             loc = dict()
         glob["_consumer"] = consumer
-        glob["_accumulator"] = Accumulator()
+        glob["_accumulator"] = Accumulator(consumer)
         glob["UNIQ"] = UNIQ
         glob["SORT"] = SORT
         glob["REVERSE"] = REVERSE
         consumer.next()
+        if self.embed(consumer, glob, loc):
+            result = "".join("".join(x) for x in glob["_accumulator"].collect())
+            if result:
+                consumer.send(result)
+            consumer.close()
+
+    def embed(self, consumer, glob, loc):
+        """Ejecuta una plantilla embebida.
+
+        Es como "render", pero considera que el consumidor y los datos
+        ya estan inicializados.
+        """
         try:
             exec self.code in glob, loc
-            result = "".join("".join(x) for x in glob["_accumulator"].collect())
-            consumer.send(result)
-        except Exception:
+            return True
+        except:
             try:
                 consumer.throw(TemplateException(self.translated, loc))
             except StopIteration:
@@ -533,15 +572,18 @@ class Templite(object):
                 # bueno, lo capturo.
                 pass
         finally:
-            del(glob["_consumer"])
-            consumer.close()
-        # Pongo en el alcance global los siguientes elementos:
-        # - clases
-        # - modulos
-        # - funciones
-        for item, value in loc.iteritems():
+            # paso al scope global las variables globales definidas.
+            self._promote(glob, loc)
+
+    def _promote(self, glob, loc):
+        """Pasa a scope global ciertas variables del scope local"""
+        promoted = list()
+        for key, value in loc.iteritems():
             if hasattr(value, '__call__') or type(value).__name__ in ('classobj', 'module'):
-                glob[item] = value
+                glob[key] = value
+                promoted.append(key)
+        for key in promoted:
+            del(loc[key])
 
 
 if __name__ == '__main__':
