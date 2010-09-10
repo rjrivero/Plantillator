@@ -94,9 +94,10 @@ class DataNav(tk.Tk):
                 print "Exception: %s" % str(details)
                 return
         # filtro de "data" los elementos que no quiero que se vean
-        data = dict((x, y) for (x, y) in data.iteritems()
-            if not any (y.__class__.__name__.endswith(s)
-                for s in ("ANY", "NONE", "Meta", "Resolver")))
+        if hasattr(data, 'iteritems'):
+            data = dict((x, y) for (x, y) in data.iteritems()
+                if not any (y.__class__.__name__.endswith(s)
+                    for s in ("ANY", "NONE", "Meta", "Resolver")))
         self.canvas.show(name, data)
 
     def keyup(self, *skip):

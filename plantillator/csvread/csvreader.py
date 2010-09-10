@@ -24,10 +24,40 @@ except (ImportError, locale.Error):
 
 from contextlib import contextmanager
 from itertools import count, chain, repeat
-from copy import copy
 
 from ..data import DataError, Meta, DataObject, DataSet, PeerSet
-from ..data import FieldMap, ObjectField, IntField
+from ..data import FieldMap, ObjectField, IntField, DataSetField
+
+
+class CSVMeta(Meta):
+
+    """Metadatos para objeto extraido de CSV.
+
+    Amplia el Meta basico con algunos campos necesarios
+    para hacer seguimiento de la jerarquia.
+    """
+
+    def __init__(self, path, parent=None):
+        super(CSVMeta, self).__init__(parent)
+        self.path = path
+        self.subtypes = dict()
+
+    def __getstate__(self):
+        # una vez procesado, la lista de subtipos ya no es necesaria.
+        self.subtypes = None
+        return self.__dict__
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    def child(self, name):
+        """Devuelve un tipo hijo, creandolo si es necesario"""
+        try:
+            return self.subtypes[name]
+        except KeyError:
+            submeta = CSVMeta(".".join((self.path, name)), self)
+            self.fields[name] = DataSetField(submeta)
+            return self.subtypes.setdefault(name, submeta)
 
 
 class CSVRow(object):
@@ -465,10 +495,10 @@ class CSVSource(object):
         # compatibilizar el nuevo csvreader con la version anterior (que
         # simplemente las trata como comentario). 
         marks = ((i, m) for (i, m) in marks if m != "#")
-        # Selecciono los bloques que corresponden a cada marca
+        # Identifico el bloque corresponde a cada marca
         marks = ((i, LinkBlock if m == "*" else TableBlock) for (i, m) in marks)
-        # Y por ultimo, construyo las etiquetas
-        labels = list((i - b.HEADERS, b) for (i, b) in marks)
+        # Y recalculo las etiquetas
+        labels = list((i - blk.HEADERS, blk) for (i, blk) in marks)
         if not labels:
             raise GeneratorExit()
         labels.append((len(rows), None))
@@ -514,7 +544,7 @@ class CSVShelf(object):
                 if not fnames.symmetric_difference(snames):
                     if all(files[name] <= sfiles[name] for name in fnames):
                         # Todo correcto, los datos estan cargados
-                        self.data = copy(datashelf[CSVShelf.DATA])
+                        self.data = dict(datashelf[CSVShelf.DATA])
                         return
         except:
             # Si el pickle falla o no es completo, recargamos los datos
@@ -531,7 +561,7 @@ class CSVShelf(object):
     def _update(self, files, datashelf):
         """Procesa los datos y los almacena en el shelf"""
         nesting = self._read_blocks(files)
-        meta = Meta("", None)
+        meta = CSVMeta("", None)
         data = DataObject(meta)
         for depth in sorted(nesting.keys()):
             for item in nesting[depth]:
@@ -567,6 +597,7 @@ class CSVShelf(object):
                     if vval is not None:
                         setattr(data, vname, vval)
             delattr(data, str(vart))
+            del(meta.fields[vart])
             del(meta.subtypes[vart])
 
     def _save(self, datashelf, files, data):
@@ -574,7 +605,7 @@ class CSVShelf(object):
         datashelf[CSVShelf.DATA] = data
         datashelf[CSVShelf.FILES] = files
         datashelf.sync()
-        self.data = copy(data)
+        self.data = dict(data)
 
     @staticmethod
     def loader(path, datashelf):

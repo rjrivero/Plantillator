@@ -6,14 +6,14 @@ import re
 
 
 from .ip import IPAddress
-from .meta import Field, BaseSet, BaseList, PeerSet
+from .meta import Field, BaseSet, BaseList
 
 
 class IntField(Field):
 
     def convert(self, data):
         try:
-            return int(data) if data.strip() else None
+            return int(data) if data else None
         except ValueError:
             return None
 
@@ -26,13 +26,13 @@ class StrField(Field):
         # hay forma de recuperarlo, ni siquiera con "normalize". Asi que
         # cuidado con los identificadores, mejor que sean solo ASCII...
         #return unicodedata.normalize('NFKC', data.strip()) or None
-        return data.strip() or None
+        return data or None
 
 
 class IPField(Field):
 
     def convert(self, data):
-        if not data.strip():
+        if not data:
             return None
         try:
             if data.find("/") < 0:
@@ -40,12 +40,6 @@ class IPField(Field):
             return IPAddress(data)
         except ValueError:
             return None
-
-
-class ObjectField(Field):
-
-    def collect(self, items):
-        return PeerSet(items)
 
 
 class ListField(Field):
@@ -60,7 +54,7 @@ class ListField(Field):
         Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
         es un conjunto de valores separados por ','.
         """
-        value = (self.nestedfld.convert(i) for i in data.split(","))
+        value = (self.nestedfld.convert(i.strip()) for i in data.split(","))
         value = BaseList(x for x in value if x is not None)
         return value or None
 
@@ -77,7 +71,7 @@ class SetField(Field):
         Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
         es un conjunto de valores separados por ','.
         """
-        value = (self.nestedfld.convert(i) for i in data.split(","))
+        value = (self.nestedfld.convert(i.strip()) for i in data.split(","))
         value = BaseSet(x for x in value if x is not None)
         return value or None
 
@@ -101,8 +95,8 @@ class RangeField(Field):
         if match:
             start = int(match.group('from'))
             stop = int(match.group('to'))
-            pref = match.group('pref') or ""
-            suff = match.group('suff') or ""
+            pref = (match.group('pref') or "").strip()
+            suff = (match.group('suff') or "").strip()
             for i in range(start, stop+1):
                 value = self.nestedfld.convert("%s%d%s" % (pref, i, suff))
                 if value is not None:
@@ -121,7 +115,7 @@ class ListRangeField(RangeField):
 
     def convert(self, data):
         """Interpreta una cadena de caracteres como una lista de rangos"""
-        ranges = (super(ListRangeField, self).convert(x) for x in data.split(","))
+        ranges = (super(ListRangeField, self).convert(x.strip()) for x in data.split(","))
         ranges = (x for x in ranges if x is not None)
         return BaseList(chain(*ranges)) or None
 
