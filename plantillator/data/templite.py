@@ -100,7 +100,23 @@ class Accumulator(object):
         return result
 
     def add(self, string):
-        self.current.append(string)
+        if string:
+            self.current.append(string)
+
+
+def SORT(strings):
+    """Ordena los items"""
+    return sorted(strings)
+
+
+def REVERSE(strings):
+    """Invierte el orden de los items"""
+    return reversed(strings)
+
+
+def UNIQ(strings):
+    """Filtra los items y devuelve solo los unicos"""
+    return sorted(set(strings))
 
 
 class Templite(object):
@@ -201,21 +217,29 @@ class Templite(object):
         - Los filtros reciben como parametro una lista con todas las cadenas
             que se han generado en el bloque
 
-        - Deben devolver una unica cadena de texto.
+        - Deben devolver una lista de cadenas de texto (para poder encadenar
+            filtros)
 
         - Los filtros se indican en el bloque de cierre, detras de ">>"
 
     Por ejemplo:
 
-    {{  # Ordena y elimina resultados repetidos
-        def UNIQ(strings):
-            return "".join(sorted(set(strings)))
+    {{  # Ordena los resultados
+        def SORT(strings):
+            return sorted(strings)
+
+        # Inviete el orden de los resultados
+        def REVERSE(strings):
+            return reversed(strings)
     }}
     {{nombres = ("Rosa", "Marta", "Pedro", "Luis", "Rosa")}}
     {{for nombre in nombres:}}
         Hola, ?nombre?
-    {{:endfor >> UNIQ}}
-    
+    {{:endfor >> SORT >> REVERSE}}
+
+    Los filtros SORT, UNIQ (como SORT, pero eliminando duplicados)
+    y REVERSE estan predefinidos.
+
     Las plantillas se compilan y se ejecutan mediante el paso de
     mensajes a un consumidor. Un consumidor es una corutina, es decir,
     un generador que acepte los metodos "send" y "close". Los
@@ -285,14 +309,16 @@ class Templite(object):
         consecutivamente offsets y listas de comandos.
         """
 
-        def __init__(self, part, start, end):
-            first, offset, body, filt = part.strip(), 0, 0, '"".join'
+        def __init__(self, part, start, end, TAB_WIDTH=" "*8):
+            first, offset, body, filt = part.strip(), 0, 0, ""
             # si el primer caracter no espacio es ":", es un bloque de
             # continuacion
             if first.startswith(":"):
                 first = first[1:]
                 offset = -1
-            lines = tuple(l for l in first.splitlines() if not l.isspace())
+            lines = (l for l in first.splitlines() if not l.isspace())
+            # Evito mezclar espacios con tabs
+            lines = tuple(l.replace("\t", TAB_WIDTH) for l in lines)
             first = lines[0].strip()
             # Si la primera linea termina en ":", el cuerpo se indenta
             # un nivel adicional respecto a ella.
@@ -301,9 +327,11 @@ class Templite(object):
             elif offset < 0:
                 # Un fin de bloque que no inicie otro, se descarta
                 # Eso si, comprobamos si tiene un filter
-                parts = first.split(">>")
-                if len(parts) > 1:
-                    filt = parts[1].strip()
+                parts = list(first.split(">>")[1:])
+                parts.append('"".join')
+                # Los filtros se aplican en orden inverso
+                filt = "".join("%s(" % x.strip() for x in reversed(parts))
+                filt += "_accumulator.pop()" + ")" * len(parts)
                 first, lines = None, None
             # Dedentamos las lineas que siguen a la primera.
             if lines:
@@ -353,8 +381,8 @@ class Templite(object):
                 if self.lines:
                     yield self.lines
             else:
-                # El filtro por defecto es '"".join'
-                yield ("_accumulator.add(%s(_accumulator.pop()))" % self.filt,)
+                # El filtro por defecto es '"".join(_accumulator.pop())'
+                yield ("_accumulator.add(%s)" % self.filt,)
 
     def do_literal(self, part, start, end, delim, indent):
         """Procesa un trozo de plantilla fuera de bloques"""
@@ -488,6 +516,9 @@ class Templite(object):
             loc = dict()
         glob["_consumer"] = consumer
         glob["_accumulator"] = Accumulator()
+        glob["UNIQ"] = UNIQ
+        glob["SORT"] = SORT
+        glob["REVERSE"] = REVERSE
         consumer.next()
         try:
             exec self.code in glob, loc

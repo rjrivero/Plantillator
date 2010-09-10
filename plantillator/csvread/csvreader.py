@@ -445,21 +445,30 @@ class CSVSource(object):
         for lineno, row in enumerate(reader):
             for index, val in enumerate(row):
                 # No lo volvemos a pasar a unicode, hacemos todo el proceso
-		# en utf-8.
-		# Cuando pasemos a python-3, lo que habra que hacer sera
-		# no convertir la cadena a utf-8 desde el principio, sino
-		# dejarla en unicode.
+                # en utf-8.
+                # Cuando pasemos a python-3, lo que habra que hacer sera
+                # no convertir la cadena a utf-8 desde el principio, sino
+                # dejarla en unicode.
+                # Necesito el strip para que la comparacion de abajo
+                # (row[0] != "!") sea fiable, lo mismo que el distinguir
+                # tipos de tabla por su marca ("*" => enlaces, resto => tablas)
                 row[index] = row[index].strip()
             if len(row) >= 2 and (row[0] or row[1]) and row[0] != "!":
                 yield CSVRow(lineno, row)
 
     def _split(self, path, rows):
         """Divide el fichero en tablas"""
-        labels = list()
-        # Busco todas las lineas que marcan un inicio de tabla
-        for index, row in ((i, r) for (i, r) in enumerate(rows) if r.cols[0]):
-            blk = LinkBlock if row.cols[0].strip().startswith("*") else TableBlock
-            labels.append((index-blk.HEADERS, blk))
+        # Extraigo el caracter de la primera columna, que me sirve como
+        # discriminador.
+        marks = ((i, r.cols[0][0]) for (i, r) in enumerate(rows) if r.cols[0])
+        # Me salto las lineas que empiezan por "#", que sirven para
+        # compatibilizar el nuevo csvreader con la version anterior (que
+        # simplemente las trata como comentario). 
+        marks = ((i, m) for (i, m) in marks if m != "#")
+        # Selecciono los bloques que corresponden a cada marca
+        marks = ((i, LinkBlock if m == "*" else TableBlock) for (i, m) in marks)
+        # Y por ultimo, construyo las etiquetas
+        labels = list((i - b.HEADERS, b) for (i, b) in marks)
         if not labels:
             raise GeneratorExit()
         labels.append((len(rows), None))
