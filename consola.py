@@ -13,9 +13,10 @@ from operator import itemgetter
 from optparse import OptionParser
 from traceback import print_exc, format_exception_only
 
-from plantillator.data import DataError
 from plantillator.engine import ParseError, CommandError
-from plantillator.apps import Plantillator, Consumer
+from plantillator import ParseError as NewParseError
+from plantillator import DataError, TemplateError, Plantillator, Consumer
+
 
 VERSION           = "0.2"
 OPTIONS_ERRNO     = -1
@@ -206,7 +207,7 @@ except CommandError as detail:
         detail.data['error'] = detail
         code.interact("Consola de depuracion", local={'data':detail.data})
     sys.exit(TRANSLATION_ERRNO)
-except (ParseError, DataError) as detail:
+except (ParseError, NewParseError, TemplateError, DataError) as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:

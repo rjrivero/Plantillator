@@ -11,7 +11,7 @@ except ImportError:
     import pickle
 
 
-class ParseException(Exception):
+class ParseError(Exception):
 
     """
     Encapsula las excepciones lanzadas durante la compilacion de un template.
@@ -21,7 +21,7 @@ class ParseException(Exception):
     """
 
     def __init__(self, template):
-        super(ParseException, self).__init__()
+        super(ParseError, self).__init__()
         self.template = template
         self.exc_info = sys.exc_info()
 
@@ -29,10 +29,10 @@ class ParseException(Exception):
         return "".join(traceback.format_exception(*(self.exc_info)))
 
     def __repr__(self):
-        return "ParseException(%s, %s)" % (repr(self.template), repr(self.exc_info))
+        return "ParseError(%s, %s)" % (repr(self.template), repr(self.exc_info))
 
 
-class TemplateException(Exception):
+class TemplateError(Exception):
 
     """
     Encapsula las excepciones lanzadas durante la ejecucion de un template.
@@ -44,7 +44,7 @@ class TemplateException(Exception):
     """
 
     def __init__(self, template, local):
-        super(TemplateException, self).__init__()
+        super(TemplateError, self).__init__()
         self.template = template
         self.local = local
         self.exc_info = sys.exc_info()
@@ -53,7 +53,7 @@ class TemplateException(Exception):
         return "".join(traceback.format_exception(*(self.exc_info)))
 
     def __repr__(self):
-        return "TemplateException(%s, %s, %s)" % (repr(self.template), repr(self.local), repr(self.exc_info))
+        return "TemplateError(%s, %s, %s)" % (repr(self.template), repr(self.local), repr(self.exc_info))
 
 
 class Accumulator(object):
@@ -464,7 +464,7 @@ class Templite(object):
             tree = ast.parse(translated, "<templite %r>" % template[:20], 'exec')
             return Templite.State(timestamp, translated, tree)
         except Exception as details:
-            raise ParseException(template)
+            raise ParseError(template)
 
     # ----------------
     # Parte "publica"
@@ -473,7 +473,7 @@ class Templite(object):
     def __init__(self, template="", start="{{", end="}}", delim="?", indent=" "*4, timestamp=None):
         """Analiza, valida y construye el template.
 
-        En caso de error durante el proceso, lanza una ParseException con
+        En caso de error durante el proceso, lanza una ParseError con
         los detalles del problema.
         """
         assert(isinstance(template, basestring))
@@ -529,7 +529,7 @@ class Templite(object):
         - son modulos
 
         Si se produce alguna excepcion durante la ejecucion de la plantilla,
-        se le traslada al consumidor envuelta en un TemplateException, y se
+        se le traslada al consumidor envuelta en un TemplateError, y se
         aborta la ejecucion del template.
         """
         if glob is None:
@@ -559,7 +559,7 @@ class Templite(object):
             return True
         except:
             try:
-                consumer.throw(TemplateException(self.translated, loc))
+                consumer.throw(TemplateError(self.translated, loc))
             except StopIteration:
                 # No tengo ni idea de por que me lanza un StopIteration
                 # despues de hacer el throw... me parece una tonteria, pero
@@ -600,7 +600,7 @@ if __name__ == '__main__':
                     result.append((yield))
             except GeneratorExit:
                 self.closed = True
-            except TemplateException as details:
+            except TemplateError as details:
                 self.exc = details
             finally:
                 self.result = "".join(result)
@@ -638,7 +638,7 @@ if __name__ == '__main__':
             {{if 5 > 0:}}
                 5 es mayor que 0
             """
-            self.assertRaises(ParseException, Templite, template)
+            self.assertRaises(ParseError, Templite, template)
 
     class TemplateTest(unittest.TestCase):
 

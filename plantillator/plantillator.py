@@ -14,11 +14,11 @@ try:
 except ImportError:
     print >> sys.stderr, "Warning: PyDOT NOT SUPPORTED!"
 
-from ..tools import PathFinder, FileSource
-from ..data import Fallback
-from ..csvread import CSVShelf
-from ..engine import Loader as TmplLoader, VARPATTERN
-from .dataloader import ShelfLoader, ContextMaker
+from .pathfinder import PathFinder, FileSource
+from .meta import Fallback
+from .csvreader import CSVShelf
+from .engine import Loader as TmplLoader, VARPATTERN
+from .iotools import ShelfLoader, ContextMaker
 
 
 TMPL_EXT = set(('.txt',))

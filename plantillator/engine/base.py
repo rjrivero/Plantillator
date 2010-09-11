@@ -10,7 +10,7 @@ from sys import exc_info
 from gettext import gettext as _
 from itertools import chain
 
-from ..tools import IPAddress
+from ..ip import IPAddress
 
 
 DELIMITER = "?"

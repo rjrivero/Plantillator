@@ -15,14 +15,12 @@ from optparse import OptionParser
 from contextlib import contextmanager
 
 try:
-    from plantillator.tools import PathFinder, FileSource
+    from plantillator import ShelfLoader, TreeCanvas
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.tools import PathFinder, FileSource
-
-from plantillator.apps import ShelfLoader, TreeCanvas
+    from plantillator import ShelfLoader, TreeCanvas
 
 
 _ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")

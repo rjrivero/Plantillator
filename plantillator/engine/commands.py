@@ -10,8 +10,8 @@ from collections import namedtuple
 from gettext import gettext as _
 from operator import attrgetter
 
-from ..data import Fallback
-from ..tools import OrderedSet
+from ..meta import Fallback
+from .oset import OrderedSet
 from .base import *
 
 

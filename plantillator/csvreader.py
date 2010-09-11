@@ -1,5 +1,6 @@
 #/usr/bin/env python
 
+
 import csv
 import os
 import os.path
@@ -7,9 +8,10 @@ import os.path
 from contextlib import contextmanager
 from itertools import count, chain, repeat
 
-from ..data import DataError, Meta, DataObject, DataSet, PeerSet
-from ..data import FieldMap, ObjectField, IntField, DataSetField
-from ..tools import FileSource
+from .meta import DataError, Meta, DataObject, DataSet, PeerSet
+from .meta import ObjectField, DataSetField
+from .pathfinder import FileSource
+from .fields import FieldMap, IntField
 
 
 class CSVMeta(Meta):
@@ -494,6 +496,7 @@ class CSVShelf(object):
     def _findcsv(self, dirname):
         """Encuentra todos los ficheros CSV en el path"""
         files = (x for x in os.listdir(dirname) if x.lower().endswith(".csv"))
+        files = (os.path.join(dirname, x) for x in files)
         files = (f for f in files if os.path.isfile(f))
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
@@ -553,7 +556,7 @@ if __name__ == "__main__":
     import code
     import shelve
     import sys
-    from resolver import Resolver
+    from .resolver import Resolver
 
     shelfname = "data.shelf"
     csvpath = (".",)
