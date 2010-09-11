@@ -455,7 +455,11 @@ class CSVShelf(object):
     VERSION  = "data_version"
     CURRENT  = 1
 
-    def __init__(self, path, datashelf):
+    def __init__(self, shelf):
+        self.shelf = shelf
+        self.dirty = False
+
+    def set_datapath(self, datapath):
         """Busca todos los ficheros CSV en el path.
 
         Compara la lista de ficheros encontrados con la
@@ -469,22 +473,23 @@ class CSVShelf(object):
           en el shelf, carga los datos y actualiza el
           shelf.
         """
-        files = dict(chain(*(self._findcsv(dirname) for dirname in path)))
+        files = dict(chain(*(self._findcsv(dirname) for dirname in datapath)))
+        self.dirty = False
         try:
-            if datashelf[CSVShelf.VERSION] == CSVShelf.CURRENT:
-                sfiles = datashelf[CSVShelf.FILES]
+            if self.shelf[CSVShelf.VERSION] == CSVShelf.CURRENT:
+                sfiles = self.shelf[CSVShelf.FILES]
                 fnames = set(files.keys())
                 snames = set(sfiles.keys())
                 if not fnames.symmetric_difference(snames):
                     if all(files[name] <= sfiles[name] for name in fnames):
                         # Todo correcto, los datos estan cargados
-                        self.data = dict(datashelf[CSVShelf.DATA])
+                        self.data = dict(self.shelf[CSVShelf.DATA])
                         return
         except:
-            # Si el pickle falla o no es completo, recargamos los datos
-            # (cualquiera que sea el error)
             pass
-        self._update(files, datashelf)
+        # Si el pickle falla o no es completo, recargamos los datos
+        # (cualquiera que sea el error)
+        self._update(files)
 
     def _findcsv(self, dirname):
         """Encuentra todos los ficheros CSV en el path"""
@@ -492,7 +497,7 @@ class CSVShelf(object):
         files = (f for f in files if os.path.isfile(f))
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
-    def _update(self, files, datashelf):
+    def _update(self, files):
         """Procesa los datos y los almacena en el shelf"""
         nesting = self._read_blocks(files)
         meta = CSVMeta("", None)
@@ -503,7 +508,7 @@ class CSVShelf(object):
         # Proceso la tabla de variables
         self._set_vars(data)
         # OK, todo cargado... ahora guardo los datos en el shelf.
-        self._save(datashelf, files, data.__dict__)
+        self._save(files, data.__dict__)
 
     def _read_blocks(self, files):
         """Carga los ficheros y genera los bloques de datos"""
@@ -534,16 +539,12 @@ class CSVShelf(object):
             del(meta.fields[vart])
             del(meta.subtypes[vart])
 
-    def _save(self, datashelf, files, data):
-        self.data = dict(data)
-        datashelf[CSVShelf.VERSION] = CSVShelf.CURRENT
-        datashelf[CSVShelf.DATA] = data
-        datashelf[CSVShelf.FILES] = files
-        datashelf.sync()
-
-    @staticmethod
-    def loader(path, datashelf):
-        return CSVShelf(path, datashelf).data
+    def _save(self, files, data):
+        self.data = dict(data) # hago una copia
+        self.shelf[CSVShelf.VERSION] = CSVShelf.CURRENT
+        self.shelf[CSVShelf.DATA] = data
+        self.shelf[CSVShelf.FILES] = files
+        self.dirty = True
 
 
 if __name__ == "__main__":

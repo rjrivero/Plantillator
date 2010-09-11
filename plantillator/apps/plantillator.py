@@ -6,7 +6,6 @@ import os
 import os.path
 import re
 import sys
-import shelve
 from contextlib import contextmanager
 from itertools import chain
 
@@ -18,21 +17,12 @@ except ImportError:
 from ..data import PathFinder, FileSource, Fallback
 from ..csvread import CSVShelf
 from ..engine import Loader as TmplLoader, VARPATTERN
-from .dataloader import DataLoader
+from .dataloader import ShelfLoader, ContextMaker
 
 
 TMPL_EXT = set(('.txt',))
 DATA_EXT = set(('.shelf',))
 TOOLS_FILE = "tools.py"
-
-
-@contextmanager
-def shelf_wrapper(fname):
-    shelf = shelve.open(fname, protocol=2)
-    try:
-        yield shelf
-    finally:
-        shelf.close
 
 
 class Plantillator(object):
@@ -53,51 +43,52 @@ class Plantillator(object):
         self.__dict__.update(self.OPTIONS)
 
     def prepare(self):
-        self.dataloader = DataLoader(CSVShelf.loader)
         self.tmplloader = TmplLoader(self.keep_comments)
         data, tmpl = self._classify()
         self._loaddata(data)
         self._addobjects()
         self._loadtmpl(tmpl)
+        self._context = ContextMaker(self.outpath, self.ext, self.collapse)
         # Calcula el directorio de salida en funcion de
         # outpath y collapse.
-        if self.collapse:
-            self.outdir = os.path.dirname(self.outpath)
-        elif self.outpath:
-            self.outdir = self.outpath
-        else:
-            self.outdir = os.getcwd()
+        #if self.collapse:
+            #self.outdir = os.path.dirname(self.outpath)
+        #elif self.outpath:
+            #self.outdir = self.outpath
+        #else:
+            #self.outdir = os.getcwd()
 
     def render(self):
-        if self.collapse:
+        #if self.collapse:
             # borro el fichero de salida combinado
-            if os.path.isfile(self.outpath) and self.overwrite:
-                os.unlink(self.outpath)
+        #    if os.path.isfile(self.outpath) and self.overwrite:
+        #        os.unlink(self.outpath)
         for runtree in self.tmplloader:
-            outcontext = self._outcontext(runtree.cmdtree.source.id, runtree.outpath)
+            #outcontext = self._outcontext(runtree.cmdtree.source.id, runtree.outpath)
+            outcontext = self._context.get_template_context(runtree.cmdtree.source.id)
             for block in self._renderfile(runtree, outcontext):
                 yield block
 
-    def _outcontext(self, sourceid, outpath):
-        """Genera un context que abre y cierra el fichero de salida adecuado"""
-        if self.collapse:
-            outcontext = lambda: open(self.outpath, "a+")
-        elif self.outpath:
-            # Si no hay ninguna sugerencia, el fichero de salida se
-            # llama igual que el de entrada, pero con la extension cambiada.
-            if not outpath:
-                outpath = os.path.basename(sourceid)
-                outpath = os.path.splitext(outpath)[0] + self.ext
-            outpath = os.path.join(self.outpath, outpath)
-            if os.path.isfile(outpath):
-                os.unlink(outpath)
-            outcontext = lambda: open(outpath, "a+")
-        else:
-            @contextmanager
-            def stderr_wrapper():
-                yield sys.stdout
-            outcontext = stderr_wrapper
-        return outcontext
+    #def _outcontext(self, sourceid, outpath):
+        #"""Genera un context que abre y cierra el fichero de salida adecuado"""
+        #if self.collapse:
+            #outcontext = lambda: open(self.outpath, "a+")
+        #elif self.outpath:
+            ## Si no hay ninguna sugerencia, el fichero de salida se
+            ## llama igual que el de entrada, pero con la extension cambiada.
+            #if not outpath:
+                #outpath = os.path.basename(sourceid)
+                #outpath = os.path.splitext(outpath)[0] + self.ext
+            #outpath = os.path.join(self.outpath, outpath)
+            #if os.path.isfile(outpath):
+                #os.unlink(outpath)
+            #outcontext = lambda: open(outpath, "a+")
+        #else:
+            #@contextmanager
+            #def stderr_wrapper():
+                #yield sys.stdout
+            #outcontext = stderr_wrapper
+        #return outcontext
 
     def _classify(self):
         """divide los ficheros en datos y patrones"""
@@ -119,8 +110,8 @@ class Plantillator(object):
         """carga los ficheros de datos"""
         mtimes = dict((os.stat(f.id).st_mtime, f) for f in data_sources)
         newer  = mtimes[max(mtimes.keys())]
-        with shelf_wrapper(newer.id) as shelf:
-            self.dataloader.load(self.path, shelf)
+        self.dataloader = ShelfLoader(newer.id)
+        self.dataloader.set_datapath(self.path)
 
     def _loadtmpl(self, tmpl_sources):
         """carga los patrones de texto"""

@@ -149,7 +149,7 @@ class PathFinder(list):
         """Itera sobre todos los ficheros coincidentes en la ruta definida"""
         for fpath in (os.path.join(dir, fname) for dir in self):
             if os.path.isfile(fpath):
-                yield fpath
+                yield os.path.abspath(fpath)
 
     def insert(self, pos, item):
         """Si el objeto ya estaba en la lista, lo cambia"""

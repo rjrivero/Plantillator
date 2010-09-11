@@ -4,7 +4,6 @@
 import sys, re, copy, traceback, ast
 from collections import namedtuple
 from itertools import izip, cycle, chain
-from datetime import datetime
 
 try:
     import cPickle as pickle
@@ -485,7 +484,7 @@ class Templite(object):
         assert(len(start) == 2 and len(end) == 2)
         assert(len(delim) == 1)
         assert(indent.isspace())
-        self.__setstate__(self.parse_template(template, start, end, delim, indent, timestamp or datetime.now()))
+        self.__setstate__(self.parse_template(template, start, end, delim, indent, timestamp))
 
     def __getstate__(self):
         """Devuelve el estado del objeto, para 'pickle'."""
