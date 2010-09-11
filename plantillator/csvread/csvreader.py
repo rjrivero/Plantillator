@@ -3,30 +3,13 @@
 import csv
 import os
 import os.path
-import sys
-import codecs
-import chardet
-
-try:
-    from codecs import BOM_UTF8
-except ImportError:
-    # only available since Python 2.3
-    BOM_UTF8 = '\xef\xbb\xbf'
-
-
-# Try setting the locale, so that we can find out
-# what encoding to use
-try:
-    import locale
-    locale.setlocale(locale.LC_CTYPE, "")
-except (ImportError, locale.Error):
-    pass
 
 from contextlib import contextmanager
 from itertools import count, chain, repeat
 
 from ..data import DataError, Meta, DataObject, DataSet, PeerSet
 from ..data import FieldMap, ObjectField, IntField, DataSetField
+from ..data import FileSource
 
 
 class CSVMeta(Meta):
@@ -414,71 +397,25 @@ class LinkBlock(object):
         return max(x.depth for x in self.groups)
 
 
-class CSVSource(object):
+class CSVSource(FileSource):
 
-    @classmethod
-    def get_default_encoding(cls):
-        try:
-            return cls.ENCODING
-        except AttributeError:
-            pass
-        if sys.platform == 'win32':
-            encoding = locale.getdefaultlocale()[1]
-        else:
-            try:
-                encoding = locale.nl_langinfo(locale.CODESET)
-            except (NameError, AttributeError):
-                encoding = locale.getdefaultlocale()[1]
-        try:
-            encoding = encoding.lower() if encoding else 'ascii'
-            codecs.lookup(encoding)
-        except LookupError:
-            encoding = 'ascii'
-        cls.ENCODING = encoding
-        return encoding
-
-    def as_unicode(self, chars):
-        if chars.startswith(BOM_UTF8):
-            return unicode(chars, 'utf-8')
-        try:
-            return unicode(chars)
-        except UnicodeError:
-            pass
-        try:
-            return unicode(chars, CSVSource.get_default_encoding())
-        except UnicodeError:
-            pass
-        codec = chardet.detect(chars)['encoding']
-        return unicode(chars, codec)
-
-    def __init__(self, path):
+    def read(self):
         # Auto-detecto el separador de campos... en funcion del
         # programa que exporte a CSV, algunos utilizan "," y otros ";".
-        # Asumimos que el encoding de entrada es compatible con ASCII:
-        # - csv.reader va a ser capaz de leerlo
-        # - los caracteres ",", ";", "*" y "!" son iguales que en ASCII.
-        with open(path, "rb") as infile:
-            data = self.as_unicode(infile.read())
-        # Codifico a utf-8 para el csv.reader
-        data = data.encode('utf-8')
+        data = super(CSVSource, self).read()
         lines, delim = data.splitlines(), ";"
         for line in lines:
             if line and line[0] in (",", ";"):
                 delimiter = str(line[0])
                 break
         rows = tuple(self._clean(lines, delimiter))
-        self.blocks = self._split(path, rows)        
+        return self._split(rows)        
 
     def _clean(self, lines, delimiter):
         """Elimina las columnas comentario o vacias"""
         reader = csv.reader(lines, delimiter=delimiter)
         for lineno, row in enumerate(reader):
             for index, val in enumerate(row):
-                # No lo volvemos a pasar a unicode, hacemos todo el proceso
-                # en utf-8.
-                # Cuando pasemos a python-3, lo que habra que hacer sera
-                # no convertir la cadena a utf-8 desde el principio, sino
-                # dejarla en unicode.
                 # Necesito el strip para que la comparacion de abajo
                 # (row[0] != "!") sea fiable, lo mismo que el distinguir
                 # tipos de tabla por su marca ("*" => enlaces, resto => tablas)
@@ -486,7 +423,7 @@ class CSVSource(object):
             if len(row) >= 2 and (row[0] or row[1]) and row[0] != "!":
                 yield CSVRow(lineno, row)
 
-    def _split(self, path, rows):
+    def _split(self, rows):
         """Divide el fichero en tablas"""
         # Extraigo el caracter de la primera columna, que me sirve como
         # discriminador.
@@ -504,11 +441,8 @@ class CSVSource(object):
         labels.append((len(rows), None))
         # Divido la entrada en bloques
         for (i, blk), (j, skip) in zip(labels, labels[1:]):
-            with wrap_exception(path, i):
-                yield blk(path, i, rows[i:j])
-
-    def __iter__(self):
-        return iter(self.blocks)
+            with wrap_exception(self.id, i):
+                yield blk(self.id, i, rows[i:j])
 
 
 class CSVShelf(object):
@@ -573,7 +507,7 @@ class CSVShelf(object):
 
     def _read_blocks(self, files):
         """Carga los ficheros y genera los bloques de datos"""
-        blocks  = chain(*(CSVSource(path) for path in files))
+        blocks  = chain(*tuple(CSVSource(path).read() for path in files))
         nesting = dict()
         for block in blocks:
             nesting.setdefault(block.depth, list()).append(block)
@@ -601,11 +535,11 @@ class CSVShelf(object):
             del(meta.subtypes[vart])
 
     def _save(self, datashelf, files, data):
+        self.data = dict(data)
         datashelf[CSVShelf.VERSION] = CSVShelf.CURRENT
         datashelf[CSVShelf.DATA] = data
         datashelf[CSVShelf.FILES] = files
         datashelf.sync()
-        self.data = dict(data)
 
     @staticmethod
     def loader(path, datashelf):
@@ -617,6 +551,7 @@ if __name__ == "__main__":
     import pprint
     import code
     import shelve
+    import sys
     from resolver import Resolver
 
     shelfname = "data.shelf"

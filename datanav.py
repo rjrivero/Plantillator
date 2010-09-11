@@ -177,6 +177,7 @@ def shelf_wrapper(fname):
     finally:
         shelf.close
 
+
 try:
     if options.profile and os.path.isfile(shelfname):
         os.unlink(shelfname)

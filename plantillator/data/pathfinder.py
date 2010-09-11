@@ -4,6 +4,18 @@
 
 import os
 import os.path
+import sys
+import codecs
+import chardet
+
+from codecs import BOM_UTF8
+
+# Creo el locale para poder luego consultar el encoding por defecto
+try:
+    import locale
+    locale.setlocale(locale.LC_CTYPE, "")
+except (ImportError, locale.Error):
+    pass
 
 
 class InputSource(object):
@@ -34,17 +46,64 @@ class InputSource(object):
 
 class FileSource(InputSource):
 
-    """Wrapper sobre un fichero"""
+    @classmethod
+    def get_default_encoding(cls):
+        try:
+            return cls.ENCODING
+        except AttributeError:
+            pass
+        if sys.platform == 'win32':
+            encoding = locale.getdefaultlocale()[1]
+        else:
+            try:
+                encoding = locale.nl_langinfo(locale.CODESET)
+            except (NameError, AttributeError):
+                encoding = locale.getdefaultlocale()[1]
+        try:
+            encoding = encoding.lower() if encoding else 'ascii'
+            codecs.lookup(encoding)
+        except LookupError:
+            encoding = 'ascii'
+        cls.ENCODING = encoding
+        return encoding
 
-    def __init__(self, fullpath=None, resolvepath=None):
-        super(FileSource, self).__init__(os.path.abspath(fullpath))
-        self.path = PathFinder(resolvepath)
-        self.path.insert(0, os.path.dirname(self.id))
+    def as_unicode(self, data):
+        if data.startswith(BOM_UTF8):
+            return unicode(data, "utf-8")
+        try:
+            return unicode(data)
+        except UnicodeError:
+            pass
+        try:
+            return unicode(data, FileSource.get_default_encoding())
+        except UnicodeError:
+            pass
+        codec = chardet.detect(data)["encoding"]
+        return unicode(data, codec)
 
-    def read(self, mode="r"):
-        return open(self.id, mode).read()
+    def __init__(self, abspath, resolvepath=None):
+        super(FileSource, self).__init__(abspath)
+        if resolvepath is not None:
+            # Si no nos pasaran un resolvepath, seria porque no se va a usar
+            # la parafernalia de resoluciones... solo la instanciamos si la
+            # vamos a usar.
+            self.path = PathFinder(resolvepath)
+            self.path.insert(0, os.path.dirname(self.id))
+
+    def read(self):
+        """Devuelve el texto del fichero, en un formato estandar.
+        
+        Actualmente lo devuelve en utf-8 porque este modulo es para
+        python 2.X, y hay cosas que con unicode no funcionan bien (ej:
+        el modulo csv).
+        
+        Cuando pasemos a python 3.X, podremos devolver unicode.
+        """
+        with open(self.id, "rb") as infile:
+            return self.as_unicode(infile.read()).encode("utf-8")
 
     def resolve(self, sourcename):
+        assert(hasattr(self, "path"))
         return FileSource(self.path(sourcename), self.path)
 
     def __str__(self):

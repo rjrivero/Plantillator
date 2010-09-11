@@ -236,7 +236,8 @@ class DataObject(object):
 
     def iteritems(self):
         """Itero sobre los elementos del objeto"""
-        return (x for x in self.__dict__.iteritems() if x[1] is not None)
+        return (x for x in self.__dict__.iteritems()
+            if x[1] is not None and not x[0].startswith("_"))
 
 
 class Fallback(dict):

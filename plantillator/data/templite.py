@@ -69,10 +69,6 @@ class Accumulator(object):
      - una lista interna, con el texto generado por el cuerpo del bloque.
      - una lista externa, con el texto generado en cada pasada del bloque
          (por si era un bucle: cada pasada se guardaria aparte).
-
-    Asi, conseguimos buffering parcial, sin tener que mantener en
-    memoria toda la plantilla completa, que en algunos casos (documentaciones,
-    por ejemplo) puede ser bastante grande.
     """
 
     def __init__(self, consumer):
@@ -256,7 +252,7 @@ class Templite(object):
         def SORT(strings):
             return sorted(strings)
 
-        # Inviete el orden de los resultados
+        # Invierte el orden de los resultados
         def REVERSE(strings):
             return reversed(strings)
     }}
@@ -270,7 +266,7 @@ class Templite(object):
 
     Las plantillas se compilan y se ejecutan mediante el paso de
     mensajes a un consumidor. Un consumidor es una corutina, es decir,
-    un generador que acepte los metodos "send" y "close". Los
+    un generador que acepta los metodos "send" y "close". Los
     mensajes que se envian al consumidor son cadenas de texto,
     el resultado de evaluar cada porcion de la plantilla.
 
@@ -396,11 +392,11 @@ class Templite(object):
             yield self.offset
             if self.first:
                 yield (self.first,)
-                # Incluyo el if en las construcciones que refrescan el
-                # accumulator porque de todas formas, los :else: o :elif:
-                # tambien lo van a refrescar
+                # Incluyo if y try en las construcciones que refrescan el
+                # accumulator porque de todas formas, los :else:, :elif:
+                # o :except: tambien lo van a refrescar
                 is_loop = any(self.first.startswith(x)
-                    for x in ("for ", "while ", "if "))
+                    for x in ("for", "while", "if", "try"))
                 if self.body == 1 and (self.offset == -1 or is_loop):
                     self.lines = tuple(chain((
                             "_accumulator.refresh()",
@@ -442,7 +438,7 @@ class Templite(object):
 
     def do_template(self, template, start, end, delim, indent):
         """Procesa el template linea a linea"""
-        delimiter = re.compile(r'%s(.*?)%s' % (re.escape(start), re.escape(end)), re.DOTALL | re.UNICODE)
+        delimiter = re.compile(r'%s(.*?)%s' % (re.escape(start), re.escape(end)), re.DOTALL)
         actions = cycle((self.do_literal, self.do_block))
         for subpart in delimiter.split(template):
             subpart = subpart.replace("\\".join(start), start)
@@ -469,14 +465,13 @@ class Templite(object):
             tree = ast.parse(translated, "<templite %r>" % template[:20], 'exec')
             return Templite.State(timestamp, translated, tree)
         except Exception as details:
-            print "Error compilando %s" % translated
             raise ParseException(template)
 
     # ----------------
     # Parte "publica"
     # ----------------
 
-    def __init__(self, template="", start="{{", end="}}", delim="?", indent="    ", timestamp=None):
+    def __init__(self, template="", start="{{", end="}}", delim="?", indent=" "*4, timestamp=None):
         """Analiza, valida y construye el template.
 
         En caso de error durante el proceso, lanza una ParseException con
@@ -510,8 +505,8 @@ class Templite(object):
 
         El consumidor es una corutina. Cada vez que la plantilla genera
         un trozo de texto (bien por tener texto literal, o por una
-        expresion), ese texto se acumula. Una vez acumulado todo el texto,
-        se le envia al consumidor a traves del metodo
+        expresion), ese texto se acumula. Una vez acumulada una seccion de
+        la plantilla, se le envia al consumidor a traves del metodo
         "send". Por ejemplo, la plantilla:
 
             {{nombre = "Pedro"}}
@@ -549,7 +544,7 @@ class Templite(object):
         glob["REVERSE"] = REVERSE
         consumer.next()
         if self.embed(consumer, glob, loc):
-            result = "".join("".join(x) for x in glob["_accumulator"].collect())
+            result = "".join(glob["_accumulator"].collect())
             if result:
                 consumer.send(result)
             consumer.close()
@@ -572,7 +567,7 @@ class Templite(object):
                 # bueno, lo capturo.
                 pass
         finally:
-            # paso al scope global las variables globales definidas.
+            # paso al scope global las variables locales aceptadas.
             self._promote(glob, loc)
 
     def _promote(self, glob, loc):
