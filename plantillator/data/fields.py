@@ -5,7 +5,7 @@ from itertools import chain
 import re
 
 
-from .ip import IPAddress
+from ..tools.ip import IPAddress
 from .meta import Field, BaseSet, BaseList
 
 

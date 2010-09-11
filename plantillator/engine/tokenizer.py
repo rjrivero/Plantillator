@@ -41,7 +41,13 @@ class Tokenizer(object):
 
     def _tokens(self):
         """Iterador que genera un flujo de tokens"""
-        for self.lineno, line in enumerate(self.source.readlines()):
+        for self.lineno, line in enumerate(self.source.read().splitlines()):
+            # Antes, se usaba readlines(), que devolvia las lineas de
+            # entrada terminadas en "\n".
+            # Con los nuevos cambios, se usa splitlines(), que las devuelve
+            # sin el "\n" y me lia un pitoste.
+            # Asi que le agrego el "\n" a mano.
+            line = line + "\n"
             for token in self._tokenize(self.lineno+1, line):
                 yield token
 

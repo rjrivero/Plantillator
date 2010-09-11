@@ -9,7 +9,7 @@ from itertools import count, chain, repeat
 
 from ..data import DataError, Meta, DataObject, DataSet, PeerSet
 from ..data import FieldMap, ObjectField, IntField, DataSetField
-from ..data import FileSource
+from ..tools import FileSource
 
 
 class CSVMeta(Meta):

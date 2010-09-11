@@ -8,7 +8,6 @@ import sys
 import logging
 import glob
 import re
-import shelve
 import Tkinter as tk
 
 from traceback import print_exc, format_exception_only
@@ -16,15 +15,14 @@ from optparse import OptionParser
 from contextlib import contextmanager
 
 try:
-    from plantillator.data import PathFinder, FileSource
+    from plantillator.tools import PathFinder, FileSource
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.data import PathFinder, FileSource
+    from plantillator.tools import PathFinder, FileSource
 
-from plantillator.csvread import CSVShelf
-from plantillator.apps import DataLoader, TreeCanvas
+from plantillator.apps import ShelfLoader, TreeCanvas
 
 
 _ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")
@@ -165,24 +163,21 @@ try:
     shelfname = inputfiles[0]
 except IndexError:
     shelfname = "data.shelf"
-    
-finder = PathFinder(path)
-loader = DataLoader(CSVShelf.loader)
 
 @contextmanager
 def shelf_wrapper(fname):
-    shelf = shelve.open(fname, protocol=2)
+    loader = ShelfLoader(shelfname)
+    loader.set_datapath(path)
     try:
-        yield shelf
+        yield loader
     finally:
-        shelf.close
-
+        loader.close()
 
 try:
     if options.profile and os.path.isfile(shelfname):
         os.unlink(shelfname)
-    with shelf_wrapper(shelfname) as shelf:
-        data = loader.load(finder, shelf)
+    with shelf_wrapper(shelfname) as dataloader:
+        data = dataloader.data
     # Cosas muy feas... no se por que, esto funciona:
     #
     # def test():

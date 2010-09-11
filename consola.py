@@ -15,7 +15,7 @@ from traceback import print_exc, format_exception_only
 
 from plantillator.data import DataError
 from plantillator.engine import ParseError, CommandError
-from plantillator.apps import Plantillator
+from plantillator.apps import Plantillator, Consumer
 
 VERSION           = "0.2"
 OPTIONS_ERRNO     = -1
@@ -61,9 +61,12 @@ parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
 parser.add_option("-k", "--keep_comments",
         action="store_true", dest="keep_comments", default=False,
         help="Conserva los comentarios de la plantilla")
+parser.add_option("-n", "--new-engine",
+        action="store_true", dest="new_engine", default=False,
+        help="Activa el nuevo motor de plantillas")
 
 (options, args) = parser.parse_args()
-if len(args) < 2 and not options.shell:
+if len(args) < 1 and not options.shell:
     parser.print_help(sys.stderr)
     sys.exit(OPTIONS_ERRNO)
 
@@ -159,7 +162,7 @@ def handle(item):
 
 
 # y cargo a PLANTILLATOR!
-plantillator = Plantillator()
+plantillator = Plantillator() if not options.new_engine else Consumer()
 plantillator.path = path
 plantillator.outpath = options.outpath
 plantillator.collapse = options.collapse

@@ -4,6 +4,7 @@
 import bisect
 import sys
 import traceback
+
 from itertools import chain
 
 from .resolver import Resolver

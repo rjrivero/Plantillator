@@ -14,7 +14,8 @@ try:
 except ImportError:
     print >> sys.stderr, "Warning: PyDOT NOT SUPPORTED!"
 
-from ..data import PathFinder, FileSource, Fallback
+from ..tools import PathFinder, FileSource
+from ..data import Fallback
 from ..csvread import CSVShelf
 from ..engine import Loader as TmplLoader, VARPATTERN
 from .dataloader import ShelfLoader, ContextMaker
@@ -65,6 +66,8 @@ class Plantillator(object):
         #        os.unlink(self.outpath)
         for runtree in self.tmplloader:
             #outcontext = self._outcontext(runtree.cmdtree.source.id, runtree.outpath)
+            # Traslado el valor de "overwrite" al context.
+            self._context.overwrite = self.overwrite
             outcontext = self._context.get_template_context(runtree.cmdtree.source.id)
             for block in self._renderfile(runtree, outcontext):
                 yield block
@@ -109,8 +112,11 @@ class Plantillator(object):
     def _loaddata(self, data_sources):
         """carga los ficheros de datos"""
         mtimes = dict((os.stat(f.id).st_mtime, f) for f in data_sources)
-        newer  = mtimes[max(mtimes.keys())]
-        self.dataloader = ShelfLoader(newer.id)
+        if mtimes:
+            newer = mtimes[max(mtimes.keys())].id
+        else:
+            newer = "data.shelf"
+        self.dataloader = ShelfLoader(newer)
         self.dataloader.set_datapath(self.path)
 
     def _loadtmpl(self, tmpl_sources):
@@ -122,7 +128,8 @@ class Plantillator(object):
                 execfile(init, glob, loc)
         glob.update(loc)
         for source in tmpl_sources:
-            data = Fallback(self.dataloader.data, depth=1)
+            #data = Fallback(self.dataloader.data, depth=1)
+            data = dict(self.dataloader.data)
             self.tmplloader.load(source, self.dataloader.glob, data)
 
     def _addobjects(self):
