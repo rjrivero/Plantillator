@@ -46,52 +46,26 @@ class Plantillator(object):
     def prepare(self):
         self.tmplloader = TmplLoader(self.keep_comments)
         data, tmpl = self._classify()
-        self._loaddata(data)
-        self._addobjects()
-        self._loadtmpl(tmpl)
         self._context = ContextMaker(self.outpath, self.ext, self.collapse)
-        # Calcula el directorio de salida en funcion de
-        # outpath y collapse.
-        #if self.collapse:
-            #self.outdir = os.path.dirname(self.outpath)
-        #elif self.outpath:
-            #self.outdir = self.outpath
-        #else:
-            #self.outdir = os.getcwd()
+        try:
+            self._loaddata(data)
+            self._loadtmpl(tmpl)
+            self._addobjects()
+        except:
+            if hasattr(self, 'dataloader'):
+                self.dataloader.close()
+            raise
 
     def render(self):
-        #if self.collapse:
-            # borro el fichero de salida combinado
-        #    if os.path.isfile(self.outpath) and self.overwrite:
-        #        os.unlink(self.outpath)
-        for runtree in self.tmplloader:
-            #outcontext = self._outcontext(runtree.cmdtree.source.id, runtree.outpath)
-            # Traslado el valor de "overwrite" al context.
-            self._context.overwrite = self.overwrite
-            outcontext = self._context.get_template_context(runtree.cmdtree.source.id)
-            for block in self._renderfile(runtree, outcontext):
-                yield block
-
-    #def _outcontext(self, sourceid, outpath):
-        #"""Genera un context que abre y cierra el fichero de salida adecuado"""
-        #if self.collapse:
-            #outcontext = lambda: open(self.outpath, "a+")
-        #elif self.outpath:
-            ## Si no hay ninguna sugerencia, el fichero de salida se
-            ## llama igual que el de entrada, pero con la extension cambiada.
-            #if not outpath:
-                #outpath = os.path.basename(sourceid)
-                #outpath = os.path.splitext(outpath)[0] + self.ext
-            #outpath = os.path.join(self.outpath, outpath)
-            #if os.path.isfile(outpath):
-                #os.unlink(outpath)
-            #outcontext = lambda: open(outpath, "a+")
-        #else:
-            #@contextmanager
-            #def stderr_wrapper():
-                #yield sys.stdout
-            #outcontext = stderr_wrapper
-        #return outcontext
+        try:
+            for runtree in self.tmplloader:
+                # Traslado el valor de "overwrite" al context.
+                self._context.overwrite = self.overwrite
+                outcontext = self._context.get_template_context(runtree.cmdtree.source.id)
+                for block in self._renderfile(runtree, outcontext):
+                    yield block
+        finally:
+            self.dataloader.close()
 
     def _classify(self):
         """divide los ficheros en datos y patrones"""
@@ -128,7 +102,6 @@ class Plantillator(object):
                 execfile(init, glob, loc)
         glob.update(loc)
         for source in tmpl_sources:
-            #data = Fallback(self.dataloader.data, depth=1)
             data = dict(self.dataloader.data)
             self.tmplloader.load(source, self.dataloader.glob, data)
 

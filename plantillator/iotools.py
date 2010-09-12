@@ -8,6 +8,7 @@ import os.path
 import sys
 
 from contextlib import contextmanager
+from codecs import BOM_UTF8
 
 from .pathfinder import PathFinder, FileSource
 from .ciscopw import password, secret
@@ -25,12 +26,20 @@ class ShelfLoader(CSVShelf):
 
     def __init__(self, shelfname):
         """Inicializa el cargador"""
-        shelf = shelve.open(shelfname, protocol=2)
-        super(ShelfLoader, self).__init__(shelf)
         try:
-            if self.shelf[ShelfLoader.VERSION] == ShelfLoader.CURRENT:
-                self.files = self.shelf[ShelfLoader.FILES]
+            shelf = shelve.open(shelfname, protocol=2)
+            super(ShelfLoader, self).__init__()
+            self.files, self.dirty = None, False
+            try:
+                if self.shelf[ShelfLoader.VERSION] == ShelfLoader.CURRENT:
+                    self.files = self.shelf[ShelfLoader.FILES]
+            except KeyError:
+                pass
         except:
+            # si el constructor falla, me aseguro de no dejar el shelf abierto.
+            shelf.close()
+            raise
+        if self.files is None:
             # Si el pickle falla o no es completo, recargamos los datos
             # (cualquiera que sea el error)
             self.files = dict()
@@ -135,8 +144,11 @@ class ContextMaker(object):
         'outname' es una ruta completa (o relativa a getcwd()), en ningun
         caso relativa a "output_dir".
         """
-        if self.overwrite and os.path.isfile(outname):
-            os.unlink(outname)
+        if self.overwrite:
+            if os.path.isfile(outname):
+                os.unlink(outname)
+            with open(outname, "w+b") as outfile:
+                outfile.write(BOM_UTF8)
         def outcontext():
             return open(outname, "a+")
         return outcontext

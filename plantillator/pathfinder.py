@@ -69,7 +69,7 @@ class FileSource(InputSource):
 
     def as_unicode(self, data):
         if data.startswith(BOM_UTF8):
-            return unicode(data, "utf-8")
+            return unicode(data[3:], "utf-8")
         try:
             return unicode(data)
         except UnicodeError:
@@ -97,10 +97,11 @@ class FileSource(InputSource):
         python 2.X, y hay cosas que con unicode no funcionan bien (ej:
         el modulo csv).
         
-        Cuando pasemos a python 3.X, podremos devolver unicode.
+        Lamentablemente, en python <= 3.1, el modulo csv tampoco funciona
+        bien con unicode... habra que esperar.
         """
         with open(self.id, "rb") as infile:
-            return self.as_unicode(infile.read()).encode("utf-8")
+            return self.as_unicode(infile.read()).replace(u"\r\n", u"\n").encode("utf-8")
 
     def resolve(self, sourcename):
         assert(hasattr(self, "path"))

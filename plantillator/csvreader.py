@@ -419,10 +419,11 @@ class CSVSource(FileSource):
         for lineno, row in enumerate(reader):
             for index, val in enumerate(row):
                 # Necesito el strip para que la comparacion de abajo
-                # (row[0] != "!") sea fiable, lo mismo que el distinguir
-                # tipos de tabla por su marca ("*" => enlaces, resto => tablas)
+                # (row[0].startswith("!")) sea fiable, lo mismo que el
+                # distinguir tipos de tabla por su marca
+                # ("*" => enlaces, resto => tablas)
                 row[index] = row[index].strip()
-            if len(row) >= 2 and (row[0] or row[1]) and row[0] != "!":
+            if len(row) >= 2 and (row[0] or row[1]) and not row[0].startswith("!"):
                 yield CSVRow(lineno, row)
 
     def _split(self, rows):
