@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 #########################################################################
 # Ayuda a procesar las ACLs, agrupando puertos por protocolo y numeracion
+#
+# NOTA: hay que modificarlo para que trabaje directamente con objetos
+# IPADDRESS, no con cadenas.
 #########################################################################
 
 
 import re
+from plantillator.IPy import IP
+
 
 # Conjunto de digitos al final de una cadena
 DIGIT_TAIL_RE = re.compile(r'[^\d]([\d/]+)$')

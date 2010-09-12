@@ -28,7 +28,7 @@ class ShelfLoader(CSVShelf):
         """Inicializa el cargador"""
         try:
             shelf = shelve.open(shelfname, protocol=2)
-            super(ShelfLoader, self).__init__()
+            super(ShelfLoader, self).__init__(shelf)
             self.files, self.dirty = None, False
             try:
                 if self.shelf[ShelfLoader.VERSION] == ShelfLoader.CURRENT:
@@ -87,7 +87,7 @@ class ShelfLoader(CSVShelf):
         mtime = os.stat(source).st_mtime
         if template is None or template.timestamp < mtime:
             self.dirty = True
-            template = Templite(FileSource(source).read(), timestamp=mtime)
+            template = Templite(source, FileSource(source).read(), timestamp=mtime)
             self.files[source] = template
         return self.cache.setdefault((tmplname, hint), (source, template))
 

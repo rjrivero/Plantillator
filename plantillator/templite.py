@@ -447,22 +447,23 @@ class Templite(object):
 
     CURRENT = (1, sys.version_info)
     @classmethod
-    def State(cls, timestamp, template, ast):
+    def State(cls, tmplid, timestamp, template, ast):
         return {
+            'tmplid': tmplid,
             'version': cls.CURRENT,
             'timestamp': timestamp, 
             'template': template,
             'ast': ast,
         }
 
-    def parse_template(self, template, start, end, delim, indent, timestamp):
+    def parse_template(self, tmplid, template, start, end, delim, indent, timestamp):
         try:
             self.offset = 0
             translated = "\n".join(self.do_template(template, start, end, delim, indent))
             if self.offset:
                 raise SyntaxError("%i block statement(s) not terminated" % self.offset)
-            tree = ast.parse(translated, "<templite %r>" % template[:20], 'exec')
-            return Templite.State(timestamp, translated, tree)
+            tree = ast.parse(translated, tmplid, 'exec')
+            return Templite.State(tmplid, timestamp, translated, tree)
         except Exception as details:
             raise ParseError(template)
 
@@ -470,12 +471,13 @@ class Templite(object):
     # Parte "publica"
     # ----------------
 
-    def __init__(self, template="", start="{{", end="}}", delim="?", indent=" "*4, timestamp=None):
+    def __init__(self, tmplid, template="", start="{{", end="}}", delim="?", indent=" "*4, timestamp=None):
         """Analiza, valida y construye el template.
 
         En caso de error durante el proceso, lanza una ParseError con
         los detalles del problema.
         """
+        assert(isinstance(tmplid, basestring))
         assert(isinstance(template, basestring))
         assert(isinstance(start, basestring))
         assert(isinstance(end, basestring))
@@ -484,20 +486,21 @@ class Templite(object):
         assert(len(start) == 2 and len(end) == 2)
         assert(len(delim) == 1)
         assert(indent.isspace())
-        self.__setstate__(self.parse_template(template, start, end, delim, indent, timestamp))
+        self.__setstate__(self.parse_template(tmplid, template, start, end, delim, indent, timestamp))
 
     def __getstate__(self):
         """Devuelve el estado del objeto, para 'pickle'."""
-        return Templite.State(self.timestamp, self.translated, self.ast)
+        return Templite.State(self.tmplid, self.timestamp, self.translated, self.ast)
 
     def __setstate__(self, state):
         """Restablece el estado del objeto desde un 'pickle'."""
         if state['version'] != self.__class__.CURRENT:
             raise pickle.UnpicklingError("Versions do not match: %s != %s" % (str(state['version']), str(self.__class__.CURRENT)))
+        self.tmplid = state['tmplid']
         self.timestamp = state['timestamp']
         self.translated = state['template']
         self.ast = state['ast']
-        self.code = compile(self.ast, "<templite %r>" % self.translated[:20], 'exec')
+        self.code = compile(self.ast, self.tmplid, 'exec')
 
     def render(self, consumer, glob=None, loc=None):
         """Ejecuta la plantilla con el consumidor y datos dados.
@@ -609,28 +612,28 @@ if __name__ == '__main__':
 
         def testTemplateInvalid(self):
             """Error si el template no es str"""
-            self.assertRaises(AssertionError, Templite, 100)
+            self.assertRaises(AssertionError, Templite, "test", 100)
 
         def testDelimInvalid(self):
             """Error si delim no es str o len() != 1"""
-            self.assertRaises(AssertionError, Templite, "", delim="")
-            self.assertRaises(AssertionError, Templite, "", delim="abc")
-            self.assertRaises(AssertionError, Templite, "", delim=100)
+            self.assertRaises(AssertionError, Templite, "test", "", delim="")
+            self.assertRaises(AssertionError, Templite, "test", "", delim="abc")
+            self.assertRaises(AssertionError, Templite, "test", "", delim=100)
 
         def testBlockDelimInvalid(self):
             """Error si los inicio y fin de bloque no son str o len() != 2"""
-            self.assertRaises(AssertionError, Templite, "", start="abc")
-            self.assertRaises(AssertionError, Templite, "", end="abc")
-            self.assertRaises(AssertionError, Templite, "", start="")
-            self.assertRaises(AssertionError, Templite, "", end="")
-            self.assertRaises(AssertionError, Templite, "", start=100)
-            self.assertRaises(AssertionError, Templite, "", end=100)
+            self.assertRaises(AssertionError, Templite, "test", "", start="abc")
+            self.assertRaises(AssertionError, Templite, "test", "", end="abc")
+            self.assertRaises(AssertionError, Templite, "test", "", start="")
+            self.assertRaises(AssertionError, Templite, "test", "", end="")
+            self.assertRaises(AssertionError, Templite, "test", "", start=100)
+            self.assertRaises(AssertionError, Templite, "test", "", end=100)
 
         def testIndentInvalid(self):
             """Error si indent no es str o no es whitespace"""
-            self.assertRaises(AssertionError, Templite, "", indent=100)
-            self.assertRaises(AssertionError, Templite, "", indent="abc")
-            self.assertRaises(AssertionError, Templite, "", indent="")
+            self.assertRaises(AssertionError, Templite, "test", "", indent=100)
+            self.assertRaises(AssertionError, Templite, "test", "", indent="abc")
+            self.assertRaises(AssertionError, Templite, "test", "", indent="")
 
         def testTemplateUnfinished(self):
             """Error si hay bloques sin cerrar"""
@@ -638,7 +641,7 @@ if __name__ == '__main__':
             {{if 5 > 0:}}
                 5 es mayor que 0
             """
-            self.assertRaises(ParseError, Templite, template)
+            self.assertRaises(ParseError, Templite, "test", template)
 
     class TemplateTest(unittest.TestCase):
 
@@ -669,7 +672,7 @@ if __name__ == '__main__':
                 if loc is None:
                     loc = {}
                 consumer = Consumer(glob, loc)
-                templite = self.hookTemplite(Templite(t, **d))
+                templite = self.hookTemplite(Templite("test", t, **d))
                 templite.render(consumer(), glob, loc)
                 if result:
                     self.assertEqual(consumer.result, r)
