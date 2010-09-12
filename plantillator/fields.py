@@ -35,7 +35,11 @@ class IPField(Field):
             return None
         try:
             if data.find("/") < 0:
-                data = data + "/32"
+                # interpreto una direccion "*" como 0.0.0.0/0
+                if data == "*":
+                    data = "0.0.0.0/0"
+                else:
+                    data = data + "/32"
             return IPAddress(data)
         except ValueError:
             return None

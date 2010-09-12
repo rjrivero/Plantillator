@@ -48,6 +48,8 @@ class ShelfLoader(CSVShelf):
         self.glob = {
             "CISCOPASSWORD": password,
             "CISCOSECRET": secret,
+            "ANY": DataSet.ANY,
+            "NONE": DataSet.NONE,
             "cualquiera": DataSet.ANY,
             "ninguno": DataSet.NONE,
             "ninguna": DataSet.NONE,
