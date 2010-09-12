@@ -5,11 +5,7 @@
 import sys
 import re
 
-try:
-    import pydot
-except ImportError:
-    pass
-
+import tools
 from .iotools import ShelfLoader, ContextMaker, Interactor
 
 
@@ -52,7 +48,7 @@ class Consumer(object):
                 "APPEND": self.APPEND,
                 "SAVEAS": self.SAVEAS,
                 "SELECT": self.SELECT,
-                "DOTPNG": self.DOTPNG,
+                "tools":  tools,
                 })
         except:
             self.loader.close()
@@ -107,13 +103,6 @@ class Consumer(object):
         try:
             tmplid, template = self.loader.get_template(self.tmplname)
             pending = Consumer.Pending(tmplid, template, None, self.loader.data)
-            # Modifico el path de sys en el entorno chungo para que
-            # puedan importar tools.
-            exec "\n".join((
-                "import sys",
-                "sys.path.append(%s)" % repr(sys.path[0]),
-                )) in pending.data
-            # y empiezo el proceso
             self._queue, self._done = [pending], set()
             while self._queue:
                 self._pending = self._queue.pop(0)
@@ -136,30 +125,20 @@ class Consumer(object):
         tmplid, template = self.loader.get_template(fname, self._pending.tmplid)
         self._queue.append(self._pending.dup(tmplid, template, outname))
 
+    def SAVEAS(self, outname):
+        """Filtro que guarda el contenido del bloque en un fichero.
+
+        Devuelve una sola linea, el nombre del fichero.
+        """
+        def saveme(strings):
+            outpath = self.maker.resolve_relative(outname)
+            with self.maker.get_context(outpath)() as outfile:
+                outfile.write("".join(strings))
+            return (outpath,)
+        return saveme
+
     def SELECT(self, items):
         """Pide al usuario que seleccione un elemento"""
         if self.loop:
             return self.actor.exhaust(items)
         return self.actor.select(items)
-
-    def DOTPNG(self, outname, program="dot"):
-        """Crea un fichero .png utilizando el lenguaje DOT de graphviz"""
-        if not outname.lower().endswith(".png"):
-            outname = outname + ".png"
-        def saveme(strings):
-            try:
-                graph = pydot.graph_from_dot_data("".join(strings))
-                outpath = self.maker.resolve_relative(outname)
-                graph.write(outpath, format="png", prog=program)
-                return tuple()
-            except NameError:
-                return tuple("*** PYDOT NOT SUPPORTED! ***",)
-        return saveme
-
-    def SAVEAS(self, outname):
-        """Filtro que guarda el contenido del bloque en un fichero"""
-        def saveme(strings):
-            with self.maker.get_relative_context(outname)() as outfile:
-                outfile.write("".join(strings))
-            return tuple()
-        return saveme

@@ -142,6 +142,11 @@ def UNIQ(strings):
     return sorted(set(strings))
 
 
+def SKIP(strings):
+    """Elimina la entrada"""
+    return tuple()
+
+
 class Templite(object):
 
     """
@@ -261,7 +266,7 @@ class Templite(object):
     {{:endfor >> SORT >> REVERSE}}
 
     Los filtros SORT, UNIQ (como SORT, pero eliminando duplicados)
-    y REVERSE estan predefinidos.
+    SKIP y REVERSE estan predefinidos.
 
     Las plantillas se compilan y se ejecutan mediante el paso de
     mensajes a un consumidor. Un consumidor es una corutina, es decir,
@@ -458,14 +463,16 @@ class Templite(object):
 
     def parse_template(self, tmplid, template, start, end, delim, indent, timestamp):
         try:
-            self.offset = 0
+            # Pongo algo en translated por si acaso hay un error en
+            # en do_template, antes de tener la plantilla traducida
+            translated, self.offset = template, 0
             translated = "\n".join(self.do_template(template, start, end, delim, indent))
             if self.offset:
                 raise SyntaxError("%i block statement(s) not terminated" % self.offset)
             tree = ast.parse(translated, tmplid, 'exec')
             return Templite.State(tmplid, timestamp, translated, tree)
         except Exception as details:
-            raise ParseError(template)
+            raise ParseError(translated)
 
     # ----------------
     # Parte "publica"
@@ -543,6 +550,7 @@ class Templite(object):
         glob["_accumulator"] = Accumulator(consumer)
         glob["UNIQ"] = UNIQ
         glob["SORT"] = SORT
+        glob["SKIP"] = SKIP
         glob["REVERSE"] = REVERSE
         consumer.next()
         if self.embed(consumer, glob, loc):
