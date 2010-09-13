@@ -33,7 +33,7 @@ class Tokenizer(object):
                 yield (reader.line_num, record)
 
     def _norm(self, record):
-        if not record or any(record[0].startswith(x) for x in self.comments)):
+        if not record or any(record[0].startswith(x) for x in self.comments):
             return None
         for item in reversed(record):
             if item and not item.isspace():
