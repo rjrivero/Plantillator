@@ -8,7 +8,6 @@ import os.path
 import sys
 
 from contextlib import contextmanager
-from codecs import BOM_UTF8
 
 from .pathfinder import PathFinder, FileSource
 from .ciscopw import password, secret
@@ -16,6 +15,18 @@ from .resolver import Resolver
 from .meta import SYMBOL_SELF, DataSet
 from .csvreader import CSVShelf
 from .templite import Templite
+
+
+class PathElem(str):
+
+    """Cadena de texto en formato path."""
+
+    def join(self, other):
+        # Por si el nombre de salida viene con directorio... puede venir
+        # con separadores en formato UNIX, y luego pegarse con los de
+        # WINDOWS, o viceversa.
+        elems = tuple(x for x in os.path.split(other) if x)
+        return PathElem(os.path.join(self, *elems))
 
 
 class ShelfLoader(CSVShelf):
@@ -65,6 +76,11 @@ class ShelfLoader(CSVShelf):
     def set_tmplpath(self, tmplpath):
         """Prepara la carga de plantillas del path"""
         self.path = PathFinder(tmplpath)
+
+    def set_datapath(self, datapath):
+        """ejecuta la carga de datos"""
+        super(ShelfLoader, self).set_datapath(datapath)
+        self.data.update(self.glob)
 
     def add_symbols(self, symbols):
         """Agrega simbolos al espacio global de los templates"""
@@ -121,11 +137,11 @@ class ContextMaker(object):
         # de outpath y collapse.
         if collapse:
             if not outpath:
-                self.output_dir = os.getcwd()
+                self.output_dir = PathElem(os.getcwd())
             else:
-                self.output_dir = os.path.dirname(self.outpath)
+                self.output_dir = PathElem(os.path.dirname(self.outpath))
         else:
-            self.output_dir = outpath or os.getcwd()
+            self.output_dir = PathElem(outpath or os.getcwd())
 
     def _outname(self, tmplname):
         """Calcula el nombre del fichero de salida, relativo a output_dir"""
@@ -137,7 +153,7 @@ class ContextMaker(object):
         else:
             outname = os.path.basename(tmplname)
             outname = os.path.splitext(outname)[0] + self.ext
-            outpath = os.path.join(self.outpath, outname)
+            outpath = self.output_dir.join(outname)
         return outpath
 
     def get_context(self, outname):
@@ -149,8 +165,6 @@ class ContextMaker(object):
         if self.overwrite:
             if os.path.isfile(outname):
                 os.unlink(outname)
-            with open(outname, "w+b") as outfile:
-                outfile.write(BOM_UTF8)
         def outcontext():
             return open(outname, "a+")
         return outcontext
@@ -160,8 +174,7 @@ class ContextMaker(object):
         # Por si el nombre de salida viene con directorio... puede venir
         # con separadores en formato UNIX, y luego pegarse con los de
         # WINDOWS, o viceversa.
-        pathelems = tuple(x for x in os.path.split(outname) if x)
-        return os.path.join(self.output_dir, *pathelems)
+        return self.output_dir.join(outname)
 
     def get_relative_context(self, outname):
         """Obtiene un contexto de escritura al fichero dado.

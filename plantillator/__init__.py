@@ -7,3 +7,4 @@ from .consumer import Consumer
 from .iotools import ShelfLoader
 from .meta import DataError
 from .templite import ParseError, TemplateError
+from .resolver import Resolver

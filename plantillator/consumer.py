@@ -44,6 +44,7 @@ class Consumer(object):
             self.actor = Interactor()
             self._add_objects()
             self.loader.add_symbols({
+                "OUTDIR": self.maker.output_dir,
                 "INSERT": self.INSERT,
                 "APPEND": self.APPEND,
                 "SAVEAS": self.SAVEAS,

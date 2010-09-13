@@ -10,32 +10,6 @@ import subprocess
 import os
 import os.path
 
-from contextlib import contextmanager
-
-
-@contextmanager
-def list_open(accum):
-    """Un objeto file-like que acumula los datos en una lista"""
-    class feed(object):
-        def write(data):
-            if data:
-                accum.append(data)
-    yield feed()
-
-
-def transfer(pipe, fileobj):
-    """Transfiere todo el contenido de un pipe a un objeto file_like"""
-    with fileobj:
-        if not pipe.closed:
-            try:
-                while True:
-                    data = pipe.read()
-                    if not data:
-                        break
-                    fileobj.write(data)
-            finally:
-                pipe.close()
-
 
 class DotFilter(str):
 
@@ -186,21 +160,15 @@ class DotFilter(str):
     
         Es un filtro que siempre debe ser invocado despues de SAVEAS.
         """
-        assert(len(strings) == 1 and os.path.isfile(strings[0]))
-        tmpname = strings[0]
-        outname = os.path.splitext(tmpname)[0] + ".png"
+        if len(strings) != 1 or not os.path.isfile(strings[0]):
+            return ("*** ERROR: NO INPUT FILE ***" ,)
         prog = DotFilter.get_path(self)
         if prog is None:
-            return ("*** ERROR: NO SE ENCUENTRA %s ***" % self,)
-        p = subprocess.Popen((prog, '-Tpng', tmpname),
-            cwd=os.path.dirname(tmpname),
-            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        errmsg = list()
-        transfer(p.stdout, open(outname, "w+b"))
-        transfer(p.stderr, list_open(errmsg))
-        status = p.wait()
-        if status != 0 or errmsg:
-            return ("*** ERROR (%d): %s ***" % (status, "".join(errmsg)),)
+            return ("*** ERROR: NO PROGRAM %s ***" % self,)
+        outname = os.path.splitext(strings[0])[0] + ".png"
+        status = subprocess.call((prog, '-Tpng', "-o%s" % outname, strings[0]))
+        if status != 0:
+            return ("*** ERROR %s RETURNED %d ***" % (self, status),)
         return (outname,)
 
 
@@ -208,4 +176,5 @@ DOT   = DotFilter("dot")
 NEATO = DotFilter("neato")
 CIRCO = DotFilter("circo")
 TWOPI = DotFilter("twopi")
+FDP   = DotFilter("fdp")
 SFDP  = DotFilter("sfdp")
