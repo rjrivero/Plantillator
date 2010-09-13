@@ -178,3 +178,63 @@ CIRCO = DotFilter("circo")
 TWOPI = DotFilter("twopi")
 FDP   = DotFilter("fdp")
 SFDP  = DotFilter("sfdp")
+
+
+def DotGraph(graph, scale=False):
+    """Convierte un grafo en texto en formato dot"""
+    return "\n".join(_graph_dot(graph, scale))
+
+
+def _dot_escape(data):
+    """Parecido a repr, pero usa comillas dobles en lugar de simples"""
+    return "'".join(repr(x)[1:-1] for x in data.split("'")).replace('"', '\\"')
+
+
+def _graph_dot(graph, scale=False):
+    """Convierte un grafo en un Graph de dot"""
+    yield "Graph full {"
+    for key, group in graph.groups.iteritems():
+        for item in _group_dot(group, key):
+            yield item
+    for link in graph.valid_links:
+        yield "%s -- %s" % (link[0].ID, link[1].ID)
+    yield "}"
+
+
+def _group_dot(group, label):
+    """Convierte un NodeGroup en un cluster dot"""
+    cluster = ""
+    if label:
+        cluster = label.replace(" ", "")
+        yield "\n".join((
+            '  Subgraph cluster%s {' % cluster,
+            '    margin=0.25;',
+        ))
+        yield '    label="%s";' % _dot_escape(label)
+    for sublist in group:
+        for item in _list_dot(sublist, cluster):
+            yield item
+    for sublist in group:
+        if sublist.rank is not None:
+            yield '{ rank=%s; %s };' % (sublist.rank, "; ".join(x.ID for x in sublist))
+    if label:
+        yield "  }"
+
+
+def _list_dot(sublist, label):
+    """Crea un cluster dot por cada nodo del NodeList"""
+    for item in sublist:
+        cluster = item.ID.replace(" ", "")
+        shape = 'shapefile="%s",' % sublist.shape if sublist.shape else ""
+        yield "\n".join((
+            '    Subgraph cluster%s_%s {' % (label, cluster),
+            '      center=true;',
+            '      margin=0;',
+            '      nodesep=0;',
+            '      mindist=0;',
+            '      pad=0;',
+            '      label="%s";' % _dot_escape(item.label),
+            '      color=white;',
+            '      %s [shape=box, pad=0, label="", penwidth=0, %s fontname=Calibri, fontsize=10];' % (item.ID, shape),
+            '    }'
+        ))

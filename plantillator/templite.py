@@ -344,7 +344,10 @@ class Templite(object):
             if first.startswith(":"):
                 first = first[1:]
                 offset = -1
-            lines = (l for l in first.splitlines() if not l.isspace())
+            #lines = (l for l in first.splitlines() if l and not l.isspace())
+            # Dejo las lineas en blanco por si alguien mete un string
+            # con triple quote dentro de un bloque. Raro, pero puede pasar.
+            lines = (l for l in first.splitlines())
             # Evito mezclar espacios con tabs
             lines = tuple(l.replace("\t", TAB_WIDTH) for l in lines)
             first = lines[0].strip()
@@ -368,7 +371,8 @@ class Templite(object):
 
         def dedent(self, lines):
             if lines:
-                level = min(len(l) - len(l.lstrip()) for l in lines)
+                level = min((len(l) - len(l.lstrip())) for l in lines
+                        if l and not l.isspace())
                 return tuple(l[level:].rstrip() for l in lines)
             
         def __iter__(self):

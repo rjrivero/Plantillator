@@ -12,11 +12,6 @@ from plantillator.meta import SYMBOL_SELF
 ItemDescriptor = namedtuple("ItemDescriptor", "ID, label, attribs")
 
 
-def dot_escape(data):
-    """Parecido a repr, pero usa comillas dobles en lugar de simples"""
-    return "'".join(repr(x)[1:-1] for x in data.split("'")).replace('"', '\\"')
-
-
 class NodeList(tuple):
 
     """Lista de nodos con atributos comunes"""
@@ -131,47 +126,6 @@ class NodeGroup(list):
     @property
     def IDs(self):
         return frozenset(chain(*(x.IDs for x in self)))
-        
-    def _group_dot(self, label):
-        """Convierte un grupo de nodos en un cluster dot"""
-        cluster = ""
-        if label:
-            cluster = label.replace(" ", "")
-            yield "\n".join((
-                'Subgraph cluster%s {' % cluster,
-                '  margin=0.25;',
-            ))
-            # Fuerzo a que label vaya encerrada entre comillas dobles
-            yield '  label="%s";' % dot_escape(label)
-        for group in self:
-            for item in self._list_dot(group, cluster):
-                yield item
-        for group in self:
-            if group.rank is not None:
-                yield '{ rank=%s; %s };' % (group.rank, "; ".join(x.ID for x in group))
-        if label:
-            yield "}"
-
-    def _list_dot(self, group, label):
-        for item in group:
-            cluster = item.ID.replace(" ", "")
-            shape = 'shapefile="%s",' % group.shape if group.shape else ""
-            yield "\n".join((
-                'Subgraph cluster%s_%s {' % (label, cluster),
-                '  center=true;',
-                '  margin=0;',
-                '  nodesep=0;',
-                '  mindist=0;',
-                '  pad=0;',
-                # obligo a que el label vaya entre comillas dobles
-                '  label="%s";' % dot_escape(item.label),
-                '  color=lightgray;',
-                '  %s [shape=box, pad=0, label="", penwidth=0, %s fontname=Calibri, fontsize=10];' % (item.ID, shape),
-                '}'
-            ))
-
-    def dot(self, label):
-        return "\n".join(self._group_dot(label))
 
 
 class Graph(object):
@@ -213,11 +167,3 @@ class Graph(object):
             LinkList(items, src_id, dst_id, src_label, dst_label,
                      src_attribs, dst_attribs)
         )
-
-    def dot(self):
-        yield "Graph full {\n"
-        for key, group in self.groups.iteritems():
-            yield group.dot(key)
-        for link in self.valid_links:
-            yield "\n%s -- %s" % (link[0].ID, link[1].ID)
-        yield "}\n"

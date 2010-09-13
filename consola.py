@@ -207,12 +207,19 @@ except CommandError as detail:
         detail.data['error'] = detail
         code.interact("Consola de depuracion", local={'data':detail.data})
     sys.exit(TRANSLATION_ERRNO)
-except (ParseError, NewParseError, TemplateError, DataError) as detail:
+except (ParseError, TemplateError, DataError) as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:
         print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)
+except NewParseError as detail:
+    for msg in format_exception_only(sys.exc_type, sys.exc_value):
+        sys.stderr.write(str(msg))
+    if options.debug:
+        print_exc(file=sys.stderr)
+    print detail.template
+    sys.exit(PARSE_ERRNO)     
 except Exception as detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))
