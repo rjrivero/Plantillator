@@ -180,9 +180,9 @@ FDP   = DotFilter("fdp")
 SFDP  = DotFilter("sfdp")
 
 
-def DotGraph(graph, scale=False):
+def DotGraph(graph, shapedir="iconos", scale=False):
     """Convierte un grafo en texto en formato dot"""
-    return "\n".join(_graph_dot(graph, scale))
+    return "\n".join(_graph_dot(graph, shapedir, scale))
 
 
 def _dot_escape(data):
@@ -190,18 +190,18 @@ def _dot_escape(data):
     return "'".join(repr(x)[1:-1] for x in data.split("'")).replace('"', '\\"')
 
 
-def _graph_dot(graph, scale=False):
+def _graph_dot(graph, shapedir, scale):
     """Convierte un grafo en un Graph de dot"""
     yield "Graph full {"
     for key, group in graph.groups.iteritems():
-        for item in _group_dot(group, key):
+        for item in _group_dot(group, key, shapedir):
             yield item
     for link in graph.valid_links:
         yield "%s -- %s" % (link[0].ID, link[1].ID)
     yield "}"
 
 
-def _group_dot(group, label):
+def _group_dot(group, label, shapedir):
     """Convierte un NodeGroup en un cluster dot"""
     cluster = ""
     if label:
@@ -212,7 +212,7 @@ def _group_dot(group, label):
         ))
         yield '    label="%s";' % _dot_escape(label)
     for sublist in group:
-        for item in _list_dot(sublist, cluster):
+        for item in _list_dot(sublist, cluster, shapedir):
             yield item
     for sublist in group:
         if sublist.rank is not None:
@@ -221,11 +221,12 @@ def _group_dot(group, label):
         yield "  }"
 
 
-def _list_dot(sublist, label):
+def _list_dot(sublist, label, shapedir):
     """Crea un cluster dot por cada nodo del NodeList"""
     for item in sublist:
-        cluster = item.ID.replace(" ", "")
-        shape = 'shapefile="%s",' % sublist.shape if sublist.shape else ""
+        cluster, shape = item.ID.replace(" ", ""), ""
+        if sublist.shape:
+            shape = 'shapefile="%s.png",' % os.path.join(shapedir, sublist.shape)
         yield "\n".join((
             '    Subgraph cluster%s_%s {' % (label, cluster),
             '      center=true;',
