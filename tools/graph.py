@@ -12,6 +12,12 @@ from plantillator.meta import SYMBOL_SELF
 ItemDescriptor = namedtuple("ItemDescriptor", "ID, label, attribs")
 
 
+# Estilos de linea
+LINK_SOLID  = 0
+LINK_DOTTED = 1
+LINK_DASHED = 2
+
+
 class NodeList(tuple):
 
     """Lista de nodos con atributos comunes"""
@@ -24,7 +30,7 @@ class NodeList(tuple):
         item_id:    Resolver que obtiene el ID de cada nodo
         item_label: Resolver que obtiene el label de cada nodo.
         shape:      Nombre del icono que debe tener el objeto.
-        rank:       Rango jerarquico del objeto (para dot)
+        rank:       Rango jerarquico del objeto (para dot, principalmente)
         attribs:    Nombres de los atributos que se exportaran.
         """
         obj = super(NodeList, cls).__new__(cls, NodeList._process(
@@ -61,7 +67,10 @@ class LinkList(tuple):
     
     """Lista de enlaces con atributos comunes"""
 
-    def __new__(cls, items, src_id, src_label, src_attribs, dst_id, dst_label, dst_attribs):
+    def __new__(cls, items,
+        src_id, src_label, src_attribs,
+        dst_id, dst_label, dst_attribs,
+        style=LINK_SOLID, width=1, color="#000000"):
         """"Construye un grupo de enlaces con atributos comunes.
         
         items:       Nodos que forman el grupo
@@ -81,7 +90,13 @@ class LinkList(tuple):
             attribs.update("%s%s" % ("src_", attrib) for attrib in src_attribs)
         if dst_attribs:
             attribs.update("%s%s" % ("dst_", attrib) for attrib in dst_attribs)
-        obj.attribs = attribs or None
+        # Meto los atributos "origen" y "destino", que pertenen a todos
+        # los enlaces.
+        attribs.update(("origen", "destino"))
+        obj.style = style
+        obj.width = width
+        obj.color = color
+        obj.attribs = attribs
         return obj
 
     @staticmethod
@@ -95,26 +110,35 @@ class LinkList(tuple):
             # Obtengo el ID y el label de cada atributo desde el resolver
             src_table = { SYMBOL_SELF: item.up }
             src_desc  = LinkList._descriptor(
-                src_table, src_id, src_label, src_attribs, "src_")
+                item, src_table,
+                src_id, src_label, src_attribs, "src_")
             if item._get("PEER"):
                 dst_table = { SYMBOL_SELF: item.PEER.up }
                 dst_desc  = LinkList._descriptor(
-                    dst_table, dst_id, dst_label, dst_attribs, "dst_")
+                    item.PEER, dst_table,
+                    dst_id, dst_label, dst_attribs, "dst_")
             else:
                 dst_desc = None
             yield (src_desc, dst_desc)
 
     @staticmethod
-    def _descriptor(symbols, id_resolver, label_resolver, attrs, prefix):
+    def _descriptor(link, symbols, id_resolver, label_resolver, attribs, prefix):
         """Devuelve un descriptor"""
         ID     = id_resolver._resolve(symbols)
         label  = label_resolver._resolve(symbols)
-        if attrs:
-            values = (("%s%s" % (prefix, attr), item.get(attr)) for attr in attribs)
+        if attribs:
+            values = (("%s%s" % (prefix, attr), link.get(attr)) for attr in attribs)
             values = dict((x, y) for (x, y) in values if y is not None)
         else:
             values = None
         return ItemDescriptor(ID, label, values)
+
+    def valid_links(self, IDs):
+        return (link for link in self
+                     if link[1] is not None
+                     and link[0].ID in IDs
+                     and link[1].ID in IDs
+        )
 
 
 class NodeGroup(list):
@@ -127,13 +151,21 @@ class NodeGroup(list):
     def IDs(self):
         return frozenset(chain(*(x.IDs for x in self)))
 
+    @property
+    def shapes(self):
+        return frozenset(x.shape for x in self)
+
 
 class Graph(object):
     
     """Objeto Grafo, compuesto por grupos de nodos y enlaces.
     
     Solo se permite un nivel de agrupamiento porque muchos graficos
-    con graphviz quedan feotes si se agrupan en mas de un nivel.
+    quedan feotes de todas formas, si se agrupan en mas de un nivel.
+    
+    Dicho de otra forma: si se necesita mas de un nivel, es mas recomendable
+    hacer el grafico por capas. Y ya veremos como enlazamos unas capas con
+    otras...
     """
     
     def __init__(self):
@@ -141,29 +173,35 @@ class Graph(object):
         self.links = list()
 
     @property
-    def attribs(self):
-        node_attribs = chain(*(x.attribs for x in self.groups.values()))
-        link_attribs = chain(*(x.attribs for x in self.links))
-        return frozenset(chain(ribs, link_attribs))
+    def node_attribs(self):
+        return frozenset(chain(*(x.attribs for x in self.groups.values())))
+
+    @property
+    def link_attribs(self):
+        return frozenset(chain(*(x.attribs for x in self.links)))
+
+    @property
+    def shapes(self):
+        return frozenset(chain(*(x.shapes for x in self.groups.values())))
 
     @property
     def IDs(self):
         return frozenset(chain(*tuple(x.IDs for x in self.groups.values())))
 
-    @property
-    def valid_links(self):
-        """Devuelve solo los enlaces entre nodos incluidos en la lista"""
-        IDs = self.IDs
-        return (x for x in self.links if  x[1] is not None
-                                      and x[0].ID in IDs and x[1].ID in IDs)
+    def add_links(self, items,
+        src_id, src_label, src_attribs,
+        dst_id, dst_label, dst_attribs,
+        style=LINK_SOLID, width=1, color="#000000"):
+        self.links.append(
+            LinkList(items,
+                src_id, src_label, src_attribs,
+                dst_id, dst_label, dst_attribs,
+                style=style, width=width, color=color
+            )
+        )
 
     def add_group(self, gname, items, id_resolver, label_resolver,
                   shape=None, rank=None, attribs=None):
         self.groups[gname].append(
-            NodeList(items, id_resolver, label_resolver, shape, rank, attribs))
-
-    def add_links(self, items, src_id, dst_id, src_label, dst_label, src_attribs, dst_attribs):
-        self.links.extend(
-            LinkList(items, src_id, dst_id, src_label, dst_label,
-                     src_attribs, dst_attribs)
+            NodeList(items, id_resolver, label_resolver, shape, rank, attribs)
         )

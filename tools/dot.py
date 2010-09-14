@@ -10,6 +10,8 @@ import subprocess
 import os
 import os.path
 
+from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
+
 
 class DotFilter(str):
 
@@ -180,6 +182,12 @@ FDP   = DotFilter("fdp")
 SFDP  = DotFilter("sfdp")
 
 
+STYLES = {
+    LINK_SOLID: "solid",
+    LINK_DOTTED: "dotted",
+    LINK_DASHED: "dashed",
+}
+
 def DotGraph(graph, shapedir="iconos", scale=False):
     """Convierte un grafo en texto en formato dot"""
     return "\n".join(_graph_dot(graph, shapedir, scale))
@@ -191,13 +199,24 @@ def _dot_escape(data):
 
 
 def _graph_dot(graph, shapedir, scale):
-    """Convierte un grafo en un Graph de dot"""
+    """Convierte un grafo en un Graph de dot
+    
+    - shapdir: directorio donde estan los iconos (.png)
+    - scale: True si se quiere escalar el grafico a A4
+    """
     yield "Graph full {"
+    if scale:
+        yield '  size = "6.5,9.5" /* a4 en pulgadas, menos el margen */'
     for key, group in graph.groups.iteritems():
         for item in _group_dot(group, key, shapedir):
             yield item
-    for link in graph.valid_links:
-        yield "%s -- %s" % (link[0].ID, link[1].ID)
+    IDs = graph.IDs
+    for sublist in graph.links:
+        for link in sublist.valid_links(IDs):
+            yield '%s -- %s [ color="%s", penwidth="%s", style="%s" ];' % (
+                link[0].ID, link[1].ID, sublist.color, sublist.width,
+                STYLES[sublist.style]
+            )
     yield "}"
 
 
