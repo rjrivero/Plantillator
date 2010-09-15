@@ -9,15 +9,16 @@
 import os
 import os.path
 import re
+import math
 
 from xml.sax.saxutils import escape
 from collections import namedtuple
 
 from plantillator.pathfinder import FileSource
-from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
+from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, StringWrapper
 
 
-VIEWBOX = re.compile(r'viewBox="\d+\s+\d+\s+(?P<width>\d+)\s+(?P<height>\d+)"')
+VIEWBOX = re.compile(r'viewBox="\d+\s+\d+\s+(?P<width>\d+(\.\d+)?)\s+(?P<height>\d+(\.\d+)?)"')
 
 
 Resources = namedtuple("Resources", "nattribs, lattribs, shapes")
@@ -33,7 +34,9 @@ def read_svg(path):
         data = FileSource(path).read()
         vbox = VIEWBOX.search(data)
         if vbox:
-            return ShapeFile(int(vbox.group("width")), int(vbox.group("height")), data)
+            width  = math.ceil(float(vbox.group("width")))
+            height = math.ceil(float(vbox.group("height")))
+            return ShapeFile(width, height, data)
     except:
         pass
 
@@ -45,8 +48,12 @@ STYLES = {
 }
 
 
-def YedGraph(graph, shapedir="iconos"):
-    """Convierte un grafo en texto en formato yEd"""
+def YedGraph(graph, shapedir="iconos", plain=False):
+    """Convierte un grafo en texto en formato yEd
+    
+    - shapedir: Directorio donde encontrar los iconos (en .svg)
+    - plain: si es True, se ignora la clasificacion en grupos.
+    """
     # rimero, asegurarnos de que las shapes son legibles
     shapes    = graph.shapes
     sfiles    = dict((s, read_svg(os.path.join(shapedir, s)+".svg")) for s in shapes)
@@ -61,10 +68,10 @@ def YedGraph(graph, shapedir="iconos"):
     shapes    = dict((v, i+reserved) for (i, v) in enumerate(graph.shapes))
     resources = Resources(nattribs, lattribs, shapes)
     # Y devolvemos el resultado
-    return "\n".join(_graph_yed(graph, resources, sfiles))
+    return StringWrapper("\n".join(_graph_yed(graph, resources, sfiles, plain)))
 
 
-def _graph_yed(graph, resources, sfiles):
+def _graph_yed(graph, resources, sfiles, plain):
     # Cabecera
     #---------
     yield "\n".join((
@@ -78,9 +85,14 @@ def _graph_yed(graph, resources, sfiles):
     ))
     # IDs de recursos
     #----------------
-    for attrib, index in sorted(resources.nattribs.iteritems()):
+    # Para ordenar los atributos en funcion de su indice.
+    # Es importante porque el orden en el que se definan los atributos, es el
+    # orden en que yEd los presenta, pero invertido... tocate los webs.
+    def key(item):
+        return item[1]
+    for attrib, index in reversed(sorted(resources.nattribs.iteritems(), key=key)):
         yield '  <key attr.name="%s" attr.type="string" for="node" id="d%d"><default/></key>' % (attrib, index)
-    for attrib, index in sorted(resources.lattribs.iteritems()):
+    for attrib, index in reversed(sorted(resources.lattribs.iteritems(), key=key)):
         yield '  <key attr.name="%s" attr.type="string" for="edge" id="d%d"><default/></key>' % (attrib, index)
     yield '<graph edgedefault="undirected" id="G">'
     # Grupos
@@ -89,7 +101,7 @@ def _graph_yed(graph, resources, sfiles):
     for key, group in graph.groups.iteritems():
         group.index = index
         index += 1
-        if not key:
+        if plain or not key:
             group.prefix = None
             pre, post = "", ""
         else:
@@ -203,7 +215,7 @@ def _group_wrapper(group, label):
 
 
 def _list_yed(group, gapx, sublist, resources, sfiles, idmap):
-    """Crea un cluster dot por cada nodo del NodeList"""
+    """Crea un nodo yEd por cada nodo del NodeList"""
     for xpos, item in enumerate(sublist):
         # Calculo el ID del nodo, en funcion de su pertenencia a un grupo
         if group.prefix is not None:

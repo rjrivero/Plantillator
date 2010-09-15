@@ -10,7 +10,7 @@ import subprocess
 import os
 import os.path
 
-from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
+from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, StringWrapper
 
 
 class DotFilter(str):
@@ -190,7 +190,7 @@ STYLES = {
 
 def DotGraph(graph, shapedir="iconos", scale=False):
     """Convierte un grafo en texto en formato dot"""
-    return "\n".join(_graph_dot(graph, shapedir, scale))
+    return StringWrapper("\n".join(_graph_dot(graph, shapedir, scale)))
 
 
 def _dot_escape(data):
@@ -201,15 +201,27 @@ def _dot_escape(data):
 def _graph_dot(graph, shapedir, scale):
     """Convierte un grafo en un Graph de dot
     
-    - shapdir: directorio donde estan los iconos (.png)
+    - shapedir: directorio donde estan los iconos (.png)
     - scale: True si se quiere escalar el grafico a A4
     """
     yield "Graph full {"
     if scale:
         yield '  size = "6.5,9.5" /* a4 en pulgadas, menos el margen */'
     for key, group in graph.groups.iteritems():
-        for item in _group_dot(group, key, shapedir):
-            yield item
+        if not key:
+            cluster   = None
+            pre, post = "", ""
+        else:
+            cluster   = key.replace(" ", "")
+            pre, post = tuple(_group_wrapper(cluster, key))
+        yield pre
+        for sublist in group:
+            for item in _list_dot(sublist, cluster, shapedir):
+                yield item
+        for sublist in group:
+            if sublist.rank is not None:
+                yield '{ rank=%s; %s };' % (sublist.rank, "; ".join(x.ID for x in sublist))
+        yield post
     IDs = graph.IDs
     for sublist in graph.links:
         for link in sublist.valid_links(IDs):
@@ -220,30 +232,20 @@ def _graph_dot(graph, shapedir, scale):
     yield "}"
 
 
-def _group_dot(group, label, shapedir):
-    """Convierte un NodeGroup en un cluster dot"""
-    cluster = ""
-    if label:
-        cluster = label.replace(" ", "")
-        yield "\n".join((
-            '  Subgraph cluster%s {' % cluster,
-            '    margin=0.25;',
-        ))
-        yield '    label="%s";' % _dot_escape(label)
-    for sublist in group:
-        for item in _list_dot(sublist, cluster, shapedir):
-            yield item
-    for sublist in group:
-        if sublist.rank is not None:
-            yield '{ rank=%s; %s };' % (sublist.rank, "; ".join(x.ID for x in sublist))
-    if label:
-        yield "  }"
+def _group_wrapper(cluster, label):
+    """Devuelve la parte inicial y final de un subgraph"""
+    yield "\n".join((
+        '  Subgraph cluster%s {' % cluster,
+        '    margin=0.25;',
+        '    label="%s";' % _dot_escape(label),
+    ))
+    yield "  }"
 
 
 def _list_dot(sublist, label, shapedir):
     """Crea un cluster dot por cada nodo del NodeList"""
     for item in sublist:
-        cluster, shape = item.ID.replace(" ", ""), ""
+        cluster, shape, label = item.ID.replace(" ", ""), "", label or ""
         if sublist.shape:
             shape = 'shapefile="%s.png",' % os.path.join(shapedir, sublist.shape)
         yield "\n".join((

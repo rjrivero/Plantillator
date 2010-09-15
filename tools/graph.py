@@ -18,6 +18,41 @@ LINK_DOTTED = 1
 LINK_DASHED = 2
 
 
+class OrderedFSet(tuple):
+    
+    """Una especie de frozenset que recuerda el orden de insercion.
+    
+    Cuando se itera sobre el, lo hace en el mismo orden en que
+    estuvieran los elementos en la secuencia inicial.
+    
+    Lo utilizo para las listas de atributos de nodos y enlaces, porque
+    el orden en que se definan es luego el orden en que yEd las presenta
+    (independientemente del identificador que se les asigne).
+    """
+
+    def __new__(cls, sequence):
+        ordered = dict()
+        for index, val in enumerate(sequence):
+            ordered.setdefault(val, index)
+        ordered = ((idx, val) for (val, idx) in ordered.iteritems())
+        return super(OrderedFSet, cls).__new__(cls, (x[1] for x in sorted(ordered)))
+
+
+class StringWrapper(tuple):
+
+    """Objeto que envuelve una cadena en una tuple.
+
+    Es para poder usar una cadena de texto como entrada a un filtro
+    de Templite (que normalmente reciben una secuencia de cadenas)
+    """
+
+    def __new__(cls, string):
+        return super(StringWrapper, cls).__new__(cls, (string,))
+
+    def __str__(self):
+        return self[0]
+
+
 class NodeList(tuple):
 
     """Lista de nodos con atributos comunes"""
@@ -85,18 +120,17 @@ class LinkList(tuple):
             items,
             src_id, src_label, src_attribs,
             dst_id, dst_label, dst_attribs))
-        attribs = set()
-        if src_attribs:
-            attribs.update("%s%s" % ("src_", attrib) for attrib in src_attribs)
-        if dst_attribs:
-            attribs.update("%s%s" % ("dst_", attrib) for attrib in dst_attribs)
         # Meto los atributos "origen" y "destino", que pertenen a todos
         # los enlaces.
-        attribs.update(("origen", "destino"))
+        attribs = ["origen", "destino"]
+        if src_attribs:
+            attribs.extend("%s%s" % ("src_", attrib) for attrib in src_attribs)
+        if dst_attribs:
+            attribs.extend("%s%s" % ("dst_", attrib) for attrib in dst_attribs)
         obj.style = style
         obj.width = width
         obj.color = color
-        obj.attribs = attribs
+        obj.attribs = OrderedFSet(attribs)
         return obj
 
     @staticmethod
@@ -145,7 +179,7 @@ class NodeGroup(list):
 
     @property
     def attribs(self):
-        return frozenset(chain(*(x.attribs for x in self if x.attribs)))
+        return OrderedFSet(chain(*(x.attribs for x in self if x.attribs)))
 
     @property
     def IDs(self):
@@ -174,11 +208,11 @@ class Graph(object):
 
     @property
     def node_attribs(self):
-        return frozenset(chain(*(x.attribs for x in self.groups.values())))
+        return OrderedFSet(chain(*(x.attribs for x in self.groups.values())))
 
     @property
     def link_attribs(self):
-        return frozenset(chain(*(x.attribs for x in self.links)))
+        return OrderedFSet(chain(*(x.attribs for x in self.links)))
 
     @property
     def shapes(self):

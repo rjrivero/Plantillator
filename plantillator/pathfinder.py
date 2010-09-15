@@ -144,7 +144,7 @@ class PathFinder(list):
         try:
             return next(self.every(fname))
         except StopIteration:
-            raise ValueError("File %s not found in %" % (fname, os.pathsep.join(self)))
+            raise ValueError("File %s not found in %s" % (fname, os.pathsep.join(self)))
 
     def every(self, fname):
         """Itera sobre todos los ficheros coincidentes en la ruta definida"""
