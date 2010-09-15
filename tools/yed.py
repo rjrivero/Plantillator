@@ -60,7 +60,7 @@ def YedGraph(graph, shapedir="iconos", plain=False):
     if any(x is None for x in sfiles.values()):
         return "*** ERROR: could not read all shapes"""
     # Primero, encontrar cuantos IDs de recurso tengo que reservar
-    reserved  = 5 # No. de IDs de atributo que dejamos libres, por si acaso.
+    reserved  = 10 # No. de IDs de atributo que dejamos libres, por si acaso.
     nattribs  = dict((v, i+reserved) for (i, v) in enumerate(graph.node_attribs))
     reserved  = len(nattribs) + reserved
     lattribs  = dict((v, i+reserved) for (i, v) in enumerate(graph.link_attribs))
@@ -78,10 +78,11 @@ def _graph_yed(graph, resources, sfiles, plain):
         '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
         '<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:y="http://www.yworks.com/xml/graphml" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd">',
         '<key for="graphml" id="d0" yfiles.type="resources"/>',
-        '<key attr.name="Description" attr.type="string" for="graph" id="d1"><default/></key>',
-        '<key attr.name="Description" attr.type="string" for="node" id="d2"><default/></key>',
-        '<key for="node" id="d3" yfiles.type="nodegraphics"/>',
-        '<key for="edge" id="d4" yfiles.type="edgegraphics"/>',
+        '<key attr.name="description" attr.type="string" for="graph" id="d1"><default/></key>',
+        '<key attr.name="description" attr.type="string" for="node" id="d2"><default/></key>',
+        '<key attr.name="description" attr.type="string" for="edge" id="d3"><default/></key>',
+        '<key for="node" id="d4" yfiles.type="nodegraphics"/>',
+        '<key for="edge" id="d5" yfiles.type="edgegraphics"/>',
     ))
     # IDs de recursos
     #----------------
@@ -118,15 +119,15 @@ def _graph_yed(graph, resources, sfiles, plain):
     #--------
     IDs = graph.IDs
     edgecount = 0
-    srcindex = resources.lattribs["origen"]
-    dstindex = resources.lattribs["destino"]
+    #srcindex = resources.lattribs["origen"]
+    #dstindex = resources.lattribs["destino"]
     for sublist in graph.links:
         for link in sublist.valid_links(IDs):
             srcid = idmap[link[0].ID]
             dstid = idmap[link[1].ID]
             yield "\n".join((
                 '<edge id="e%d" source="%s" target="%s">' % (edgecount, srcid, dstid),
-                '<data key="d4">',
+                '<data key="d5">',
                 '<y:PolyLineEdge>',
                 '<y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>',
                 '<y:LineStyle color="%s" type="%s" width="%s"/>' % (sublist.color, STYLES[sublist.style], sublist.width),
@@ -137,8 +138,9 @@ def _graph_yed(graph, resources, sfiles, plain):
                 '<y:BendStyle smoothed="false"/>',
                 '</y:PolyLineEdge>',
                 '</data>',
-                '<data key="d%d">%s</data>' % (srcindex, escape(link[0].label)),
-                '<data key="d%d">%s</data>' % (dstindex, escape(link[1].label)),
+                '<data key="d3">%s --&gt; %s</data>' % (escape(link[0].label), escape(link[1].label)),
+                #'<data key="d%d">%s</data>' % (srcindex, escape(link[0].label)),
+                #'<data key="d%d">%s</data>' % (dstindex, escape(link[1].label)),
             ))
             for linkside in (link[0], link[1]):
                 if linkside.attribs:
@@ -180,7 +182,7 @@ def _group_wrapper(group, label):
     yield "\n".join((
         '<node id="%s" yfiles.foldertype="group">' % group.prefix,
         '<data key="d2">%s</data>' % label,
-        '<data key="d3">',
+        '<data key="d4">',
         '<y:ProxyAutoBoundsNode>',
         '  <y:Realizers active="0">',
         '    <y:GroupNode>',
@@ -240,7 +242,7 @@ def _list_yed(group, gapx, sublist, resources, sfiles, idmap):
         item_bounds = (shape.height, shape.width, gapx+xpos*GAPX, 15+group.index*GAPY)
         # Y vuelco el objeto.
         yield "\n".join((
-            '  <data key="d3">',
+            '  <data key="d4">',
             '  <y:SVGNode>',
             '    <y:Geometry height="%d" width="%d" x="%d" y="%d"/>' % item_bounds,
             '    <y:Fill color="#CCCCFF" transparent="false"/>',

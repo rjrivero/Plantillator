@@ -194,8 +194,11 @@ def DotGraph(graph, shapedir="iconos", scale=False):
 
 
 def _dot_escape(data):
-    """Parecido a repr, pero usa comillas dobles en lugar de simples"""
-    return "'".join(repr(x)[1:-1] for x in data.split("'")).replace('"', '\\"')
+    """Escapa un texto para meterlo en un atributo de dot"""
+    # Antes usaba "repr", pero eso sustituia los caracteres no ASCII
+    # por secuencias de escape... ahora hago el escapado a mano para
+    # conservar esos caracteres.
+    return str(data).replace('"', '\\"').replace("\n", "\\n")
 
 
 def _graph_dot(graph, shapedir, scale):
@@ -204,7 +207,10 @@ def _graph_dot(graph, shapedir, scale):
     - shapedir: directorio donde estan los iconos (.png)
     - scale: True si se quiere escalar el grafico a A4
     """
-    yield "Graph full {"
+    yield "\n".join((
+        "Graph full {",
+        '  charset="UTF-8";',
+    ))
     if scale:
         yield '  size = "6.5,9.5" /* a4 en pulgadas, menos el margen */'
     for key, group in graph.groups.iteritems():
@@ -220,12 +226,12 @@ def _graph_dot(graph, shapedir, scale):
                 yield item
         for sublist in group:
             if sublist.rank is not None:
-                yield '{ rank=%s; %s };' % (sublist.rank, "; ".join(x.ID for x in sublist))
+                yield '  { rank=%s; %s };' % (sublist.rank, "; ".join(x.ID for x in sublist))
         yield post
     IDs = graph.IDs
     for sublist in graph.links:
         for link in sublist.valid_links(IDs):
-            yield '%s -- %s [ color="%s", penwidth="%s", style="%s" ];' % (
+            yield '  %s -- %s [ color="%s", penwidth="%s", style="%s" ];' % (
                 link[0].ID, link[1].ID, sublist.color, sublist.width,
                 STYLES[sublist.style]
             )

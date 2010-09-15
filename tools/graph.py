@@ -120,9 +120,11 @@ class LinkList(tuple):
             items,
             src_id, src_label, src_attribs,
             dst_id, dst_label, dst_attribs))
-        # Meto los atributos "origen" y "destino", que pertenen a todos
-        # los enlaces.
-        attribs = ["origen", "destino"]
+        # Antes metia los atributos "origen" y "destino" a todos los enlaces.
+        # Ahora prefiero un atributo "description" de yEd, donde pongo 
+        # "%s --> %s" % (origen, destino)
+        # attribs = ["origen", "destino"]
+        attribs = list()
         if src_attribs:
             attribs.extend("%s%s" % ("src_", attrib) for attrib in src_attribs)
         if dst_attribs:
