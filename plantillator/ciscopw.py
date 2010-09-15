@@ -20,7 +20,7 @@
 #########################################################
 
 """
-Utilidad para ofuscar o cifrar los passwords cifrados con el algoritmo
+Utilidad para ofuscar o descifrar passwords utilizando los algoritmos
 7 o 5 de Cisco.
 """
 
@@ -70,7 +70,7 @@ def password(pw, seed=None):
     return "%02d%s" % (seed, data)
 
 
-def to64 (stream, chars):
+def to64(stream, chars):
     """Concatena algunos bytes de un stream y los convierte a base64.
     stream: cadena de la que se toman los bytes.
     chars: tupla con los bytes a codificar.
@@ -121,6 +121,5 @@ def secret(pw, salt=None, magic="$1$"):
         (4, 10, 5),
         (11,),
     )
-    passwd = "".join(to64(final, x) for x in tuples)                            
+    passwd = "".join(to64(final, x) for x in tuples)
     return magic + salt + '$' + passwd
-

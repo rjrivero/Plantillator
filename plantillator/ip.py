@@ -148,13 +148,8 @@ class IPAddress(object):
 
     def __str__(self):
         if self.bits == self.bitsize:
-            return self.ip
-        return " /".join((self.ip, str(self.bits)))
-
-    def __unicode__(self):
-        if self.bits == self.bitsize:
-            return unicode(self.ip)
-        return u" /".join((self.ip, str(self.bits)))
+            return str(self.ip)
+        return " /".join((str(self.ip), str(self.bits)))
 
     def __repr__(self):
         return "IPAddress('%s')" % str(self)

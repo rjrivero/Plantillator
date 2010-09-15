@@ -5,11 +5,14 @@
 # Para python 2.7 y posteriores, podria usar OrderedDict. Pero esto debe
 # funcionar con python 2.6
 
+
 import collections
 from weakref import proxy
 
+
 class Link(object):
     __slots__ = 'prev', 'next', 'key', 'count', '__weakref__'
+
 
 class OrderedSet(collections.MutableSet):
     'Set that remembers the order elements were added'
@@ -94,4 +97,3 @@ class OrderedSet(collections.MutableSet):
         if isinstance(other, OrderedSet):
             return len(self) == len(other) and list(self) == list(other)
         return not self.isdisjoint(other)
-

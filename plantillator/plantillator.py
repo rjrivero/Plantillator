@@ -14,49 +14,16 @@ try:
 except ImportError:
     print >> sys.stderr, "Warning: PyDOT NOT SUPPORTED!"
 
-from ..data import PathFinder, FileSource, Fallback
-from ..csvread import DataSource
-from ..engine import Loader as TmplLoader, VARPATTERN
-from .dataloader import DataLoader
+from .pathfinder import PathFinder, FileSource
+from .meta import Fallback
+from .csvreader import CSVShelf
+from .engine import Loader as TmplLoader, VARPATTERN
+from .iotools import ShelfLoader, ContextMaker
 
 
 TMPL_EXT = set(('.txt',))
-DATA_EXT = set(('.csv',))
+DATA_EXT = set(('.shelf',))
 TOOLS_FILE = "tools.py"
-
-
-#class FallbackDict(dict):
-#
-#    """Diccionario que hace Fallback a un DataObject
-#
-#    Lo he definido para usarlo como "locals" en las llamadas a exec
-#    y eval, por si utilizar un tipo basado en diccionario mejoraba algo
-#    el rendimiento comparado con un tipo basado en DataType. Pero la verdad
-#    es que el rendimiento se queda igual.
-#    """
-#
-#    def __init__(self, data):
-#        dict.__init__(self)
-#        self._up = data
-#
-#    def __getitem__(self, index):
-#        try:
-#            return dict.__getitem__(self, index)
-#        except KeyError:
-#            return self.setdefault(index, self._up[index])
-#
-#    @property
-#    def _type(self):
-#        return self._up._type
-#
-#    def __setattr__(self, index, value):
-#        self[index] = value
-#
-#    def __getattr__(self, attr):
-#        try:
-#            return self[attr]
-#        except KeyError as details:
-#            raise AttributeError(details)
 
 
 class Plantillator(object):
@@ -77,51 +44,28 @@ class Plantillator(object):
         self.__dict__.update(self.OPTIONS)
 
     def prepare(self):
-        self.dataloader = DataLoader(DataSource())
         self.tmplloader = TmplLoader(self.keep_comments)
         data, tmpl = self._classify()
-        self._loaddata(data)
-        self._addobjects()
-        self._loadtmpl(tmpl)
-        # Calcula el directorio de salida en funcion de
-        # outpath y collapse.
-        if self.collapse:
-            self.outdir = os.path.dirname(self.outpath)
-        elif self.outpath:
-            self.outdir = self.outpath
-        else:
-            self.outdir = os.getcwd()
+        self._context = ContextMaker(self.outpath, self.ext, self.collapse)
+        try:
+            self._loaddata(data)
+            self._loadtmpl(tmpl)
+            self._addobjects()
+        except:
+            if hasattr(self, 'dataloader'):
+                self.dataloader.close()
+            raise
 
     def render(self):
-        if self.collapse:
-            # borro el fichero de salida combinado
-            if os.path.isfile(self.outpath) and self.overwrite:
-                os.unlink(self.outpath)
-        for runtree in self.tmplloader:
-            outcontext = self._outcontext(runtree.cmdtree.source.id, runtree.outpath)
-            for block in self._renderfile(runtree, outcontext):
-                yield block
-
-    def _outcontext(self, sourceid, outpath):
-        """Genera un context que abre y cierra el fichero de salida adecuado"""
-        if self.collapse:
-            outcontext = lambda: open(self.outpath, "a+")
-        elif self.outpath:
-            # Si no hay ninguna sugerencia, el fichero de salida se
-            # llama igual que el de entrada, pero con la extension cambiada.
-            if not outpath:
-                outpath = os.path.basename(sourceid)
-                outpath = os.path.splitext(outpath)[0] + self.ext
-            outpath = os.path.join(self.outpath, outpath)
-            if os.path.isfile(outpath):
-                os.unlink(outpath)
-            outcontext = lambda: open(outpath, "a+")
-        else:
-            @contextmanager
-            def stderr_wrapper():
-                yield sys.stdout
-            outcontext = stderr_wrapper
-        return outcontext
+        try:
+            for runtree in self.tmplloader:
+                # Traslado el valor de "overwrite" al context.
+                self._context.overwrite = self.overwrite
+                outcontext = self._context.get_template_context(runtree.cmdtree.source.id)
+                for block in self._renderfile(runtree, outcontext):
+                    yield block
+        finally:
+            self.dataloader.close()
 
     def _classify(self):
         """divide los ficheros en datos y patrones"""
@@ -141,8 +85,13 @@ class Plantillator(object):
 
     def _loaddata(self, data_sources):
         """carga los ficheros de datos"""
-        for source in data_sources:
-            self.dataloader.load(source)
+        mtimes = dict((os.stat(f.id).st_mtime, f) for f in data_sources)
+        if mtimes:
+            newer = mtimes[max(mtimes.keys())].id
+        else:
+            newer = "data.shelf"
+        self.dataloader = ShelfLoader(newer)
+        self.dataloader.set_datapath(self.path)
 
     def _loadtmpl(self, tmpl_sources):
         """carga los patrones de texto"""
@@ -153,7 +102,7 @@ class Plantillator(object):
                 execfile(init, glob, loc)
         glob.update(loc)
         for source in tmpl_sources:
-            data = Fallback(self.dataloader.data, depth=1)
+            data = dict(self.dataloader.data)
             self.tmplloader.load(source, self.dataloader.glob, data)
 
     def _addobjects(self):

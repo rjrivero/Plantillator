@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
+# -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 from __future__ import with_statement
 import os
@@ -13,9 +13,10 @@ from operator import itemgetter
 from optparse import OptionParser
 from traceback import print_exc, format_exception_only
 
-from plantillator.data import DataError
 from plantillator.engine import ParseError, CommandError
-from plantillator.apps import Plantillator
+from plantillator import ParseError as NewParseError
+from plantillator import DataError, TemplateError, Plantillator, Consumer
+
 
 VERSION           = "0.2"
 OPTIONS_ERRNO     = -1
@@ -61,9 +62,12 @@ parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
 parser.add_option("-k", "--keep_comments",
         action="store_true", dest="keep_comments", default=False,
         help="Conserva los comentarios de la plantilla")
+parser.add_option("-n", "--new-engine",
+        action="store_true", dest="new_engine", default=False,
+        help="Activa el nuevo motor de plantillas")
 
 (options, args) = parser.parse_args()
-if len(args) < 2 and not options.shell:
+if len(args) < 1 and not options.shell:
     parser.print_help(sys.stderr)
     sys.exit(OPTIONS_ERRNO)
 
@@ -159,7 +163,7 @@ def handle(item):
 
 
 # y cargo a PLANTILLATOR!
-plantillator = Plantillator()
+plantillator = Plantillator() if not options.new_engine else Consumer()
 plantillator.path = path
 plantillator.outpath = options.outpath
 plantillator.collapse = options.collapse
@@ -172,10 +176,8 @@ plantillator.keep_comments = options.keep_comments
 try:
     plantillator.prepare()
     if options.shell:
-        local = {
-            'glob': plantillator.dataloader.glob,
-            'data': plantillator.dataloader.data,
-        }
+        local = dict(plantillator.dataloader.glob)
+        local.update(plantillator.dataloader.data)
         code.interact("Shell de pruebas", local=local)
         exit(0)
     if not options.loop:
@@ -205,12 +207,19 @@ except CommandError as detail:
         detail.data['error'] = detail
         code.interact("Consola de depuracion", local={'data':detail.data})
     sys.exit(TRANSLATION_ERRNO)
-except (ParseError, DataError) as detail:
+except (ParseError, TemplateError, DataError) as detail:
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:
         print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)
+except NewParseError as detail:
+    for msg in format_exception_only(sys.exc_type, sys.exc_value):
+        sys.stderr.write(str(msg))
+    if options.debug:
+        print_exc(file=sys.stderr)
+    print detail.template
+    sys.exit(PARSE_ERRNO)     
 except Exception as detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))

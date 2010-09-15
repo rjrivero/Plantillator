@@ -1,22 +1,53 @@
 #/usr/bin/env python
 
+
 import csv
 import os
 import os.path
-import sys
 
 from contextlib import contextmanager
-from itertools import count, chain
-from copy import copy
-from chardet.universaldetector import UniversalDetector
+from itertools import count, chain, repeat
 
-import fields
-from meta import DataException, Meta, DataObject, DataSet, BaseSet
+from .meta import DataError, Meta, DataObject, DataSet, PeerSet
+from .meta import ObjectField, DataSetField
+from .pathfinder import FileSource
+from .fields import FieldMap, IntField
+
+
+class CSVMeta(Meta):
+
+    """Metadatos para objeto extraido de CSV.
+
+    Amplia el Meta basico con algunos campos necesarios
+    para hacer seguimiento de la jerarquia.
+    """
+
+    def __init__(self, path, parent=None):
+        super(CSVMeta, self).__init__(parent)
+        self.path = path
+        self.subtypes = dict()
+
+    def __getstate__(self):
+        # una vez procesado, la lista de subtipos ya no es necesaria.
+        self.subtypes = None
+        return self.__dict__
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    def child(self, name):
+        """Devuelve un tipo hijo, creandolo si es necesario"""
+        try:
+            return self.subtypes[name]
+        except KeyError:
+            submeta = CSVMeta(".".join((self.path, name)), self)
+            self.fields[name] = DataSetField(submeta)
+            return self.subtypes.setdefault(name, submeta)
 
 
 class CSVRow(object):
 
-    """Fila de un fichero CSV, en unicode"""
+    """Fila de un fichero CSV"""
 
     __slots__ = ("lineno", "cols")
 
@@ -28,6 +59,9 @@ class CSVRow(object):
         """Normaliza los datos de las columnas en funcion del tipo"""
         for col in columns:
             self.cols[col.index] = col.coltype.convert(self.cols[col.index])
+
+    def __repr__(self):
+        return " (%s) " % ", ".join(self.cols)
 
 
 class Column(object):
@@ -55,12 +89,13 @@ class ColumnList(object):
     def __init__(self, source, index, path, columns):
         """Construye la lista de columnas.
 
-        source: origen del bloque (nombre de fichero)
+        source: origen del bloque (nombre de fichero).
+        index: numero de linea de la cabecera en el fichero.
         path: path de la lista, ya procesado (en forma de tuple).
         columns: columnas de la lista, ya procesadas.
 
         En caso de excepcion al construir el objeto, el constructor
-        lanza la excepcion desnuda, sin envolver en un DataException.
+        lanza la excepcion desnuda, sin envolver en un DataError.
         """
         # Por si acaso columns es un iterator (no estaria definido __len__)
         self.source = source
@@ -78,7 +113,7 @@ class ColumnList(object):
             raise SyntaxError("Orden de cabeceras incorrecto")
         # Comparo los selectores con los elementos del path, y los
         # expando si estan abreviados.
-        cursor = self.path[:-1]
+        cursor = list(self.path[:-1])
         for column in self.selects:
             # Busco un elemento del path que coincida con el selector
             while cursor and not cursor[0].lower().startswith(column.selector.lower()):
@@ -92,15 +127,6 @@ class ColumnList(object):
     def depth(self):
         """Devuelve el nivel de anidamiento de la tabla"""
         return len(self.path)
-
-    def _object(self, meta, parent, row_cols):
-        """Construye un objeto con los datos de una fila"""
-        obj = DataObject(meta, parent)
-        for col in self.attribs:
-            value = row_cols[col.index]
-            if value is not None:
-                setattr(obj, col.colname, value)
-        return obj
 
     def _prepare(self, meta):
         """Prepara la carga de datos, analizando el path"""
@@ -118,18 +144,27 @@ class ColumnList(object):
         self.meta = meta
         # Creo una pila de operaciones, que filtra el dataset raiz
         # hasta llegar al punto donde tengo que insertar los datos.
-        selects, stack = list(self.selects), list()
-        for step in self.path[:-1]:
-            def getsubtype(dset, vector):
-                return getattr(dset, step)
-            stack.append(getsubtype)
-            while selects and selects[0].selector == step:
-                select = selects.pop(0)
-                def search(dset, vector):
-                    return dset(**{str(select.colname): vector.next()})
-                stack.append(search)
-        self.stack = stack
+        selects = list(self.selects)
+        ops = (self._consume(selects, step) for step in self.path[:-1])
+        self.stack = tuple(chain(*ops))
 
+    def _consume(self, selects, step):
+        """Genera operaciones para descender un paso con los selectores"""
+        # Primera operacion: descender un nivel.
+        def getsubtype(dset, vector):
+            return getattr(dset, step)
+        yield getsubtype
+        # Segunda operacion: hacer los filtrados
+        indexes = list()
+        while selects and selects[0].selector == step:
+            indexes.append(str(selects.pop(0).colname))
+        if indexes:
+            def search(dset, vector):
+                for key in indexes:
+                    dset = dset(**{key: vector.next()})
+                return dset
+            yield search
+    
     def _addrow(self, row_cols, rootset):
         """Crea el objeto y lo inserta en la posicion adecuada del rootset"""
         attrib = self.path[-1]
@@ -153,11 +188,11 @@ class ColumnList(object):
 
 @contextmanager
 def wrap_exception(source, index):
-    """Envuelve una excepcion normal en un DataException"""
+    """Envuelve una excepcion normal en un DataError"""
     try:
         yield
     except Exception:
-        raise DataException(source, index, sys.exc_info())
+        raise DataError(source, index)
 
 
 class TableBlock(ColumnList):
@@ -170,37 +205,39 @@ class TableBlock(ColumnList):
         """Analiza la cabecera y prepara la carga de los datos
 
         En caso de excepcion al construir el objeto, el constructor
-        lanza la excepcion desnuda, sin envolver en un DataException.
+        lanza la excepcion desnuda, sin envolver en un DataError.
         """
-        typeline = csvrows[0].cols[1:]
-        headline = csvrows[1].cols[1:]
-        columns = tuple(self._columns(typeline, headline))
-        path = tuple(x.strip() for x in csvrows[1].cols[0].split(u"."))
+        typeline   = csvrows[0].cols[1:]
+        headline   = csvrows[1].cols[1:]
+        self.body  = csvrows[2:]
+        path       = tuple(x.strip() for x in csvrows[1].cols[0].split("."))
+        columns    = tuple(self._columns(typeline, headline))
         super(TableBlock, self).__init__(source, index, path, columns)
-        self.body = csvrows[2:]
 
     def _columns(self, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, coltype, colname in zip(count(1), typeline, headline):
-            if not coltype or not colname or colname.startswith(u"!"):
+            # Me salto las columnas excluidas
+            if not coltype or not colname or colname.startswith("!"):
                 continue
-            selector, nameparts = None, colname.split(u".")
+            # Divido el nombre en selector y atributo
+            selector, nameparts = None, colname.split(".")
             if len(nameparts) > 1:
                 selector = nameparts.pop(0).strip()
             colname = nameparts.pop(0).strip()
             if colname:
-                coltype = fields.Map.resolve(coltype)
+                coltype = FieldMap.resolve(coltype)
                 yield Column(index, selector, coltype, colname)
 
-    def process(self, meta, data):
+    def process(self, data):
         """Procesa las lineas del bloque actualizando los datos.
 
         En caso de excepcion al procesar los objetos, la excepcion se
-        lanza envuelta en un DataException.
+        lanza envuelta en un DataError.
         """
-        rootset = DataSet(meta, (data,))
+        rootset = DataSet(data._meta, (data,))
         with wrap_exception(self.source, self.index):
-            self._prepare(meta)
+            self._prepare(data._meta)
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
                 row.normalize(self.columns)
@@ -217,15 +254,15 @@ class LinkBlock(object):
         """Analiza la cabecera y prepara la carga de los datos.
 
         En caso de excepcion al construir el objeto, el constructor
-        lanza la excepcion desnuda, sin envolver en un DataException.
+        lanza la excepcion desnuda, sin envolver en un DataError.
         """
         selectline = csvrows[0].cols[1:]
         typeline = csvrows[1].cols[1:]
         headline = csvrows[2].cols[1:]
+        self.path = csvrows[2].cols[0][1:].split(".").pop(0).strip()
         self.source = source
         self.index = index
         self.columns = tuple(self._columns(selectline, typeline, headline))
-        self.path = csvrows[2].cols[0][1:].split(u".").pop(0).strip()
         self.groups = tuple(self._groups())
         self.peercolumns = tuple(x for x in self.columns if not x.selector)
         self.body = csvrows[3:]
@@ -233,10 +270,11 @@ class LinkBlock(object):
     def _columns(self, selectline, typeline, headline):
         """Construye los objetos columna con los datos de la cabecera"""
         for index, selector, coltype, colname in zip(count(1), selectline, typeline, headline):
-            if not coltype or not colname or colname.startswith("!") or colname.strip() == "*":
+            # Me salto las lineas excluidas
+            if not coltype or not colname or colname.startswith("!") or colname == "*":
                 continue
             selector = selector.strip() or None
-            coltype = fields.Map.resolve(coltype)
+            coltype = FieldMap.resolve(coltype)
             yield Column(index, selector, coltype, colname.strip())
 
     def _groups(self):
@@ -295,15 +333,15 @@ class LinkBlock(object):
                 for subdemux in self._demux(columns):
                     yield tuple(chain((newcol,), subdemux))
 
-    def process(self, meta, data):
+    def process(self, data):
         """Procesa los datos.
 
         En caso de excepcion al procesar los objetos, la excepcion se
-        lanza envuelta en un DataException.
+        lanza envuelta en un DataError.
         """
         # Preparo los grupos y descarto los que correspondan a paths
         # no validos.
-        valid = set()
+        meta, valid = data._meta, set()
         with wrap_exception(self.source, self.index):
             for group in self.groups:
                 # Preparo cada uno de los bloques
@@ -321,20 +359,20 @@ class LinkBlock(object):
             # Si no hay combinaciones validas, habra que lanzar un
             # error, digo yo...
             if not valid:
-                raise SyntaxError(u"Ningun enlace valido")
+                raise SyntaxError("Ningun enlace valido")
         # A cada grupo valido le incluyo un sub-atributo:
         # - si solo hay dos grupos, el sub-atributo es "PEER"
         # - si hay mas de dos grupos, el subatributo es "PEERS"
         attrib = "PEER" if self.p2p else "PEERS"
         for group in valid:
-            group.meta.fields[attrib] = fields.Field()
-            group.meta.fields["POSITION"] = fields.IntField()
+            group.meta.fields[attrib] = ObjectField()
+            group.meta.fields["POSITION"] = IntField()
         # Y ahora, voy procesando linea a linea
         rootset = DataSet(meta, (data,))
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
-                row.normalize(self.columns)
                 # Creo todos los objetos y los agrego a una lista
+                row.normalize(self.columns)
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
                 inserted = tuple((p, r) for (p, r) in inserted if r)
                 # Y los cruzo para construir los peerings
@@ -343,16 +381,17 @@ class LinkBlock(object):
                     # excepto el que estamos evaluando.
                     # Los peers pueden ser de distintos tipos, asi que
                     # en general no puedo meterlos en un DataSet...
-                    # como mucho, en un BaseSet.
+                    # como mucho, en un PeerSet.
+                    position, items = result
+                    for item in items:
+                        item.POSITION = position
                     peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
-                    peers = BaseSet(chain(*(p[1] for p in peers)))
+                    peers = PeerSet(chain(*(p[1] for p in peers)))
                     if peers:
                         if self.p2p:
                             peers = +peers
-                        position, items = result
                         for item in items:
                             setattr(item, attrib, peers)
-                            item.POSITION = position
 
     @property
     def depth(self):
@@ -360,49 +399,53 @@ class LinkBlock(object):
         return max(x.depth for x in self.groups)
 
 
-class CSVSource(object):
+class CSVSource(FileSource):
 
-    def __init__(self, data, source, codec="utf-8"):
+    def read(self):
         # Auto-detecto el separador de campos... en funcion del
         # programa que exporte a CSV, algunos utilizan "," y otros ";".
+        data = super(CSVSource, self).read()
         lines, delim = data.splitlines(), ";"
         for line in lines:
             if line and line[0] in (",", ";"):
-                delimiter = line[0]
+                delimiter = str(line[0])
                 break
-        rows = self._clean(source, lines, delimiter, codec)
-        self.blocks = self._split(source, rows)
+        rows = tuple(self._clean(lines, delimiter))
+        return self._split(rows)        
 
-    def _clean(self, source, lines, delimiter, codec):
+    def _clean(self, lines, delimiter):
         """Elimina las columnas comentario o vacias"""
         reader = csv.reader(lines, delimiter=delimiter)
         for lineno, row in enumerate(reader):
-            with wrap_exception(source, lineno):
-                # decodifico despues de reconocer el csv, porque por lo
-                # visto, el csv.reader no se lleva muy bien con el texto
-                # unicode.
-                for index, item in enumerate(row):
-                    row[index] = item.decode(codec).strip()
-                if len(row) >= 2 and (row[0] or row[1]) and row[0] != u"!":
-                    yield CSVRow(lineno, row)
+            for index, val in enumerate(row):
+                # Necesito el strip para que la comparacion de abajo
+                # (row[0].startswith("!")) sea fiable, lo mismo que el
+                # distinguir tipos de tabla por su marca
+                # ("*" => enlaces, resto => tablas)
+                row[index] = row[index].strip()
+            if len(row) >= 2 and (row[0] or row[1]) and not row[0].startswith("!"):
+                yield CSVRow(lineno, row)
 
-    def _split(self, source, rows):
+    def _split(self, rows):
         """Divide el fichero en tablas"""
-        labels, rows = list(), tuple(rows)
-        # Busco todas las lineas que marcan un inicio de tabla
-        for index, row in ((i, r) for (i, r) in enumerate(rows) if r.cols[0]):
-            blk = LinkBlock if row.cols[0].startswith("*") else TableBlock
-            labels.append((index-blk.HEADERS, blk))
+        # Extraigo el caracter de la primera columna, que me sirve como
+        # discriminador.
+        marks = ((i, r.cols[0][0]) for (i, r) in enumerate(rows) if r.cols[0])
+        # Me salto las lineas que empiezan por "#", que sirven para
+        # compatibilizar el nuevo csvreader con la version anterior (que
+        # simplemente las trata como comentario). 
+        marks = ((i, m) for (i, m) in marks if m != "#")
+        # Identifico el bloque corresponde a cada marca
+        marks = ((i, LinkBlock if m == "*" else TableBlock) for (i, m) in marks)
+        # Y recalculo las etiquetas
+        labels = list((i - blk.HEADERS, blk) for (i, blk) in marks)
         if not labels:
             raise GeneratorExit()
         labels.append((len(rows), None))
         # Divido la entrada en bloques
         for (i, blk), (j, skip) in zip(labels, labels[1:]):
-            with wrap_exception(source, i):
-                yield blk(source, i, rows[i:j])
-
-    def __iter__(self):
-        return iter(self.blocks)
+            with wrap_exception(self.id, i):
+                yield blk(self.id, i, rows[i:j])
 
 
 class CSVShelf(object):
@@ -415,7 +458,11 @@ class CSVShelf(object):
     VERSION  = "data_version"
     CURRENT  = 1
 
-    def __init__(self, path, datashelf):
+    def __init__(self, shelf):
+        self.shelf = shelf
+        self.dirty = False
+
+    def set_datapath(self, datapath):
         """Busca todos los ficheros CSV en el path.
 
         Compara la lista de ficheros encontrados con la
@@ -429,71 +476,79 @@ class CSVShelf(object):
           en el shelf, carga los datos y actualiza el
           shelf.
         """
-        files = dict(chain(*(self._findcsv(dirname) for dirname in path)))
+        files = dict(chain(*(self._findcsv(dirname) for dirname in datapath)))
+        self.dirty = False
         try:
-            if datashelf[CSVShelf.VERSION] == CSVShelf.CURRENT:
-                sfiles = datashelf[CSVShelf.FILES]
+            if self.shelf[CSVShelf.VERSION] == CSVShelf.CURRENT:
+                sfiles = self.shelf[CSVShelf.FILES]
                 fnames = set(files.keys())
                 snames = set(sfiles.keys())
                 if not fnames.symmetric_difference(snames):
                     if all(files[name] <= sfiles[name] for name in fnames):
                         # Todo correcto, los datos estan cargados
-                        self.data = datashelf[CSVShelf.DATA]
+                        self.data = dict(self.shelf[CSVShelf.DATA])
                         return
-        except KeyError:
+        except:
             pass
-        self._update(files, datashelf)
+        # Si el pickle falla o no es completo, recargamos los datos
+        # (cualquiera que sea el error)
+        self._update(files)
 
     def _findcsv(self, dirname):
+        """Encuentra todos los ficheros CSV en el path"""
         files = (x for x in os.listdir(dirname) if x.lower().endswith(".csv"))
+        files = (os.path.join(dirname, x) for x in files)
         files = (f for f in files if os.path.isfile(f))
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
-    def _update(self, files, datashelf):
-        fdata = tuple((f, open(f, "r").read()) for f in files.keys())
-        # Asumo que todos los ficheros CSV han sido generados
-        # por el mismo editor, y que deben usar el mismo encoding.
-        detector = UniversalDetector()
-        for fname, data in fdata:
-            detector.feed(data)
-            if detector.done:
-                break
-        detector.close()
-        self.codec = detector.result['encoding']
-        # Leo todos los ficheros y proceso los bloques en orden
-        # de profundidad
-        sources = (CSVSource(data, f, self.codec) for (f, data) in fdata)
-        blocks = chain(*sources)
-        meta = Meta("", None)
+    def _update(self, files):
+        """Procesa los datos y los almacena en el shelf"""
+        nesting = self._read_blocks(files)
+        meta = CSVMeta("", None)
         data = DataObject(meta)
+        for depth in sorted(nesting.keys()):
+            for item in nesting[depth]:
+                item.process(data)
+        # Proceso la tabla de variables
+        self._set_vars(data)
+        # OK, todo cargado... ahora guardo los datos en el shelf.
+        self._save(files, data.__dict__)
+
+    def _read_blocks(self, files):
+        """Carga los ficheros y genera los bloques de datos"""
+        blocks  = chain(*tuple(CSVSource(path).read() for path in files))
         nesting = dict()
         for block in blocks:
             nesting.setdefault(block.depth, list()).append(block)
-        for depth in sorted(nesting.keys()):
-            for item in nesting[depth]:
-                item.process(meta, data)
+        return nesting
+
+    def _set_vars(self, data):
         # proceso la tabla especial "variables"
-        vartab = tuple((t, s) for (t, s) in meta.subtypes.iteritems() if t.lower() == CSVShelf.VARTABLE)
-        if vartab:
-            table, submeta = vartab[0]
+        meta = data._meta
+        keys = dict((k.lower(), k) for k in meta.subtypes.keys())
+        vart = keys.get(CSVShelf.VARTABLE.lower(), None)
+        if vart:
+            submeta = meta.subtypes[keys[vart]]
             key, typ, val = submeta.summary[:3]
-            vartab = getattr(data, str(table))
-            for item in vartab:
-                vname = item._get(key)
+            for item in getattr(data, str(vart)):
+                vname = str(item._get(key))
                 vtyp  = item._get(typ)
                 vval  = item._get(val)
                 if all(x is not None for x in (vname, vtyp, vval)):
-                    vtyp = fields.Map.resolve(vtyp)
+                    vtyp = FieldMap.resolve(vtyp)
                     vval = vtyp.convert(vval)
-                    setattr(data, str(vname), vval)
-            delattr(data, str(table))
-            del(meta.subtypes[table])
-        # OK, todo cargado... ahora guardo los datos en el shelf.
-        self.data = data
-        datashelf[CSVShelf.VERSION] = CSVShelf.CURRENT
-        datashelf[CSVShelf.DATA] = data
-        datashelf[CSVShelf.FILES] = files
-        datashelf.sync()
+                    if vval is not None:
+                        setattr(data, vname, vval)
+            delattr(data, str(vart))
+            del(meta.fields[vart])
+            del(meta.subtypes[vart])
+
+    def _save(self, files, data):
+        self.data = dict(data) # hago una copia
+        self.shelf[CSVShelf.VERSION] = CSVShelf.CURRENT
+        self.shelf[CSVShelf.DATA] = data
+        self.shelf[CSVShelf.FILES] = files
+        self.dirty = True
 
 
 if __name__ == "__main__":
@@ -501,7 +556,8 @@ if __name__ == "__main__":
     import pprint
     import code
     import shelve
-    from resolver import Resolver
+    import sys
+    from .resolver import Resolver
 
     shelfname = "data.shelf"
     csvpath = (".",)
@@ -512,18 +568,17 @@ if __name__ == "__main__":
     try:
         csvshelf = CSVShelf(csvpath, shelf)
         data = csvshelf.data
-    except DataException as details:
+    except DataError as details:
         print details
         sys.exit(-1)
     finally:
         shelf.close()
-    print "DETECTADO CODEC %s" % csvshelf.codec
     symbols  = ("x", "y", "z", "X", "Y", "Z")
     for s in symbols:
-        setattr(data, s, Resolver("self"))
-    data.NONE = DataSet.NONE
-    data.ANY = DataSet.ANY
+        data[s] = Resolver("self")
+    data['NONE'] = DataSet.NONE
+    data['ANY'] = DataSet.ANY
     if len(sys.argv) > 1:
-        code.interact(local = data.__dict__)
+        code.interact(local = data)
     else:
         print "USO: %s <cualquier cosa>" % sys.argv[0]

@@ -4,10 +4,18 @@
 import bisect
 import sys
 import traceback
+
 from itertools import chain
 
+from .resolver import Resolver
 
-class DataException(Exception):
+
+# Simbolos para el resolver
+SYMBOL_SELF   = 1
+SYMBOL_FOLLOW = 2
+
+
+class DataError(Exception):
 
     """
     Encapsula las excepciones lanzadas durante el analisis de una fuente
@@ -18,193 +26,20 @@ class DataException(Exception):
     - self.exc_info: tupla (tipo, excepcion, traceback)
     """
 
-    def __init__(self, source, index, exc_info):
-        super(DataException, self).__init__()
+    def __init__(self, source, index):
+        super(DataError, self).__init__()
         self.source = source
         self.index = index
-        self.exc_info = exc_info
+        self.exc_info = sys.exc_info()
 
-    def __unicode__(self):
-        return u"".join(chain(
-            (u"DataException: Error en %s [%s]\n" % (unicode(self.source), unicode(self.index)),),
+    def __str__(self):
+        return "".join(chain(
+            ("DataError: Error en %s [%s]\n" % (str(self.source), str(self.index)),),
             traceback.format_exception(*(self.exc_info))
             ))
 
-    def __str__(self):
-        return str(unicode(self))
-
     def __repr__(self):
-        return "DataException(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
-
-
-class Field(object):
-
-    """
-    Describe uno de los campos de un DataObject.
-
-    Tiene los siguientes metodos:
-        - convert: Un Callable que lee el campo de un string.
-        - dynamic: Un Callable que calcula el valor del campo.
-
-    "dynamic" solo esta definido para los campos dinamicos. Se invoca
-    pasandole como parametro el objeto, y devuelve el valor del campo.
-    """
-
-    def __init__(self, indexable=True):
-        self.indexable = indexable
-
-    def convert(self, data):
-        return data
-
-    def dynamic(self, attr, item):
-        raise AttributeError(attr)
-
-
-class Meta(object):
-
-    """
-    Encapsula los metadatos de un DataObject.
-
-    Tiene los siguientes atributos:
-        - up: Objeto Meta "padre" de este en la jerarquia.
-        - path: ID completo del objeto Meta. Es una cadena separada por ".".
-        - fields: diccionario { atributo: Field() }
-        - subtypes: diccionario { atributo: Meta() }
-        - summary: tupla de atributos para describir un dataobject
-    """
-    def __init__(self, path, parent=None, fields=None, subtypes=None):
-        self.fields = fields if fields is not None else dict()
-        self.subtypes = subtypes if subtypes is not None else dict()
-        self.path = path
-        self.up = parent
-        self.summary = tuple()
-
-    def child(self, name):
-        """Devuelve un tipo hijo, creandolo si es necesario"""
-        try:
-            return self.subtypes[name]
-        except KeyError:
-            return self.subtypes.setdefault(name, Meta(".".join((self.path, name)), self))
-
-
-class DataObject(object):
-
-    """
-    Objeto contenedor de atributos
-    """
-
-    def __init__(self, meta, parent=None):
-        self._meta = meta
-        self.up = parent
-
-    def __getattr__(self, attr):
-        if attr.startswith("_"):
-            raise AttributeError(attr)
-        subtype = self._meta.subtypes.get(attr, None)
-        if not subtype:
-            field = self._meta.fields.get(attr, None)
-            if not field:
-                raise AttributeError(attr)
-            return field.dynamic(attr, self)
-        return self.__dict__.setdefault(attr, DataSet(subtype))
-
-    def get(self, attr, default=None):
-        try:
-            return getattr(self, attr)
-        except AttributeError:
-            return default
-
-    def _get(self, attr, default=None):
-        return self.__dict__.get(attr, default)
-
-    class Tester(object):
-        def __getattr__(self, attr):
-            if attr.startswith("_"):
-                raise AttributeError(attr)
-            return self._data._get(attr) is not None
-        def __init__(self, data, pos=True):
-            self._data = data
-
-    class TesterNot(object):
-        def __getattr__(self, attr):
-            if attr.startswith("_"):
-                raise AttributeError(attr)
-            return self._data._get(attr) is None
-        def __init__(self, data, pos=True):
-            self._data = data
-
-    @property
-    def HAS(self):
-        return DataObject.Tester(self)
-
-    @property
-    def HASNOT(self):
-        return DataObject.TesterNot(self)
-
-    @property
-    def fb(self):
-        return Fallback(self)
-
-    def __unicode__(self):
-        summary = (self._get(x) for x in self._meta.summary)
-        return u", ".join(unicode(x) for x in summary if x is not None)
-
-
-class Fallback(dict):
-
-    """
-    Objeto Fallback.
-    """
-
-    def __init__(self, back, depth=sys.maxint):
-        super(Fallback, self).__init__()
-        # Para que "back" sea accesible desde los templates
-        self['back'] = back
-        # Utilizo self.__dict__ en lugar de poner el atributo directamente,
-        # para no disparar setattr.
-        self.__dict__['_back'] = back
-        self.__dict__['_depth'] = depth
-
-    def _get(self, attr, default=None):
-        try:
-            return self[attr]
-        except KeyError:
-            return default
-
-    def get(self, attr, default=None):
-        return self._get(attr, default)
-    
-    def __setattr__(self, attr, val):
-        self[attr] = val
-
-    def __getattr__(self, attr):
-        if attr.startswith("_"):
-            raise AttributeError(attr)
-        try:
-            return self[attr]
-        except KeyError:
-            raise AttributeError(attr)
-
-    def __missing__(self, attr):
-        back, depth = self._back, self._depth
-        while back and depth:
-            value = back.get(attr)
-            if value is not None:
-                return self.setdefault(attr, value)
-            depth -= 1
-            back = back.up
-        raise KeyError(attr)
-
-    @property
-    def HAS(self):
-        return DataObject.Tester(self)
-
-    @property
-    def HASNOT(self):
-        return DataObject.TesterNot(self)
-
-    def __unicode__(self):
-        return unicode(self._back)
+        return "DataError(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
 
 
 def matches(item, crit):
@@ -214,7 +49,7 @@ def matches(item, crit):
     resolucion, se considera que el criterio no se cumple.
     """
     try:
-        return all(c._resolve({'self': item}) for c in crit)
+        return all(c._resolve({SYMBOL_SELF: item}) for c in crit)
     except (AttributeError, AssertionError):
         return False
 
@@ -246,6 +81,233 @@ class BaseList(tuple):
         return BaseList(chain(self, other))
 
 
+class Field(object):
+
+    """
+    Describe uno de los campos de un DataObject.
+
+    Tiene los siguientes metodos:
+        - collect: Agrupa una secuencia de objetos en una coleccion.
+        - convert: Un Callable que lee el campo de un string.
+        - dynamic: Un Callable que calcula el valor del campo.
+
+    "dynamic" solo esta definido para los campos dinamicos. Se invoca
+    pasandole como parametro el objeto, y devuelve el valor del campo.
+    """
+
+    def __init__(self, indexable=True):
+        self.indexable = indexable
+
+    def convert(self, data):
+        raise NotImplemented("convert")
+
+    def dynamic(self, item, attr):
+        raise AttributeError(attr)
+
+    def collect(self, dset, attr):
+        items = (item._get(attr) for item in dset._children)
+        return BaseSet((x for x in items if x is not None))
+
+
+class ObjectField(Field):
+
+    """Campo que contiene un objeto"""
+
+    def __init__(self, meta=None):
+        super(ObjectField, self).__init__(indexable=False)
+        self.meta = meta
+
+    def collect(self, dset, attr):
+        items = (item._get(attr) for item in dset._children)
+        items = (item for item in items if item is not None)
+        if self.meta:
+            return DataSet(self.meta, items, indexable=False)
+        return PeerSet(items)
+
+
+class DataSetField(Field):
+
+    """Campo que contiene un DataSet"""
+
+    def __init__(self, meta):
+        super(DataSetField, self).__init__(indexable=False)
+        self.meta = meta
+
+    def dynamic(self, item, attr):
+        return DataSet(self.meta)
+
+    def collect(self, dset, attr):
+        items = (item._get(attr) for item in dset._children)
+        items = tuple(item for item in items if item is not None)
+        if len(items) == 1:
+            # Devuelvo el propio DataSet, para aprovechar indices
+            return items[0]
+        return DataSet(self.meta, chain(*items), indexable=dset._indexable)
+
+
+class Meta(object):
+
+    """
+    Encapsula los metadatos de un DataObject.
+
+    Tiene los siguientes atributos:
+        - up: Objeto Meta "padre" de este en la jerarquia.
+        - fields: diccionario { atributo: Field() }
+        - summary: tupla de atributos para describir un dataobject
+    """
+    def __init__(self, path, parent=None):
+        # Creo "up", aunque el parent sea None, para permitir que "up"
+        # funcione tambien en los PeerSets que se crean al definir enlaces,
+        # que no tienen parent en cuanto al set, pero si individualmente.
+        self.fields = { "up": ObjectField(parent) }
+        self.up = parent
+        self.summary = tuple()
+
+
+class DataObject(object):
+
+    """
+    Objeto contenedor de atributos
+    """
+
+    def __init__(self, meta, parent=None):
+        self._meta = meta
+        self.up = parent
+
+    def __getattr__(self, attr):
+        """Obtiene o crea el atributo.
+
+        - Si el atributo es dinamico, lo calcula.
+        - Si es un DataSet, crea uno vacio al vuelo en caso de no existir.
+        - En el resto de situaciones, lanza AttributeError.
+        """
+        if attr.startswith("_"):
+            raise AttributeError(attr)
+        try:
+            value = self._meta.fields[attr].dynamic(self, attr)
+            return self.__dict__.setdefault(attr, value)
+        except KeyError:
+            raise AttributeError(attr)
+
+    def get(self, attr, default=None):
+        """Obtiene el atributo o lo genera si es dinamico o subtipo"""
+        try:
+            return getattr(self, attr)
+        except AttributeError:
+            return default
+
+    def _get(self, attr, default=None):
+        """Obtiene el atributo solo si es estatico y esta definido"""
+        return self.__dict__.get(attr, default)
+
+    class Tester(object):
+        def __getattr__(self, attr):
+            if attr.startswith("_"):
+                raise AttributeError(attr)
+            return attr in self._data
+        def __init__(self, data, pos=True):
+            self._data = data.__dict__
+
+    class TesterNot(object):
+        def __getattr__(self, attr):
+            if attr.startswith("_"):
+                raise AttributeError(attr)
+            return attr not in self._data
+        def __init__(self, data, pos=True):
+            self._data = data.__dict__
+
+    @property
+    def HAS(self):
+        return DataObject.Tester(self)
+
+    @property
+    def HASNOT(self):
+        return DataObject.TesterNot(self)
+
+    @property
+    def fb(self):
+        return Fallback(self)
+
+    def __str__(self):
+        summary = (self._get(x) for x in self._meta.summary)
+        return ", ".join(str(x) for x in summary if x is not None)
+
+    def __repr__(self):
+        return "<%s>" % str(self)
+
+    def iteritems(self):
+        """Itero sobre los elementos del objeto"""
+        return (x for x in self.__dict__.iteritems()
+            if x[1] is not None and not x[0].startswith("_"))
+
+
+class Fallback(dict):
+
+    """
+    Objeto Fallback.
+    """
+
+    def __init__(self, back, depth=sys.maxint):
+        super(Fallback, self).__init__()
+        # Para que "back" sea accesible desde los templates
+        self['back'] = back
+        # Utilizo self.__dict__ en lugar de poner el atributo directamente,
+        # para no disparar setattr.
+        self.__dict__['_back'] = back
+        # Averiguo la profundidad real de la pila de objetos, para evitar que
+        # luego me pueda dar un AttributeError o un IndexError volviendo
+        # atras en la lista.
+        maxdepth = 1
+        try:
+            while back.up:
+                back = back.up
+                maxdepth += 1
+        except AttributeError:
+            back.up = None
+        self.__dict__['_depth'] = min(depth, maxdepth)
+
+    def _get(self, attr, default=None):
+        try:
+            return self[attr]
+        except KeyError:
+            return default
+
+    def get(self, attr, default=None):
+        return self._get(attr, default)
+    
+    def __setattr__(self, attr, val):
+        self[attr] = val
+
+    def __getattr__(self, attr):
+        if attr.startswith("_"):
+            raise AttributeError(attr)
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError(attr)
+
+    def __missing__(self, attr):
+        back, depth = self._back, self._depth
+        while back and depth:
+            value = back.get(attr, None)
+            if value is not None:
+                return self.setdefault(attr, value)
+            depth -= 1
+            back = back.up
+        raise KeyError(attr)
+
+    @property
+    def HAS(self):
+        return DataObject.Tester(self)
+
+    @property
+    def HASNOT(self):
+        return DataObject.TesterNot(self)
+
+    def __str__(self):
+        return str(self._back)
+
+
 class Linear(object):
 
     """Realiza una busqueda lineal sobre un DataSet"""
@@ -254,10 +316,10 @@ class Linear(object):
         self._items = items
         self._attr = attr
 
-    def __eq__(self, index):
+    def _eq(self, index):
         return tuple(x for x in self._items if x.get(self._attr) == index)
 
-    def __ne__(self, index):
+    def _ne(self, index):
         return tuple(x for x in self._items if x.get(self._attr) != index)
 
     def _none(self):
@@ -303,6 +365,7 @@ class Index(object):
         values = tuple(x.get(attr) for x in items)
         self._empty = tuple(y for (x, y) in zip(values, items) if x is None)
         self._full  = tuple(sorted(IndexItem(x, y) for (x, y) in zip(values, items) if x is not None))
+        self._cache = dict()
 
     def _margins(self, index):
         item  = IndexKey(index)
@@ -311,8 +374,12 @@ class Index(object):
         return (first, last)
 
     def _eq(self, index):
-        first, last = self._margins(index)
-        return tuple(x.item for x in self._full[first:last])
+        try:
+            return self._cache[index]
+        except KeyError:
+            first, last = self._margins(index)
+            result = tuple(x.item for x in self._full[first:last])
+            return self._cache.setdefault(index, result)
 
     def _ne(self, index):
         first, last = self._margins(index)
@@ -325,11 +392,25 @@ class Index(object):
         return tuple(x.item for x in self._full)
 
     def _sorted(self, asc=True):
-        if asc:
-            items = chain(self._empty, (x.item for x in self._full))
-        else:
-            items = chain((x.item for x in reversed(self._full)), self._empty)
+        items = chain(self._empty, (x.item for x in self._full))
+        if not asc:
+            items = reversed(items)
         return tuple(items)
+
+
+def index_to_crit(items, key, val):
+    """Convierte un criterio expresado como "key=val" en un Resolver"""
+    crit = Resolver(SYMBOL_SELF)
+    if val is DataSet.NONE:
+        crit = getattr(crit, "HASNOT")
+        crit = getattr(crit, key)
+    elif val is DataSet.ANY:
+        crit = getattr(crit, "HAS")
+        crit = getattr(crit, key)
+    else:
+        crit = getattr(crit, key)
+        crit = (crit == val)
+    return tuple(x for x in items if matches(x, (crit,)))
 
 
 class DataSet(object):
@@ -383,14 +464,18 @@ class DataSet(object):
             # un campo indexable.
             key, val = shortcut.popitem()
             index = self._index(key)
-            assert(index and not crit and not shortcut)
-            # Tres posibles casos: NONE, ANY y un indice a buscar
-            if val is DataSet.NONE:
-                items = index._none()
-            elif val is DataSet.ANY:
-                items = index._any()
+            assert(not crit and not shortcut)
+            if index:
+                # Tres posibles casos: NONE, ANY y un indice a buscar
+                if val is DataSet.NONE:
+                    items = index._none()
+                elif val is DataSet.ANY:
+                    items = index._any()
+                else:
+                    items = index._eq(val)
             else:
-                items = index._eq(val)
+                # El campo no era indexable, hacemos una busqueda normal
+                items = index_to_crit(self._children, key, val)
         else:
             # Para los indices compuestos, vamos al caso general.
             items = tuple(x for x in self._children if matches(x, crit))
@@ -401,51 +486,14 @@ class DataSet(object):
         return DataSet(self._meta, items, False)
 
     def __getattr__(self, attr):
-        """Obtiene el atributo elegido, en funcion de su tipo:
-
-        - up: devuelve un DataSet con todos los atributos "up"
-              de todos los elementos del set.
-        - subtipo: devuelve un DataSet con la concatenacion de
-                   todas las sublistas de los elementos del set.
-        - otro atributo: Devuelve un BaseSet con todos los
-                        valores del atributo en todos los elementos
-                        del set.
-        """
+        """Obtiene el atributo elegido, en funcion de su tipo"""
         if attr.startswith("_"):
             raise AttributeError(attr)
-        if attr == "up":
-            # "up" lo pongo como un atributo dinamico y no como una
-            # propiedad para que solo tenga que ser calculado una vez,
-            # la primera vez que se utiliza (lyego se almacena como
-            # atributo normal y no llega a llamarse a __getattr__)
-            supertype = self._meta.up
-            if supertype is None:
-                value = None
-            else:
-                items = (up for up in (x.up for x in self._children) if up is not None)
-                value = DataSet(supertype, items, self._indexable)
-        else:
-            subtype = self._meta.subtypes.get(attr, None)
-            if subtype is not None:
-                items = tuple(x for x in (y._get(attr) for y in self._children) if x is not None)
-                # si el resultado es un unico DataSet, lo devuelvo
-                # directamente, y asi puedo reutilizar el indice.
-                # si son varios DataSets, lo que devuelvo es un agregado
-                # efimero que solo tiene sentido indexar si este objeto
-                # a su vez no es efimero.
-                if len(items) == 1:
-                    value = items[0]
-                else:
-                    value = DataSet(subtype, chain(*items), self._indexable)
-            else:
-                field = self._meta.fields.get(attr, None)
-                if field is not None:
-                    items = (x for x in (y.get(attr) for y in self._children) if x is not None)
-                    value = BaseSet(items)
-                else:
-                    raise AttributeError(attr)
-        setattr(self, attr, value)
-        return value
+        try:
+            value = self._meta.fields[attr].collect(self, attr)
+            return self.__dict__.setdefault(attr, value)
+        except KeyError:
+            raise AttributeError(attr)
 
     def _index(self, attr):
         """Devuelve un indice sobre el campo indicado, si es indexable"""
@@ -473,8 +521,16 @@ class DataSet(object):
     def __add__(self, other):
         assert(self._meta == other._meta)
         if not hasattr(other, '__iter__'):
-            other = (other,)
-        return DataSet(self._meta, self._children.union(other))
+            other = DataSet(other._meta, (other,))
+        # Si uno de los dos datasets esta vacio, devolvemos
+        # el otro (en lugar de la suma) para poder aprovechar
+        # los indices.
+        if not other._children:
+            return self
+        if not self._children:
+            return other
+        # Si los dos tiene datos, devolvemos un dataset no indexable.
+        return DataSet(self._meta, self._children.union(other), False)
 
     def __pos__(self):
         assert(len(self._children) == 1)
@@ -519,6 +575,84 @@ class DataSet(object):
         return DataSet.Sorter(self, False)
 
 
+class PeerSet(frozenset):
+
+    """
+    Conjunto de objetos DataObject sin metadatos comunes
+    """
+
+    def __call__(self, *crit, **shortcut):
+        # Acepta la misma mini-especializacion que un DataSet, aunque
+        # la generaliza.
+        if shortcut:
+            key, val = shortcut.popitem()
+            assert(not crit and not shortcut)
+            items = index_to_crit(self, key, val)
+        elif not crit:
+            # Esto lo pueden usar para intentar promover el PeerSet
+            items = self
+        else:
+            items = (x for x in self if matches(x, crit))
+        return self._promote(tuple(items))
+
+    def __getattr__(self, attr):
+        """Obtiene el atributo elegido, en funcion de su tipo"""
+        # Esquivo los atributos "magicos" (empezando por "_") o aquellos
+        # que pueden hacer que me confundan con un DataObject ("iteritems")
+        if attr.startswith("_") or attr=="iteritems":
+            raise AttributeError(attr)
+        items = tuple(x for x in (y.get(attr) for y in self) if x is not None)
+        if not items:
+            # El resultado esta vacio, no podemos decidir que hacer
+            # con el... lanzamos AttributeError
+            raise AttributeError(attr)
+        if isinstance(items[0], DataSet):
+            # Asumo que todos los resultados son DataSets,
+            # y los encadeno.
+            value = self._promote(tuple(chain(*(x for x in items if x))))
+        elif isinstance(items[0], DataObject):
+            # Asumo que todos los resultados son DataObjects,
+            # y los encadeno.
+            value = self._promote(items)
+        else:
+            # En otro caso, los agrupo en un BaseSet.
+            value = BaseSet(items)
+        # Intento promocionar el PeerSet a DataSet, si todos los
+        # objetos son del mismo tipo
+        setattr(self, attr, value)
+        return value
+
+    def _promote(self, items):
+        """Devuelve un PeerSet o un DataSet, en funcion de 'items'."""
+        metas = set(x._meta for x in items)
+        if len(metas) == 1:
+            return DataSet(metas.pop(), items, indexable=False)
+        return PeerSet(items)
+
+    def __add__(self, other):
+        return self._promote(tuple(chain(self, other)))
+    
+    def __pos__(self):
+        assert(len(self) == 1)
+        return tuple(self)[0]
+
+    def _index(self, attr):
+        """Siempre devuelve un indice lineal, lo pongo para poder ordenar"""
+        return Linear(self, attr)
+
+    @property
+    def SORTBY(self):
+        return DataSet.Sorter(self, True)
+        
+    @property
+    def SORTASC(self):
+        return DataSet.Sorter(self, True)
+        
+    @property
+    def SORTDESC(self):
+        return DataSet.Sorter(self, False)
+
+
 if __name__ == "__main__":
 
     import unittest
@@ -547,9 +681,9 @@ if __name__ == "__main__":
             self.d1 = DataObject(self.m1, None)
             self.d2 = DataObject(self.m2, self.d1)
 
-        def testMetaPath(self):
-            self.failUnless(self.m1.path == "data")
-            self.failUnless(self.m2.path == "data.subfield")
+        #def testMetaPath(self):
+        #    self.failUnless(self.m1.path == "data")
+        #    self.failUnless(self.m2.path == "data.subfield")
 
         def testMetaUp(self):
             self.failUnless(self.m1.up is None)
@@ -755,7 +889,7 @@ if __name__ == "__main__":
             self.failUnless(set(x.b for x in indexB._any()) == set(("aabb", "ccdd", "eeff", "gghh")))
             
         def testFilter(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             expected = {"ccdd":0, "eeff":0}
             for item in self.d1.subfield(x.a >= 4):
                 if item.HAS.b:
@@ -763,12 +897,12 @@ if __name__ == "__main__":
                     del(expected[item.b])
 
         def testEmptyFilter(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             items = self.d1.subfield(x.a < 0)
             self.failUnless(len(items) == 0)
 
         def testCombinedFilter(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             items = self.d1.subfield(x.a > 0, x.b.MATCH("bb"))
             self.failUnless(len(items) == 1)
             self.failUnless(+(items.a) == 3)
@@ -793,12 +927,12 @@ if __name__ == "__main__":
             self.failUnless(self.d2 in both)
 
         def testPos(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             first = +(self.d1.subfield(x.a==3))
             self.failUnless(first.b == "aabb")
 
         def testInvalidPos(self):
-            x = resolver.Resolver("self")
+            x = resolver.Resolver(SYMBOL_SELF)
             self.assertRaises(AssertionError, operator.pos, self.d1.subfield(x.a>=3))
             self.assertRaises(AssertionError, operator.pos, self.d2.subfield(x.a<=3))
 

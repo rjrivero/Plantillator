@@ -9,19 +9,18 @@ import logging
 import glob
 import re
 import Tkinter as tk
+
 from traceback import print_exc, format_exception_only
 from optparse import OptionParser
+from contextlib import contextmanager
 
 try:
-    from plantillator.data import PathFinder, FileSource
+    from plantillator import ShelfLoader, TreeCanvas
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator.data import PathFinder, FileSource
-
-from plantillator.csvread import DataSource
-from plantillator.apps import DataLoader, TreeCanvas
+    from plantillator import ShelfLoader, TreeCanvas
 
 
 _ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")
@@ -35,10 +34,9 @@ class DataNav(tk.Tk):
             self.top = top
             self.bottom = bottom
 
-    def __init__(self, glob, data, geometry="800x600"):
+    def __init__(self, data, geometry="800x600"):
         tk.Tk.__init__(self)
         self.title("DataNav")
-        self.glob = glob
         self.data = data
         self.hist = list()
         self.cursor = 0
@@ -82,7 +80,7 @@ class DataNav(tk.Tk):
                 if match:
                     exec name in self.data
                     name = match.group("var")
-                data = eval(name, self.glob, self.data)
+                data = eval(name, self.data)
                 if name not in self.hist:
                     self.cursor = 0
                     self.hist.append(name)
@@ -91,6 +89,11 @@ class DataNav(tk.Tk):
             except Exception as details:
                 print "Exception: %s" % str(details)
                 return
+        # filtro de "data" los elementos que no quiero que se vean
+        if hasattr(data, 'iteritems'):
+            data = dict((x, y) for (x, y) in data.iteritems()
+                if not any (y.__class__.__name__.endswith(s)
+                    for s in ("ANY", "NONE", "Meta", "Resolver")))
         self.canvas.show(name, data)
 
     def keyup(self, *skip):
@@ -129,11 +132,11 @@ parser.add_option("-g", "--geometry", dest="geometry", metavar="WxH+X+Y",
 parser.add_option("-d", "--debug",
         action="store_true", dest="debug", default=False,
         help="Vuelca los mensajes de debug en stderr")
+parser.add_option("-x", "--profile",
+        action="store_true", dest="profile", default=False,
+        help="Ejecutar en modo profile (solo carga datos)")
 
 (options, args) = parser.parse_args()
-if len(args) < 1:
-    parser.print_help(sys.stderr)
-    sys.exit(OPTIONS_ERRNO)
 
 if options.debug:
     loglevel = logging.DEBUG
@@ -154,23 +157,25 @@ for name in args:
     else:
         inputfiles.append(name)
 
-
-def preload(loader, type, pref, dots):
-    item = type()
-    for k in (x for x in loader if x.startswith(pref) and x.count(".")==dots):
-        attrib = k.split(".").pop()
-        csvset = loader[k](item, attrib)
-        preload(loader, csvset._type, k, dots+1)
-
-    
-finder = PathFinder(path)
-loader = DataLoader(DataSource())
 try:
-    for fname in inputfiles:
-        source = FileSource(finder(fname), finder)
-        loader.load(source)
-    # precargo las tablas
-    preload(loader.loader, loader.root, "", 0)
+    shelfname = inputfiles[0]
+except IndexError:
+    shelfname = "data.shelf"
+
+@contextmanager
+def shelf_wrapper(fname):
+    loader = ShelfLoader(shelfname)
+    loader.set_datapath(path)
+    try:
+        yield loader
+    finally:
+        loader.close()
+
+try:
+    if options.profile and os.path.isfile(shelfname):
+        os.unlink(shelfname)
+    with shelf_wrapper(shelfname) as dataloader:
+        data = dataloader.data
     # Cosas muy feas... no se por que, esto funciona:
     #
     # def test():
@@ -189,10 +194,10 @@ try:
     # En resumen, usar exec con globals y locals da problemillas, asi que lo que
     # he decidido de momento, al menos para el datanav, es:
     #
-    # - pongo loader.glob como fallback de loader.data
-    # - ejecuto las cosas con "exec EXPR in loader.data"
-    # loader.data._up = loader.glob
-    DataNav(loader.glob, loader.data.fb, geometry).mainloop()
+    # - pongo data como globals
+    # - pongo un diccionario vacio como locals.
+    if not options.profile:
+        DataNav(data, geometry).mainloop()
 except Exception, detail:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))
