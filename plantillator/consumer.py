@@ -138,8 +138,8 @@ class Consumer(object):
             return (outpath,)
         return saveme
 
-    def SELECT(self, items):
+    def SELECT(self, items, sort=True):
         """Pide al usuario que seleccione un elemento"""
         if self.loop:
             return self.actor.exhaust(items)
-        return self.actor.select(items)
+        return self.actor.select(items, sort)

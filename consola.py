@@ -9,9 +9,11 @@ import logging
 import re
 import glob # pa windows, que no expande nombres
 import code
+
 from operator import itemgetter
 from optparse import OptionParser
-from traceback import print_exc, format_exception_only
+from itertools import chain
+from traceback import print_exc, format_exception_only, extract_tb, format_list
 
 from plantillator.engine import ParseError, CommandError
 from plantillator import ParseError as NewParseError
@@ -174,6 +176,7 @@ plantillator.overwrite = True
 plantillator.keep_comments = options.keep_comments
 
 try:
+
     plantillator.prepare()
     if options.shell:
         local = dict(plantillator.dataloader.glob)
@@ -200,6 +203,7 @@ try:
                 break
 
 except CommandError as detail:
+
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:
@@ -207,20 +211,56 @@ except CommandError as detail:
         detail.data['error'] = detail
         code.interact("Consola de depuracion", local={'data':detail.data})
     sys.exit(TRANSLATION_ERRNO)
+
+except TemplateError as details:
+
+    error, einf = list(), details.exc_info
+    # Busco el error que se origino en el template.
+    for tb in extract_tb(details.exc_info[2]):
+        filename, lineno, funcname, text = tb
+        if filename.lower().endswith(".txt"):
+            # es una plantilla, intentamos obtener los datos.
+            template = plantillator.loader.get_template(filename)
+            if template:
+                template = template[1]
+                lineno   = max(lineno-1, 0)
+                minline  = max(lineno-2, 0)
+                maxline  = lineno+3
+                tlines   = template.translated.splitlines()
+                error.append("\n".join((
+                    "***",
+                    "Error ejecutando %s:" % filename,
+                    "***",
+                    "\n".join(tlines[minline:lineno]),
+                    " >>> " + tlines[lineno] + " <<< ",
+                    "\n".join(tlines[lineno+1:maxline]),
+                    "***",
+                )))
+    error.append("\n".join(format_exception_only(einf[0], einf[1])))
+    sys.stderr.write("\n".join(error))
+    if options.debug:
+        print_exc(file=sys.stderr)
+    sys.exit(PARSE_ERRNO)    
+
 except (ParseError, TemplateError, DataError) as detail:
+
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:
         print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)
+
 except NewParseError as detail:
+
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))
     if options.debug:
         print_exc(file=sys.stderr)
     print detail.template
     sys.exit(PARSE_ERRNO)     
+
 except Exception as detail:
+
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(detail))
     if options.debug:

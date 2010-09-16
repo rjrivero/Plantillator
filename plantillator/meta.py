@@ -133,8 +133,12 @@ class DataSetField(Field):
         super(DataSetField, self).__init__(indexable=False)
         self.meta = meta
 
+    def _new(self, items=None, indexable=True):
+        """Crea un DataSet nuevo"""
+        return DataSet(self.meta, items, indexable)
+
     def dynamic(self, item, attr):
-        return DataSet(self.meta)
+        return self._new()
 
     def collect(self, dset, attr):
         items = (item._get(attr) for item in dset._children)
@@ -142,7 +146,7 @@ class DataSetField(Field):
         if len(items) == 1:
             # Devuelvo el propio DataSet, para aprovechar indices
             return items[0]
-        return DataSet(self.meta, chain(*items), indexable=dset._indexable)
+        return self._new(chain(*items), dset._indexable)
 
 
 class Meta(object):
@@ -451,6 +455,9 @@ class DataSet(object):
         self._indexes = dict()
         self._indexable = True
 
+    def _new(self, items=None, indexable=False):
+        return DataSet(self._meta, items, indexable)
+
     def __call__(self, *crit, **shortcut):
         # Mini-especializacion: es muy habitual buscar un objeto
         # en un dataset a partir de su indice, asi que especializo
@@ -483,7 +490,7 @@ class DataSet(object):
             # si el resultado del filtro es el dataset entero,
             # devuelvo el propio dataset para aprovechar los indices.
             return self
-        return DataSet(self._meta, items, False)
+        return self._new(items, False)
 
     def __getattr__(self, attr):
         """Obtiene el atributo elegido, en funcion de su tipo"""
@@ -520,8 +527,6 @@ class DataSet(object):
 
     def __add__(self, other):
         assert(self._meta == other._meta)
-        if not hasattr(other, '__iter__'):
-            other = DataSet(other._meta, (other,))
         # Si uno de los dos datasets esta vacio, devolvemos
         # el otro (en lugar de la suma) para poder aprovechar
         # los indices.
@@ -530,7 +535,7 @@ class DataSet(object):
         if not self._children:
             return other
         # Si los dos tiene datos, devolvemos un dataset no indexable.
-        return DataSet(self._meta, self._children.union(other), False)
+        return self._new(self._children.union(other), False)
 
     def __pos__(self):
         assert(len(self._children) == 1)
@@ -622,12 +627,16 @@ class PeerSet(frozenset):
         setattr(self, attr, value)
         return value
 
+    def _new(self, items, meta=None):
+        if meta:
+            return DataSet(meta, items, indexable=False)
+        return PeerSet(items)
+
     def _promote(self, items):
         """Devuelve un PeerSet o un DataSet, en funcion de 'items'."""
-        metas = set(x._meta for x in items)
-        if len(metas) == 1:
-            return DataSet(metas.pop(), items, indexable=False)
-        return PeerSet(items)
+        meta = set(x._meta for x in items)
+        meta = meta.pop() if len(meta) == 1 else None
+        return self._new(items, meta)
 
     def __add__(self, other):
         return self._promote(tuple(chain(self, other)))

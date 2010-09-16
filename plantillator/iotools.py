@@ -203,24 +203,26 @@ class Interactor(object):
     
     """Presenta al usuario una serie de opciones a elegir"""
     
-    def select(self, itemlist):
+    def select(self, itemlist, sort=True):
         """Permite al usuario seleccionar un elemento de la lista dada"""
-        itemlist = list(sorted((str(item), item) for item in itemlist))
+        itemlist = list((str(item), item) for item in itemlist)
         if len(itemlist) == 1:
             item = itemlist[0]
-            print "** SE SELECCIONA %s = %s" % (var, item[0])
-        elif len(itemlist) > 1:
-            print "****"
-            print "Selecciona un elemento de la lista:"
-            for index, item in enumerate(itemlist):
-                print "  %2s.- %s" % (index+1, item[0])
-            print "****"
-            chosen = 0
-            while chosen < 1 or chosen > len(itemlist):
-                userdata = input("Seleccione [1-%d]: " % len(itemlist))
-                if type(userdata) == int:
-                    chosen = userdata
-            item = itemlist[chosen-1]
+            print "** SE SELECCIONA %s" % item[0]
+            return item[1]
+        if sort:
+            itemlist = sorted(itemlist)
+        print "****"
+        print "Selecciona un elemento de la lista:"
+        for index, item in enumerate(itemlist):
+            print "  %2s.- %s" % (index+1, item[0])
+        print "****"
+        chosen = 0
+        while chosen < 1 or chosen > len(itemlist):
+            userdata = input("Seleccione [1-%d]: " % len(itemlist))
+            if type(userdata) == int:
+                chosen = userdata
+        item = itemlist[chosen-1]
         return item[1]
 
     def exhaust(self, itemlist):

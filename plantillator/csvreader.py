@@ -41,8 +41,40 @@ class CSVMeta(Meta):
             return self.subtypes[name]
         except KeyError:
             submeta = CSVMeta(".".join((self.path, name)), self)
-            self.fields[name] = DataSetField(submeta)
+            self.fields[name] = CSVDataSetField(submeta)
             return self.subtypes.setdefault(name, submeta)
+
+
+def flip(self):
+    for item in self:
+        item.POSITION, item.PEER.POSITION = item.PEER.POSITION, item.POSITION
+
+
+class CSVDataSet(DataSet):
+
+    """Incluye la funcion "FLIP", para darle la vuelta a los enlaces"""
+    FLIP = flip
+
+    def _new(self, items=None, indexable=False):
+        return CSVDataSet(self._meta, items, indexable)
+
+
+class CSVPeerSet(PeerSet):
+
+    """Incluye la funcion "FLIP", para darle la vuelta a los enlaces"""
+    FLIP = flip
+
+    def _new(self, items, meta=None):
+        if meta:
+            return CSVDataSet(meta, items, indexable=False)
+        return CSVPeerSet(items)
+
+
+class CSVDataSetField(DataSetField):
+
+    """Crea objetos de tipo CSVDataSet"""
+    def _new(self, items=None, indexable=True):
+        return CSVDataSet(self.meta, items, indexable)
 
 
 class CSVRow(object):
@@ -149,7 +181,7 @@ class ColumnList(object):
         self.stack = tuple(chain(*ops))
 
     def _consume(self, selects, step):
-        """Genera operaciones para descender un paso con los selectores"""
+        """Genera operaciones para descender un paso en el path"""
         # Primera operacion: descender un nivel.
         def getsubtype(dset, vector):
             return getattr(dset, step)
@@ -179,11 +211,15 @@ class ColumnList(object):
         data = dict((k, v) for (k, v) in data if v is not None)
         # Inserto el objeto en cada elemento del dataset.
         for item in rootset:
+            # El "parent" del objeto es el item que estamos procesando
+            # si hemos tenido que bajar en la jerarquia (stack is not None).
+            # En otro caso "item" es el objeto raiz y no queremos que los
+            # objetos de primer nivel lo tengan como padre.
             obj = DataObject(self.meta, item if self.stack else None)
             obj.__dict__.update(data)
             getattr(item, attrib).add(obj)
             nitems.add(obj)
-        return None if not nitems else DataSet(self.meta, nitems)
+        return None if not nitems else CSVDataSet(self.meta, nitems)
 
 
 @contextmanager
@@ -235,7 +271,7 @@ class TableBlock(ColumnList):
         En caso de excepcion al procesar los objetos, la excepcion se
         lanza envuelta en un DataError.
         """
-        rootset = DataSet(data._meta, (data,))
+        rootset = CSVDataSet(data._meta, (data,))
         with wrap_exception(self.source, self.index):
             self._prepare(data._meta)
         for row in self.body:
@@ -284,13 +320,32 @@ class LinkBlock(object):
         de una parte del enlace.
         """
         groups, commons, columns = list(), list(), list(self.columns)
+        shared_selectors = list()
         while columns:
             # Voy dividiendo las columnas en subgrupos
-            sublist = list()
+            sublist, selindex = list(), len(shared_selectors)
             # Primera parte: columnas formadas por selectores
             while columns and columns[0].selector:
-                sublist.append(columns.pop(0))
-            # Segunda parte: columnas formadas por campos
+                column = columns.pop(0)
+                # si el campo empieza por "*", es comun a todos los grupos
+                if column.colname.startswith("*"):
+                    column.colname = column.colname[1:].strip()
+                    # el orden de los selectores importa, asi que lo guardo
+                    # para luego insertarlos en el mismo orden.
+                    shared_selectors.append((selindex, column))
+                # Si no comienza por "*", es exclusivo de este grupo
+                else:
+                    sublist.append(column)
+                selindex += 1
+            # Segunda parte: incluyo los "shared selectors" que haya
+            # definidos hasta ahora.
+            #
+            # A diferencia de los campos comunes, que son comunes para todos
+            # los peers, los selectores solo son comunes a partir del peer en
+            # que se definen.
+            for index, selector in shared_selectors:
+                sublist.insert(index, selector)
+            # Tercera parte: columnas formadas por campos
             while columns and not columns[0].selector:
                 column = columns.pop(0)
                 # si el campo empieza por "*", es comun a todos los grupos
@@ -313,7 +368,7 @@ class LinkBlock(object):
                 path.append(self.path)
                 clist = ColumnList(self.source, self.index, path, demux)
                 # Marco la posicion del grupo dentro del enlace, para
-                # hacer mas facil de-multiplexarlos si fuera necesario.
+                # hacer mas facil de-multiplexarlos.
                 clist.position = pos
                 yield clist
 
@@ -350,7 +405,7 @@ class LinkBlock(object):
                 except IndexError:
                     # Este error se lanza cuando el path es invalido.
                     # Como cada columna puede tener selectores
-                    # combinados, es posible que al demultiplezar haya
+                    # combinados, es posible que al demultiplexar haya
                     # creado una combinacion invalida... asi que
                     # simplemente la ignoro.
                     pass
@@ -365,10 +420,12 @@ class LinkBlock(object):
         # - si hay mas de dos grupos, el subatributo es "PEERS"
         attrib = "PEER" if self.p2p else "PEERS"
         for group in valid:
+            # La POSITION no va a ser un campo indexable, porque se
+            # puede utilizar "FLIP" para cambiarla.
+            group.meta.fields["POSITION"] = IntField(indexable=False)
             group.meta.fields[attrib] = ObjectField()
-            group.meta.fields["POSITION"] = IntField()
         # Y ahora, voy procesando linea a linea
-        rootset = DataSet(meta, (data,))
+        rootset = CSVDataSet(meta, (data,))
         for row in self.body:
             with wrap_exception(self.source, row.lineno):
                 # Creo todos los objetos y los agrego a una lista
@@ -386,7 +443,7 @@ class LinkBlock(object):
                     for item in items:
                         item.POSITION = position
                     peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
-                    peers = PeerSet(chain(*(p[1] for p in peers)))
+                    peers = CSVPeerSet(chain(*(p[1] for p in peers)))
                     if peers:
                         if self.p2p:
                             peers = +peers
@@ -408,7 +465,7 @@ class CSVSource(FileSource):
         lines, delim = data.splitlines(), ";"
         for line in lines:
             if line and line[0] in (",", ";"):
-                delimiter = str(line[0])
+                delimiter = line[0]
                 break
         rows = tuple(self._clean(lines, delimiter))
         return self._split(rows)        
