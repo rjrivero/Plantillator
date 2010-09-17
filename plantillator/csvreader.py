@@ -5,7 +5,6 @@ import csv
 import os
 import os.path
 
-from contextlib import contextmanager
 from itertools import count, chain, repeat
 
 from .meta import DataError, Meta, DataObject, DataSet, PeerSet
@@ -176,37 +175,32 @@ class ColumnList(object):
         self.meta = meta
         # Creo una pila de operaciones, que filtra el dataset raiz
         # hasta llegar al punto donde tengo que insertar los datos.
-        selects = list(self.selects)
-        ops = (self._consume(selects, step) for step in self.path[:-1])
-        self.stack = tuple(chain(*ops))
+        selects = list(self.selects) # copio para poder hacer pops()
+        self.stack = tuple(self._consume(selects, step) for step in self.path[:-1])
 
     def _consume(self, selects, step):
         """Genera operaciones para descender un paso en el path"""
-        # Primera operacion: descender un nivel.
-        def getsubtype(dset, vector):
-            return getattr(dset, step)
-        yield getsubtype
-        # Segunda operacion: hacer los filtrados
+        # Obtengo los filtrados que corresponden al paso que voy a descender.
         indexes = list()
         while selects and selects[0].selector == step:
             indexes.append(str(selects.pop(0).colname))
-        if indexes:
-            def search(dset, vector):
-                for key in indexes:
-                    val = vector.next()
-                    # Si alguno de los indices es "None", es que no se
-                    # quiere procesar esta fila. Salgo devolviendo None.
-                    if val is None:
-                        return
-                    dset = dset(**{key: val})
-                return dset
-            yield search
+        # Esta operacion desciende un nivel y aplica los filtros.
+        def search(dset, vector):
+            dset = getattr(dset, step)
+            for key in indexes:
+                val = vector.next()
+                # Si alguno de los indices es "None", es que no se
+                # quiere procesar esta fila. Salgo devolviendo None.
+                if val is None:
+                    return
+                dset = dset(**{key: val})
+            return dset
+        return search
     
     def _addrow(self, row_cols, rootset):
         """Crea el objeto y lo inserta en la posicion adecuada del rootset"""
         attrib = self.path[-1]
         vector = (row_cols[s.index] for s in self.selects)
-        nitems = set()
         # Desciendo en el rootset hasta llegar al DataSet del que
         # cuelga el objeto. Si en algun paso me quedo sin dataset,
         # el indice no apunta a nadie, asi que salgo de la funcion.
@@ -217,7 +211,10 @@ class ColumnList(object):
         # Creo un objeto con los datos, que luego ire copiando
         data = ((c.colname, row_cols[c.index]) for c in self.attribs)
         data = dict((k, v) for (k, v) in data if v is not None)
+        if not data:
+            return
         # Inserto el objeto en cada elemento del dataset.
+        nitems = set()
         for item in rootset:
             # El "parent" del objeto es el item que estamos procesando
             # si hemos tenido que bajar en la jerarquia (stack is not None).
@@ -227,16 +224,7 @@ class ColumnList(object):
             obj.__dict__.update(data)
             getattr(item, attrib).add(obj)
             nitems.add(obj)
-        return None if not nitems else CSVDataSet(self.meta, nitems)
-
-
-@contextmanager
-def wrap_exception(source, index):
-    """Envuelve una excepcion normal en un DataError"""
-    try:
-        yield
-    except Exception:
-        raise DataError(source, index)
+        return nitems
 
 
 class TableBlock(ColumnList):
@@ -280,12 +268,15 @@ class TableBlock(ColumnList):
         lanza envuelta en un DataError.
         """
         rootset = CSVDataSet(data._meta, (data,))
-        with wrap_exception(self.source, self.index):
+        source, lineno = self.source, self.index
+        try:
             self._prepare(data._meta)
-        for row in self.body:
-            with wrap_exception(self.source, row.lineno):
+            for row in self.body:
+                lineno = row.lineno
                 row.normalize(self.columns)
                 self._addrow(row.cols, rootset)
+        except:
+            raise DataError(source, lineno)
 
 
 class LinkBlock(object):
@@ -405,7 +396,8 @@ class LinkBlock(object):
         # Preparo los grupos y descarto los que correspondan a paths
         # no validos.
         meta, valid = data._meta, set()
-        with wrap_exception(self.source, self.index):
+        source, lineno = self.source, self.index
+        try:
             for group in self.groups:
                 # Preparo cada uno de los bloques
                 try:
@@ -423,6 +415,8 @@ class LinkBlock(object):
             # error, digo yo...
             if not valid:
                 raise SyntaxError("Ningun enlace valido")
+        except:
+            raise DataError(source, lineno)
         # A cada grupo valido le incluyo un sub-atributo:
         # - si solo hay dos grupos, el sub-atributo es "PEER"
         # - si hay mas de dos grupos, el subatributo es "PEERS"
@@ -450,8 +444,9 @@ class LinkBlock(object):
             group.meta.fields[attrib] = ObjectField()
         # Y ahora, voy procesando linea a linea
         rootset = CSVDataSet(meta, (data,))
-        for row in self.body:
-            with wrap_exception(self.source, row.lineno):
+        try:
+            for row in self.body:
+                lineno = row.lineno # por si lanzo excepcion
                 # Creo todos los objetos y los agrego a una lista
                 row.normalize(self.columns)
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
@@ -474,6 +469,8 @@ class LinkBlock(object):
                         peers = +peers
                         for item in items:
                             setattr(item, attrib, peers)
+        except:
+            raise DataError(source, lineno)
 
     @property
     def depth(self):
@@ -525,9 +522,12 @@ class CSVSource(FileSource):
             raise GeneratorExit()
         labels.append((len(rows), None))
         # Divido la entrada en bloques
-        for (i, blk), (j, skip) in zip(labels, labels[1:]):
-            with wrap_exception(self.id, i):
-                yield blk(self.id, i, rows[i:j])
+        source, lineno = self.id, -1
+        try:
+            for (lineno, blk), (j, skip) in zip(labels, labels[1:]):
+                yield blk(source, lineno, rows[lineno:j])
+        except:
+            raise DataError(source, lineno)
 
 
 class CSVShelf(object):

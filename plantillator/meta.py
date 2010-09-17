@@ -49,7 +49,8 @@ def matches(item, crit):
     resolucion, se considera que el criterio no se cumple.
     """
     try:
-        return all(c._resolve({SYMBOL_SELF: item}) for c in crit)
+        symbol_map = {SYMBOL_SELF: item}
+        return all(c._resolve(symbol_map) for c in crit)
     except (AttributeError, AssertionError):
         return False
 
@@ -314,28 +315,40 @@ class Fallback(dict):
 
 class Linear(object):
 
-    """Realiza una busqueda lineal sobre un DataSet"""
+    """Realiza una busqueda lineal sobre un DataSet.
+
+    Utilizo la funcion _get de los DataObjects porque se supone que
+    ningun campo dinamico sera indexable.
+    """
 
     def __init__(self, items, attr):
         self._items = items
         self._attr = attr
 
     def _eq(self, index):
-        return tuple(x for x in self._items if x.get(self._attr) == index)
+        return tuple(x for x in self._items if x._get(self._attr) == index)
 
     def _ne(self, index):
-        return tuple(x for x in self._items if x.get(self._attr) != index)
+        return tuple(x for x in self._items if x._get(self._attr) != index)
 
     def _none(self):
-        return tuple(x for x in self._items if x.get(self._attr) is None)
+        return tuple(x for x in self._items if x._get(self._attr) is None)
 
     def _any(self):
-        return tuple(x for x in self._items if x.get(self._attr) is not None)
+        return tuple(x for x in self._items if x._get(self._attr) is not None)
 
     def _sorted(self, asc=True):
         def key(item):
             return item.get(self._attr)
         return tuple(sorted(self._items, key=key, reverse=(not asc)))
+
+    def __len__(self):
+        """La longitud del indice representa su granularidad.
+        
+        En este caso la longitud 0 porque es una busqueda lineal,
+        sin ninguna granularidad. No particiona el DataSet en trozos.
+        """
+        return 0
 
 
 class IndexItem(object):
@@ -361,12 +374,16 @@ class IndexKey(object):
 
 class Index(object):
 
-    """Mantiene un indice sobre una columna dada del DataSet"""
+    """Mantiene un indice sobre una columna dada del DataSet.
+
+    Utiliza la funcion _get porque se supone que ningun atributo dinamico
+    sera indexable.
+    """
 
     def __init__(self, items, attr):
         # Separo los objetos en dos grupos: los que tienen el
         # atributo, y los que no.
-        values = tuple(x.get(attr) for x in items)
+        values = tuple(x._get(attr) for x in items)
         self._empty = tuple(y for (x, y) in zip(values, items) if x is None)
         self._full  = tuple(sorted(IndexItem(x, y) for (x, y) in zip(values, items) if x is not None))
         self._cache = dict()
@@ -401,20 +418,31 @@ class Index(object):
             items = reversed(items)
         return tuple(items)
 
+    def __len__(self):
+        """La longitud del indice se usa para indicar su granularidad.
 
-def index_to_crit(items, key, val):
-    """Convierte un criterio expresado como "key=val" en un Resolver"""
-    crit = Resolver(SYMBOL_SELF)
-    if val is DataSet.NONE:
-        crit = getattr(crit, "HASNOT")
-        crit = getattr(crit, key)
-    elif val is DataSet.ANY:
-        crit = getattr(crit, "HAS")
-        crit = getattr(crit, key)
-    else:
-        crit = getattr(crit, key)
-        crit = (crit == val)
-    return tuple(x for x in items if matches(x, (crit,)))
+        En este caso, devolvemos la longitud del array "full", que indica
+        en cuantos trozos particiona este indice al DataSet.
+        """
+        return len(self._full)
+
+
+def search_crit(items, args, kw):
+    """Filtra una lista con los criterios dados, sin usar indices"""
+    resv = Resolver(SYMBOL_SELF)
+    args = list(args)
+    for key, val in kw.iteritems():
+        if val is DataSet.NONE:
+            crit = getattr(resv, "HASNOT")
+            crit = getattr(crit, key)
+        elif val is DataSet.ANY:
+            crit = getattr(resv, "HAS")
+            crit = getattr(crit, key)
+        else:
+            crit = getattr(resv, key)
+            crit = (crit == val)
+        args.append(crit)
+    return tuple(x for x in items if matches(x, args))
 
 
 class DataSet(object):
@@ -442,6 +470,7 @@ class DataSet(object):
         self._meta = meta
         self._children = set(children) if children is not None else set()
         self._indexes = dict()
+        self._bestidx = dict()
         self._indexable = indexable
 
     def __getstate__(self):
@@ -452,8 +481,9 @@ class DataSet(object):
         """Restauro estado y borro indices"""
         self._meta = state[0]
         self._children = state[1]
-        self._indexes = dict()
         self._indexable = True
+        self._indexes = dict()
+        self._bestidx = dict()
 
     def _new(self, items=None, indexable=False):
         return DataSet(self._meta, items, indexable)
@@ -461,18 +491,16 @@ class DataSet(object):
     def __call__(self, *crit, **shortcut):
         # Mini-especializacion: es muy habitual buscar un objeto
         # en un dataset a partir de su indice, asi que especializo
-        # el filtro: si el unico parametro es un keyword-arg, se
-        # utiliza el indice para hacer la busqueda:
+        # el filtro: si hay parametros keyword-arg, se utiliza el indice
+        # para hacer la busqueda:
         # - Valor == DataSet.NONE: se devuelven elementos sin el atributo.
         # - Valor == DataSet.ANY: se devuelven elementos con el atributo.
         # - Valor == cualquier otra cosa: se busca el valor.
+        items = self._children
         if shortcut:
-            # Solo admitimos un unico criterio, y ademas debe ser sobre
-            # un campo indexable.
-            key, val = shortcut.popitem()
-            index = self._index(key)
-            assert(not crit and not shortcut)
-            if index:
+            key = self._best_index(frozenset(shortcut))
+            if key:
+                index, val = self._index(key), shortcut.pop(key)
                 # Tres posibles casos: NONE, ANY y un indice a buscar
                 if val is DataSet.NONE:
                     items = index._none()
@@ -480,12 +508,8 @@ class DataSet(object):
                     items = index._any()
                 else:
                     items = index._eq(val)
-            else:
-                # El campo no era indexable, hacemos una busqueda normal
-                items = index_to_crit(self._children, key, val)
-        else:
-            # Para los indices compuestos, vamos al caso general.
-            items = tuple(x for x in self._children if matches(x, crit))
+        if crit or shortcut:
+            items = search_crit(items, crit, shortcut)
         if len(items) == len(self._children):
             # si el resultado del filtro es el dataset entero,
             # devuelvo el propio dataset para aprovechar los indices.
@@ -502,17 +526,36 @@ class DataSet(object):
         except KeyError:
             raise AttributeError(attr)
 
+    def _best_index(self, keys, dummy=tuple()):
+        """Devuelve el atributo con el indice mas granular"""
+        try:
+            return self._bestidx[keys]
+        except:
+            def key(item, dummy=tuple()):
+                """Los atributos se compararan por la longitud del indice"""
+                return -len(self._indexes.get(item, dummy))
+            valid = (k for (k, v) in self._meta.fields.iteritems() if v.indexable)
+            bestidx = sorted(keys.intersection(valid), key=key)
+            bestidx = bestidx[0] if bestidx else None
+            return self._bestidx.setdefault(keys, bestidx)
+
     def _index(self, attr):
         """Devuelve un indice sobre el campo indicado, si es indexable"""
         try:
             return self._indexes[attr]
         except KeyError:
-            field = self._meta.fields.get(attr, None)
-            if not field or not field.indexable:
+            field = self._meta.fields[attr]
+            if not field.indexable:
+                # El field puede ser un DataSet o un BaseSet, que no se
+                # pueden comparar con las funciones _eq y _ne de los indices
+                # porque no se va a comparar igualdad, sino longitud.
                 index = None
             else:
                 indextype = Index if self._indexable else Linear
                 index = indextype(self._children, attr)
+                # Borro bestidx para que se vuelva a recalcular, ahora que hay
+                # indices nuevos.
+                self._bestidx = dict()
             return self._indexes.setdefault(attr, index)
 
     class Indexer(object):
@@ -586,19 +629,10 @@ class PeerSet(frozenset):
     Conjunto de objetos DataObject sin metadatos comunes
     """
 
-    def __call__(self, *crit, **shortcut):
+    def __call__(self, *arg, **kw):
         # Acepta la misma mini-especializacion que un DataSet, aunque
         # la generaliza.
-        if shortcut:
-            key, val = shortcut.popitem()
-            assert(not crit and not shortcut)
-            items = index_to_crit(self, key, val)
-        elif not crit:
-            # Esto lo pueden usar para intentar promover el PeerSet
-            items = self
-        else:
-            items = (x for x in self if matches(x, crit))
-        return self._promote(tuple(items))
+        return self._promote(search_crit(self, arg, kw))
 
     def __getattr__(self, attr):
         """Obtiene el atributo elegido, en funcion de su tipo"""
@@ -622,10 +656,7 @@ class PeerSet(frozenset):
         else:
             # En otro caso, los agrupo en un BaseSet.
             value = BaseSet(items)
-        # Intento promocionar el PeerSet a DataSet, si todos los
-        # objetos son del mismo tipo
-        setattr(self, attr, value)
-        return value
+        return self.__dict__.setdefault(attr, value)
 
     def _new(self, items, meta=None):
         if meta:
