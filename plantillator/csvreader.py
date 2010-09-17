@@ -193,7 +193,12 @@ class ColumnList(object):
         if indexes:
             def search(dset, vector):
                 for key in indexes:
-                    dset = dset(**{key: vector.next()})
+                    val = vector.next()
+                    # Si alguno de los indices es "None", es que no se
+                    # quiere procesar esta fila. Salgo devolviendo None.
+                    if val is None:
+                        return
+                    dset = dset(**{key: val})
                 return dset
             yield search
     
@@ -203,9 +208,12 @@ class ColumnList(object):
         vector = (row_cols[s.index] for s in self.selects)
         nitems = set()
         # Desciendo en el rootset hasta llegar al DataSet del que
-        # cuelga el objeto
+        # cuelga el objeto. Si en algun paso me quedo sin dataset,
+        # el indice no apunta a nadie, asi que salgo de la funcion.
         for op in self.stack:
             rootset = op(rootset, vector)
+            if not rootset:
+                return
         # Creo un objeto con los datos, que luego ire copiando
         data = ((c.colname, row_cols[c.index]) for c in self.attribs)
         data = dict((k, v) for (k, v) in data if v is not None)
@@ -357,7 +365,7 @@ class LinkBlock(object):
                     sublist.append(column)
             groups.append(sublist)
         # Extiendo cada grupo con los grupos comunes
-        self.p2p = (len(groups) == 2)
+        # self.p2p = (len(groups) == 2)
         for group in groups:
             group.extend(commons)
         # "des-multiplexo" los selectores y los convierto en ColumnLists.
@@ -418,7 +426,23 @@ class LinkBlock(object):
         # A cada grupo valido le incluyo un sub-atributo:
         # - si solo hay dos grupos, el sub-atributo es "PEER"
         # - si hay mas de dos grupos, el subatributo es "PEERS"
-        attrib = "PEER" if self.p2p else "PEERS"
+        #
+        # No he encontrado ningun use-case en el que necesite un peering
+        # de mas de dos objetos. Sin embargo, si he encontrado use-cases
+        # en que necesite peering de un objeto con dos posibles objetos
+        # alternativos.
+        #
+        # Por ejemplo, en el ayto. de Sevilla: un enlace de un switch de una
+        # sede de fibra optica a otro switch de otra sede o a un PE. Las rutas
+        # de los switches_fo y de los PEs son completamente distintas, asi
+        # que necesito dos bloques de selectores. Pero cada enlace utiliza
+        # uno solo de los dos bloques, y el otro queda vacio.
+        #
+        # Asi que he decidido cambiar esta logica. Los enlaces son siempre
+        # punto a punto, si hay multiples bloques seran alternativas.
+        #
+        # attrib = "PEER" if self.p2p else "PEERS"
+        attrib = "PEER"
         for group in valid:
             # La POSITION no va a ser un campo indexable, porque se
             # puede utilizar "FLIP" para cambiarla.
@@ -445,8 +469,9 @@ class LinkBlock(object):
                     peers = tuple(r for (i, r) in enumerate(inserted) if i != index)
                     peers = CSVPeerSet(chain(*(p[1] for p in peers)))
                     if peers:
-                        if self.p2p:
-                            peers = +peers
+                        # if self.p2p:
+                        #    peers = +peers
+                        peers = +peers
                         for item in items:
                             setattr(item, attrib, peers)
 

@@ -4,9 +4,16 @@
 
 import sys
 import re
+import os.path
+import code
 
 import tools
 from .iotools import ShelfLoader, ContextMaker, Interactor
+
+
+# Nombre de variable valido. Excluyo los que comienzan por "_",
+# estan reservados para atributos internos del plantillator.
+varpattern = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
 
 
 class Consumer(object):
@@ -49,6 +56,7 @@ class Consumer(object):
                 "APPEND": self.APPEND,
                 "SAVEAS": self.SAVEAS,
                 "SELECT": self.SELECT,
+                "BREAK":  self.BREAK,
                 "tools":  tools,
                 })
         except:
@@ -58,11 +66,13 @@ class Consumer(object):
     def _add_objects(self):
         """Carga objetos predefinidos e indicados en la linea de comandos."""
         varpattern = re.compile(r"^[a-zA-Z][a-zA-Z0-9]*$")
+        symbols = dict()
         for definition in self.definitions or tuple():
             var, expr = tuple(x.strip() for x in definition.split("=", 1))
             if not varpattern.match(var):
                 raise SyntaxError, "\"%s\" NO es un nombre valido" % var
-            self.dataloader.data[var] = eval(expr, self.dataloader.data)
+            symbols[var] = eval(expr, self.loader.data)
+        self.loader.add_symbols(symbols)
 
     def _consume(self, tmplid, outname=None):
         if outname is None:
@@ -126,6 +136,24 @@ class Consumer(object):
         tmplid, template = self.loader.get_template(fname, self._pending.tmplid)
         self._queue.append(self._pending.dup(tmplid, template, outname))
 
+    def SELECT(self, sort=False, **kw):
+        """Pide al usuario que seleccione elementos.
+
+        Los argumentos opcionales son pares "nombre"="lista". La funcion
+        presenta cada lista al usuario, y guarda el objeto elegido en el
+        espacio global con el nombre asignado.
+
+        Si el nombre ya existe en el espacio global, se salta la eleccion.
+        """
+        for key, items in kw.iteritems():
+            if key in self._pending.data:
+                continue
+            if not self.loop:
+                item = self.actor.select(items, sort)
+            else:
+                item = self.actor.exhaust(items)
+            self._pending.data[key] = item
+
     def SAVEAS(self, outname):
         """Filtro que guarda el contenido del bloque en un fichero.
 
@@ -138,8 +166,18 @@ class Consumer(object):
             return (outpath,)
         return saveme
 
-    def SELECT(self, items, sort=True):
-        """Pide al usuario que seleccione un elemento"""
-        if self.loop:
-            return self.actor.exhaust(items)
-        return self.actor.select(items, sort)
+    def BREAK(self, label=None):
+        """Lanza un interprete interactivo, para depuracion"""
+        banner = "\n".join((
+            "***",
+            "Breakpoint en plantilla %s: '%s'" % (
+                os.path.basename(self._pending.tmplid),
+                str(label) if label is not None else "<Sin etiqueta>",
+            ),
+            "  Para salir de la sesion, pulse Ctrl+D",
+            "  Para cancelar la ejecucion de la plantilla, excriba 'exit()'",
+            "***",
+        ))
+        self._pending.data.update(self._pending.loc)
+        self._pending.loc = dict()
+        code.interact(banner=banner, local=self._pending.data)

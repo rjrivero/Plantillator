@@ -16,7 +16,7 @@ class ParseError(Exception):
     """
     Encapsula las excepciones lanzadas durante la compilacion de un template.
 
-    - self.template: plantilla (sin procesar) que ha provocado la excepcion
+    - self.template: plantilla (texto) que ha provocado la excepcion
     - self.exc_info: tupla (tipo, excepcion, traceback)
     """
 
@@ -24,12 +24,6 @@ class ParseError(Exception):
         super(ParseError, self).__init__()
         self.template = template
         self.exc_info = sys.exc_info()
-
-    def __str__(self):
-        return "".join(traceback.format_exception(*(self.exc_info)))
-
-    def __repr__(self):
-        return "ParseError(%s, %s)" % (repr(self.template), repr(self.exc_info))
 
 
 class TemplateError(Exception):
@@ -48,12 +42,6 @@ class TemplateError(Exception):
         self.template = template
         self.local = local
         self.exc_info = sys.exc_info()
-
-    def __str__(self):
-        return "".join(traceback.format_exception(*(self.exc_info)))
-
-    def __repr__(self):
-        return "TemplateError(%s, %s, %s)" % (repr(self.template), repr(self.local), repr(self.exc_info))
 
 
 class Accumulator(object):

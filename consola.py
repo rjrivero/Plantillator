@@ -20,7 +20,7 @@ from plantillator import ParseError as NewParseError
 from plantillator import DataError, TemplateError, Plantillator, Consumer
 
 
-VERSION           = "0.2"
+VERSION           = "0.5"
 OPTIONS_ERRNO     = -1
 FILE_ERRNO        = -2
 DATA_ERRNO        = -3
@@ -58,7 +58,7 @@ parser.add_option("-s", "--shell",
         help="Carga los datos y entra en un interprete de comandos")
 parser.add_option("-l", "--loop",
         action="store_true", dest="loop", default=False,
-        help="Itera sobre todos los posibles valores de los 'utiliza'")
+        help="Itera sobre todos los posibles valores de los 'SELECT'")
 parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
         help="Extension del fichero resultado (por defecto, .cfg)")
 parser.add_option("-k", "--keep_comments",
@@ -164,6 +164,32 @@ def handle(item):
         print "NO SE RECONOCE COMANDO %s" % item.opcode
 
 
+def add_error(errlist, template, filename, lineno):
+    """Da formato a un mensaje de error provocado por una plantilla"""
+    lineno  = max(lineno-1, 0)
+    minline = max(lineno-2, 0)
+    maxline = lineno+3
+    tlines  = template.splitlines()
+    errlist.append("\n".join((
+        "***",
+        "Error en fichero %s:" % os.path.basename(filename),
+        "***",
+        "\n".join(tlines[minline:lineno]),
+        " >>> " + tlines[lineno] + " <<< ",
+        "\n".join(tlines[lineno+1:maxline]),
+        "***",
+    )))
+
+
+def exit_with_errors(errlist, exc_info):
+    """Sale volcando todos los mensajes de error."""
+    errlist.append("".join(format_exception_only(exc_info[0], exc_info[1])))
+    sys.stderr.write("\n".join(errlist))
+    if options.debug:
+        print_exc(file=sys.stderr)
+    sys.exit(PARSE_ERRNO)    
+
+
 # y cargo a PLANTILLATOR!
 plantillator = Plantillator() if not options.new_engine else Consumer()
 plantillator.path = path
@@ -212,9 +238,19 @@ except CommandError as detail:
         code.interact("Consola de depuracion", local={'data':detail.data})
     sys.exit(TRANSLATION_ERRNO)
 
+except NewParseError as details:
+
+    errlist, inner = list(), details.exc_info[1]
+    if hasattr(inner, "filename") and hasattr(inner, "lineno"):
+        template = details.template
+        filename = inner.filename
+        lineno   = inner.lineno
+        add_error(errlist, template, filename, lineno)
+    exit_with_errors(errlist, details.exc_info)
+
 except TemplateError as details:
 
-    error, einf = list(), details.exc_info
+    errlist = list()
     # Busco el error que se origino en el template.
     for tb in extract_tb(details.exc_info[2]):
         filename, lineno, funcname, text = tb
@@ -222,25 +258,8 @@ except TemplateError as details:
             # es una plantilla, intentamos obtener los datos.
             template = plantillator.loader.get_template(filename)
             if template:
-                template = template[1]
-                lineno   = max(lineno-1, 0)
-                minline  = max(lineno-2, 0)
-                maxline  = lineno+3
-                tlines   = template.translated.splitlines()
-                error.append("\n".join((
-                    "***",
-                    "Error ejecutando %s:" % filename,
-                    "***",
-                    "\n".join(tlines[minline:lineno]),
-                    " >>> " + tlines[lineno] + " <<< ",
-                    "\n".join(tlines[lineno+1:maxline]),
-                    "***",
-                )))
-    error.append("\n".join(format_exception_only(einf[0], einf[1])))
-    sys.stderr.write("\n".join(error))
-    if options.debug:
-        print_exc(file=sys.stderr)
-    sys.exit(PARSE_ERRNO)    
+                add_error(errlist, template[1].translated, filename, lineno)
+    exit_with_errors(errlist, details.exc_info)
 
 except (ParseError, TemplateError, DataError) as detail:
 
@@ -249,15 +268,6 @@ except (ParseError, TemplateError, DataError) as detail:
     if options.debug:
         print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)
-
-except NewParseError as detail:
-
-    for msg in format_exception_only(sys.exc_type, sys.exc_value):
-        sys.stderr.write(str(msg))
-    if options.debug:
-        print_exc(file=sys.stderr)
-    print detail.template
-    sys.exit(PARSE_ERRNO)     
 
 except Exception as detail:
 
