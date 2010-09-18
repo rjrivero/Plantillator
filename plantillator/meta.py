@@ -470,7 +470,6 @@ class DataSet(object):
         self._meta = meta
         self._children = set(children) if children is not None else set()
         self._indexes = dict()
-        self._bestidx = dict()
         self._indexable = indexable
 
     def __getstate__(self):
@@ -483,7 +482,6 @@ class DataSet(object):
         self._children = state[1]
         self._indexable = True
         self._indexes = dict()
-        self._bestidx = dict()
 
     def _new(self, items=None, indexable=False):
         return DataSet(self._meta, items, indexable)
@@ -498,9 +496,9 @@ class DataSet(object):
         # - Valor == cualquier otra cosa: se busca el valor.
         items = self._children
         if shortcut:
-            key = self._best_index(frozenset(shortcut))
-            if key:
-                index, val = self._index(key), shortcut.pop(key)
+            key, index = self._best_index(frozenset(shortcut))
+            if index:
+                val = shortcut.pop(key)
                 # Tres posibles casos: NONE, ANY y un indice a buscar
                 if val is DataSet.NONE:
                     items = index._none()
@@ -528,16 +526,30 @@ class DataSet(object):
 
     def _best_index(self, keys, dummy=tuple()):
         """Devuelve el atributo con el indice mas granular"""
+        index = None
         try:
-            return self._bestidx[keys]
-        except:
+            bestidx = self._bestidx[keys]
+            if bestidx:
+                # Si hay un resultado, el indice siempre tiene que
+                # existir.
+                index = self._indexes[bestidx]
+        except (AttributeError, KeyError):
             def key(item, dummy=tuple()):
                 """Los atributos se compararan por la longitud del indice"""
                 return -len(self._indexes.get(item, dummy))
-            valid = (k for (k, v) in self._meta.fields.iteritems() if v.indexable)
-            bestidx = sorted(keys.intersection(valid), key=key)
-            bestidx = bestidx[0] if bestidx else None
-            return self._bestidx.setdefault(keys, bestidx)
+            valid   = (k for (k, v) in self._meta.fields.iteritems()
+                         if v.indexable)
+            bestidx = sorted(keys.intersection(valid), key=key) or None
+            # Si alguno de los indices es valido, lo recupero.
+            if bestidx:
+                bestidx = bestidx[0]
+                # Obtengo el indice antes de cachear la decision, porque
+                # _index puede borrar el diccionario _bestidx si el indice
+                # no existia.
+                index = self._index(bestidx)
+            # y cacheo la decision.
+            self._bestidx[keys] = bestidx
+        return (bestidx, index)
 
     def _index(self, attr):
         """Devuelve un indice sobre el campo indicado, si es indexable"""
@@ -551,11 +563,14 @@ class DataSet(object):
                 # porque no se va a comparar igualdad, sino longitud.
                 index = None
             else:
-                indextype = Index if self._indexable else Linear
+                if self._indexable:
+                    # Borro bestidx para que se vuelva a recalcular, ahora que
+                    # hay indices nuevos.
+                    self._bestidx = dict()
+                    indextype = Index
+                else:
+                    indextype = Linear
                 index = indextype(self._children, attr)
-                # Borro bestidx para que se vuelva a recalcular, ahora que hay
-                # indices nuevos.
-                self._bestidx = dict()
             return self._indexes.setdefault(attr, index)
 
     class Indexer(object):
