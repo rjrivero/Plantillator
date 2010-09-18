@@ -42,14 +42,14 @@ class DataError(Exception):
         return "DataError(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
 
 
-def matches(item, crit):
+def matches(item, crit, symbol=SYMBOL_SELF):
     """Comprueba si un objeto cumple un criterio.
 
     Si la evaluacion del criterio lanza una exception durante la
     resolucion, se considera que el criterio no se cumple.
     """
     try:
-        symbol_map = {SYMBOL_SELF: item}
+        symbol_map = {symbol: item}
         return all(c._resolve(symbol_map) for c in crit)
     except (AttributeError, AssertionError):
         return False
@@ -427,9 +427,8 @@ class Index(object):
         return len(self._full)
 
 
-def search_crit(items, args, kw):
+def search_crit(items, args, kw, resv=Resolver(SYMBOL_SELF)):
     """Filtra una lista con los criterios dados, sin usar indices"""
-    resv = Resolver(SYMBOL_SELF)
     args = list(args)
     for key, val in kw.iteritems():
         if val is DataSet.NONE:
@@ -645,8 +644,7 @@ class PeerSet(frozenset):
     """
 
     def __call__(self, *arg, **kw):
-        # Acepta la misma mini-especializacion que un DataSet, aunque
-        # la generaliza.
+        # Aqui no hay indices que valgan, se busca a pelo.
         return self._promote(search_crit(self, arg, kw))
 
     def __getattr__(self, attr):

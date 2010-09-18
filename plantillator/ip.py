@@ -2,6 +2,8 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
 
+import socket
+
 from itertools import chain
 from IPy import IP
 
@@ -13,6 +15,20 @@ NIBBLES_LIST = (
     '00ff', '007f', '003f', '001f',
     '000f', '0007', '0003', '0001',
 )
+
+
+def simple_check_ip(ip, socket=socket):
+    """Trata de validar si una cadena representa una IP"""
+    try:
+        ip, mask = ip.split("/")
+        if ":" in ip:
+            socket.inet_pton(socket.AF_INET6, ip)
+            assert(int(mask) <= 128)
+        else:
+            socket.inet_pton(socket.AF_INET, ip)
+            assert(int(mask) <= 32)
+    except (socket.error, AssertionError):
+        raise ValueError(ip)
 
 
 class IPAddress(object):
@@ -49,7 +65,7 @@ class IPAddress(object):
         'wildmask',     # mascara invertida (estilo Cisco)
     ))
 
-    def __init__(self, ip, host=None):
+    def __init__(self, ip, host=None, check_ip=simple_check_ip):
         """Construye un objeto de tipo IP.
         - Si se omite "host", "ip" debe ser una cadena de texto en formato
           "ip / mask".
@@ -59,8 +75,13 @@ class IPAddress(object):
             self.host = host
             self.raw_network = ip
         else:
+            check_ip(ip)
             self._str = ip
-            self.validate()
+            # el validate tarda MUCHISIMO, prefiero hacer una comprobacion
+            # con socket.inet_pton y dejar validate() para tiempo
+            # de ejecucion... si no, se me va la carga de los CSVs a un monton
+            # de tiempo.
+            # self.validate()
 
     def validate(self):
         """Valida una IP que se ha creado a partir de una cadena de texto"""
