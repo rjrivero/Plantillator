@@ -606,7 +606,7 @@ class CSVShelf(object):
         vart = keys.get(CSVShelf.VARTABLE.lower(), None)
         if vart:
             submeta = meta.subtypes[keys[vart]]
-            key, typ, val = submeta.summary[:3]
+            key, val, typ = submeta.summary[:3]
             for item in getattr(data, str(vart)):
                 vname = str(item._get(key))
                 vtyp  = item._get(typ)
