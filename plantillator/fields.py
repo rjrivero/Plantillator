@@ -123,6 +123,25 @@ class ListRangeField(RangeField):
         return BaseList(chain(*ranges)) or None
 
 
+class ComboField(Field):
+
+    """Un campo que puede tener valores de distintos tipos.
+
+    Va intentando convertir con cada tipo de conversor, hasta que
+    encuentre uno que no devuelva None.
+    """
+
+    def __init__(self, fields):
+        super(ComboField, self).__init__(indexable=False)
+        self.fields = fields
+
+    def convert(self, data):
+        for f in self.fields:
+            val = f.convert(data)
+            if val is not None:
+                return val
+
+
 class FieldMap(object):
 
     ScalarFields = {
@@ -140,6 +159,13 @@ class FieldMap(object):
 
     @classmethod
     def resolve(cls, filtername):
+        fields = tuple(cls.resolve_single(f) for f in filtername.split(" OR "))
+        if len(fields) == 1:
+            return fields[0]
+        return ComboField(fields)
+
+    @classmethod
+    def resolve_single(cls, filtername):
         try:
             vector, scalar = filtername.split(".")
         except ValueError:
