@@ -5,7 +5,7 @@ import csv
 import os
 import os.path
 
-from itertools import count, chain, repeat
+from itertools import count, chain, repeat, izip
 
 from .meta import DataError, Meta, DataObject, DataSet, PeerSet
 from .meta import ObjectField, DataSetField
@@ -184,18 +184,7 @@ class ColumnList(object):
         indexes = list()
         while selects and selects[0].selector == step:
             indexes.append(str(selects.pop(0).colname))
-        # Esta operacion desciende un nivel y aplica los filtros.
-        def search(dset, vector):
-            dset = getattr(dset, step)
-            for key in indexes:
-                val = vector.next()
-                # Si alguno de los indices es "None", es que no se
-                # quiere procesar esta fila. Salgo devolviendo None.
-                if val is None:
-                    return
-                dset = dset(**{key: val})
-            return dset
-        return search
+        return (step, indexes)
     
     def _addrow(self, row_cols, rootset):
         """Crea el objeto y lo inserta en la posicion adecuada del rootset"""
@@ -204,8 +193,14 @@ class ColumnList(object):
         # Desciendo en el rootset hasta llegar al DataSet del que
         # cuelga el objeto. Si en algun paso me quedo sin dataset,
         # el indice no apunta a nadie, asi que salgo de la funcion.
-        for op in self.stack:
-            rootset = op(rootset, vector)
+        for step, indexes in self.stack:
+            rootset = getattr(rootset, step)
+            for key, val in izip(indexes, vector):
+                # Si alguno de los indices es "None", es que no se
+                # quiere procesar esta fila. Salgo devolviendo None.
+                if val is None:
+                    return
+                rootset = rootset(**{key: val})
             if not rootset:
                 return
         # Creo un objeto con los datos, que luego ire copiando
@@ -214,7 +209,7 @@ class ColumnList(object):
         if not data:
             return
         # Inserto el objeto en cada elemento del dataset.
-        nitems = set()
+        nitems = list()
         for item in rootset:
             # El "parent" del objeto es el item que estamos procesando
             # si hemos tenido que bajar en la jerarquia (stack is not None).
@@ -223,7 +218,7 @@ class ColumnList(object):
             obj = DataObject(self.meta, item if self.stack else None)
             obj.__dict__.update(data)
             getattr(item, attrib).add(obj)
-            nitems.add(obj)
+            nitems.append(obj)
         return nitems
 
 
