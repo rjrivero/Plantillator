@@ -479,7 +479,7 @@ class CSVSource(FileSource):
         # Auto-detecto el separador de campos... en funcion del
         # programa que exporte a CSV, algunos utilizan "," y otros ";".
         data = super(CSVSource, self).read()
-        lines, delim = data.splitlines(), ";"
+        lines, delimiter = data.splitlines(), ";"
         for line in lines:
             if line and line[0] in (",", ";"):
                 delimiter = line[0]
@@ -514,7 +514,7 @@ class CSVSource(FileSource):
         # Y recalculo las etiquetas
         labels = list((i - blk.HEADERS, blk) for (i, blk) in marks)
         if not labels:
-            raise GeneratorExit()
+            raise StopIteration()
         labels.append((len(rows), None))
         # Divido la entrada en bloques
         source, lineno = self.id, -1

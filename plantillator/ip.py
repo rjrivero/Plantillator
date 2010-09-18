@@ -60,6 +60,7 @@ class IPAddress(object):
             self.raw_network = ip
         else:
             self._str = ip
+            self.validate()
 
     def validate(self):
         """Valida una IP que se ha creado a partir de una cadena de texto"""
