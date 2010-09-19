@@ -604,18 +604,6 @@ class DataSet(object):
     def __len__(self):
         return len(self._children)
 
-    def update(self, items):
-        assert(not self._indexes)
-        self._children.update(items)
-
-    def add(self, item):
-        assert(not self._indexes)
-        self._children.add(item)
-
-    def pop(self):
-        assert(not self._indexes)
-        item = self._children.pop()
-
     class Sorter(object):
         def __init__(self, dataset, asc=True):
             self._dataset = dataset

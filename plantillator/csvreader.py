@@ -57,6 +57,18 @@ class CSVDataSet(DataSet):
     def _new(self, items=None, indexable=False):
         return CSVDataSet(self._meta, items, indexable)
 
+    def update(self, items):
+        assert(not self._indexes)
+        self._children.update(items)
+
+    def add(self, item):
+        assert(not self._indexes)
+        self._children.add(item)
+
+    def pop(self):
+        assert(not self._indexes)
+        item = self._children.pop()
+
 
 class CSVPeerSet(PeerSet):
 
@@ -86,10 +98,14 @@ class CSVRow(object):
         self.lineno = lineno
         self.cols = cols
 
-    def normalize(self, columns):
-        """Normaliza los datos de las columnas en funcion del tipo"""
-        for col in columns:
-            self.cols[col.index] = col.coltype.convert(self.cols[col.index])
+    @staticmethod
+    def normalize(rows, columns):
+        """Normaliza los datos de las filas en funcion del tipo"""
+        columns = tuple((col.index, col.coltype.convert) for col in columns)
+        for cols in (row.cols for row in rows):
+            for index, convert in columns:
+                cols[index] = convert(cols[index])
+        return rows
 
     def __repr__(self):
         return " (%s) " % ", ".join(self.cols)
@@ -266,9 +282,8 @@ class TableBlock(ColumnList):
         source, lineno = self.source, self.index
         try:
             self._prepare(data._meta)
-            for row in self.body:
+            for row in CSVRow.normalize(self.body, self.columns):
                 lineno = row.lineno
-                row.normalize(self.columns)
                 self._addrow(row.cols, rootset)
         except:
             raise DataError(source, lineno)
@@ -440,10 +455,9 @@ class LinkBlock(object):
         # Y ahora, voy procesando linea a linea
         rootset = CSVDataSet(meta, (data,))
         try:
-            for row in self.body:
+            for row in CSVRow.normalize(self.body, self.columns):
                 lineno = row.lineno # por si lanzo excepcion
                 # Creo todos los objetos y los agrego a una lista
-                row.normalize(self.columns)
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
                 inserted = tuple((p, r) for (p, r) in inserted if r)
                 # Y los cruzo para construir los peerings

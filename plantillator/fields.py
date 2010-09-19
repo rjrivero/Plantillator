@@ -10,9 +10,9 @@ from .meta import Field, BaseSet, BaseList
 
 class IntField(Field):
 
-    def convert(self, data):
+    def convert(self, data, converter=int):
         try:
-            return int(data) if data else None
+            return converter(data) if data else None
         except ValueError:
             return None
 
@@ -28,9 +28,9 @@ class StrField(Field):
         return data or None
 
 
-class IPField(Field):
+class IPv4Field(Field):
 
-    def convert(self, data):
+    def convert(self, data, converter=IPAddress):
         if not data:
             return None
         try:
@@ -40,7 +40,24 @@ class IPField(Field):
                     data = "0.0.0.0/0"
                 else:
                     data = data + "/32"
-            return IPAddress(data)
+            return converter(data)
+        except ValueError:
+            return None
+
+
+class IPv6Field(Field):
+
+    def convert(self, data, converter=IPAddress):
+        if not data:
+            return None
+        try:
+            if data.find("/") < 0:
+                # interpreto una direccion "*" como 0.0.0.0/0
+                if data == "*":
+                    data = "::0/0"
+                else:
+                    data = data + "/128"
+            return converter(data)
         except ValueError:
             return None
 
@@ -51,14 +68,14 @@ class ListField(Field):
         super(ListField, self).__init__(indexable=False)
         self.nestedfld = nestedfld
 
-    def convert(self, data):
+    def convert(self, data, converter=BaseList):
         """Interpreta una cadena de caracteres como una lista
 
         Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
         es un conjunto de valores separados por ','.
         """
         value = (self.nestedfld.convert(i.strip()) for i in data.split(","))
-        value = BaseList(x for x in value if x is not None)
+        value = converter(x for x in value if x is not None)
         return value or None
 
 
@@ -68,14 +85,14 @@ class SetField(Field):
         super(SetField, self).__init__(indexable=False)
         self.nestedfld = nestedfld
 
-    def convert(self, data):
+    def convert(self, data, converter=BaseSet):
         """Interpreta una cadena de caracteres como un set
 
         Crea al vuelo una lista a partir de una cadena de caracteres. La cadena
         es un conjunto de valores separados por ','.
         """
         value = (self.nestedfld.convert(i.strip()) for i in data.split(","))
-        value = BaseSet(x for x in value if x is not None)
+        value = converter(x for x in value if x is not None)
         return value or None
 
 
@@ -87,7 +104,7 @@ class RangeField(Field):
         super(RangeField, self).__init__(indexable=False)
         self.nestedfld = nestedfld
 
-    def convert(self, data):
+    def convert(self, data, converter=BaseList):
         """Interpreta una cadena de caracteres como un rango
 
         Crea al vuelo un rango a partir de una cadena de caracteres.
@@ -108,7 +125,7 @@ class RangeField(Field):
             value = self.nestedfld.convert(data)
             if value is not None:
                 rango.append(value)
-        return BaseList(rango) or None
+        return converter(rango) or None
 
 
 class ListRangeField(RangeField):
@@ -116,11 +133,11 @@ class ListRangeField(RangeField):
     def __init__(self, nestedfld):
         super(ListRangeField, self).__init__(nestedfld)
 
-    def convert(self, data):
+    def convert(self, data, converter=BaseList):
         """Interpreta una cadena de caracteres como una lista de rangos"""
         ranges = (super(ListRangeField, self).convert(x.strip()) for x in data.split(","))
         ranges = (x for x in ranges if x is not None)
-        return BaseList(chain(*ranges)) or None
+        return converter(chain(*ranges)) or None
 
 
 class ComboField(Field):
@@ -147,7 +164,9 @@ class FieldMap(object):
     ScalarFields = {
         'int': IntField,
         'string': StrField,
-        'ip': IPField,
+        'ip': IPv4Field,
+        'ipv4': IPv4Field,
+        'ipv6': IPv6Field,
     }
 
     VectorFields = {

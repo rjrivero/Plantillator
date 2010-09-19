@@ -22,11 +22,11 @@ def simple_check_ip(ip, socket=socket):
     try:
         ip, mask = ip.split("/")
         if ":" in ip:
-            socket.inet_pton(socket.AF_INET6, ip)
-            assert(int(mask) <= 128)
+            af, ml = socket.AF_INET6, 128
         else:
-            socket.inet_pton(socket.AF_INET, ip)
-            assert(int(mask) <= 32)
+            af, ml = socket.AF_INET, 32
+        socket.getaddrinfo(ip, None, af, 0, 0, socket.AI_NUMERICHOST)
+        assert(int(mask) <= ml)
     except (socket.error, AssertionError):
         raise ValueError(ip)
 
