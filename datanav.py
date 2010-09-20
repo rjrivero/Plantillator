@@ -171,11 +171,20 @@ def shelf_wrapper(fname):
     finally:
         loader.close()
 
+def force_process(meta):
+    meta.process()
+    for submeta in meta.subtypes.values():
+        force_process(submeta)
+
 try:
     if options.profile and os.path.isfile(shelfname):
         os.unlink(shelfname)
     with shelf_wrapper(shelfname) as dataloader:
         data = dataloader.data
+        # me aseguro de instanciar todas las sublistas, que
+        # pueden no estarlo.
+        if not options.profile:
+            force_process(data['_meta'])
     # Cosas muy feas... no se por que, esto funciona:
     #
     # def test():

@@ -15,9 +15,11 @@ from optparse import OptionParser
 from itertools import chain
 from traceback import print_exc, format_exception_only, extract_tb, format_list
 
-from plantillator.engine import ParseError, CommandError
-from plantillator import ParseError as NewParseError
-from plantillator import DataError, TemplateError, Plantillator, Consumer
+#from plantillator.engine import ParseError, CommandError
+#from plantillator import ParseError as NewParseError
+#from plantillator import DataError, TemplateError, Plantillator, Consumer
+
+from plantillator import DataError, ParseError, TemplateError, Consumer
 
 
 VERSION           = "0.5"
@@ -64,9 +66,9 @@ parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
 parser.add_option("-k", "--keep_comments",
         action="store_true", dest="keep_comments", default=False,
         help="Conserva los comentarios de la plantilla")
-parser.add_option("-n", "--new-engine",
-        action="store_true", dest="new_engine", default=False,
-        help="Activa el nuevo motor de plantillas")
+#parser.add_option("-n", "--new-engine",
+#        action="store_true", dest="new_engine", default=False,
+#        help="Activa el nuevo motor de plantillas")
 
 (options, args) = parser.parse_args()
 if len(args) < 1 and not options.shell:
@@ -191,7 +193,8 @@ def exit_with_errors(errlist, exc_info):
 
 
 # y cargo a PLANTILLATOR!
-plantillator = Plantillator() if not options.new_engine else Consumer()
+# plantillator = Plantillator() if not options.new_engine else Consumer()
+plantillator = Consumer()
 plantillator.path = path
 plantillator.outpath = options.outpath
 plantillator.collapse = options.collapse
@@ -228,17 +231,18 @@ try:
             if hitcount <= 1:
                 break
 
-except CommandError as detail:
+#except CommandError as detail:
 
-    for msg in format_exception_only(sys.exc_type, sys.exc_value):
-        sys.stderr.write(str(msg))
-    if options.debug:
-        print_exc(file=sys.stderr)
-        detail.data['error'] = detail
-        code.interact("Consola de depuracion", local={'data':detail.data})
-    sys.exit(TRANSLATION_ERRNO)
+    #for msg in format_exception_only(sys.exc_type, sys.exc_value):
+        #sys.stderr.write(str(msg))
+    #if options.debug:
+        #print_exc(file=sys.stderr)
+        #detail.data['error'] = detail
+        #code.interact("Consola de depuracion", local={'data':detail.data})
+    #sys.exit(TRANSLATION_ERRNO)
 
-except NewParseError as details:
+#except NewParseError as details:
+except ParseError as details:
 
     errlist, inner = list(), details.exc_info[1]
     if hasattr(inner, "filename") and hasattr(inner, "lineno"):
@@ -261,7 +265,8 @@ except TemplateError as details:
                 add_error(errlist, template[1].translated, filename, lineno)
     exit_with_errors(errlist, details.exc_info)
 
-except (ParseError, TemplateError, DataError) as detail:
+#except (ParseError, TemplateError, DataError) as detail:
+except DataError as detail:
 
     for msg in format_exception_only(sys.exc_type, sys.exc_value):
         sys.stderr.write(str(msg))

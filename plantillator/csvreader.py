@@ -25,11 +25,13 @@ class CSVMeta(Meta):
         super(CSVMeta, self).__init__(parent)
         self.path = path
         self.subtypes = dict()
+        self.blocks = list()
 
     def __getstate__(self):
-        # una vez procesado, la lista de subtipos ya no es necesaria.
-        self.subtypes = None
-        return self.__dict__
+        """Guardo todo menos el rootset, que se recrea cada vez"""
+        state = dict(self.__dict__)
+        state['rootset'] = None
+        return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -42,6 +44,12 @@ class CSVMeta(Meta):
             submeta = CSVMeta(".".join((self.path, name)), self)
             self.fields[name] = CSVDataSetField(submeta)
             return self.subtypes.setdefault(name, submeta)
+
+    def process(self):
+        if hasattr(self, "blocks"):
+            for blk in self.blocks:
+                blk.process(self.rootset)
+            del(self.blocks)
 
 
 def flip(self):
@@ -83,9 +91,13 @@ class CSVPeerSet(PeerSet):
 
 class CSVDataSetField(DataSetField):
 
-    """Crea objetos de tipo CSVDataSet"""
     def _new(self, items=None, indexable=True):
+        """Crea objetos de tipo CSVDataSet"""
         return CSVDataSet(self.meta, items, indexable)
+
+    def collect(self, dset, attrib):
+        self.meta.process()
+        return super(CSVDataSetField, self).collect(dset, attrib)
 
 
 class CSVRow(object):
@@ -175,7 +187,7 @@ class ColumnList(object):
         """Devuelve el nivel de anidamiento de la tabla"""
         return len(self.path)
 
-    def _prepare(self, meta):
+    def prepare(self, meta, block):
         """Prepara la carga de datos, analizando el path"""
         # Creo o accedo al meta y le inserto los nuevos campos.
         # Lo hago en esta fase y no en el constructor, porque aqui
@@ -188,6 +200,7 @@ class ColumnList(object):
         meta.summary = tuple(c.colname for c in self.attribs)[:3]
         for col in self.attribs:
             meta.fields[col.colname] = col.coltype
+        meta.blocks.append(block)        
         self.meta = meta
         # Creo una pila de operaciones, que filtra el dataset raiz
         # hasta llegar al punto donde tengo que insertar los datos.
@@ -272,21 +285,25 @@ class TableBlock(ColumnList):
                 coltype = FieldMap.resolve(coltype)
                 yield Column(index, selector, coltype, colname)
 
-    def process(self, data):
+    def prepare(self, rootmeta):
+        """Prepara los datos para su proceso"""
+        super(TableBlock, self).prepare(rootmeta, self)
+
+    def process(self, rootset):
         """Procesa las lineas del bloque actualizando los datos.
 
         En caso de excepcion al procesar los objetos, la excepcion se
         lanza envuelta en un DataError.
         """
-        rootset = CSVDataSet(data._meta, (data,))
         source, lineno = self.source, self.index
         try:
-            self._prepare(data._meta)
             for row in CSVRow.normalize(self.body, self.columns):
                 lineno = row.lineno
                 self._addrow(row.cols, rootset)
         except:
             raise DataError(source, lineno)
+        finally:
+            self.body = tuple() # para que no se vuelva a ejecutar
 
 
 class LinkBlock(object):
@@ -397,36 +414,28 @@ class LinkBlock(object):
                 for subdemux in self._demux(columns):
                     yield tuple(chain((newcol,), subdemux))
 
-    def process(self, data):
-        """Procesa los datos.
-
-        En caso de excepcion al procesar los objetos, la excepcion se
-        lanza envuelta en un DataError.
-        """
+    def prepare(self, rootmeta):
+        """Prepara los datos para el posterior procesamiento"""
         # Preparo los grupos y descarto los que correspondan a paths
         # no validos.
-        meta, valid = data._meta, set()
-        source, lineno = self.source, self.index
-        try:
-            for group in self.groups:
-                # Preparo cada uno de los bloques
-                try:
-                    group._prepare(meta)
-                except IndexError:
-                    # Este error se lanza cuando el path es invalido.
-                    # Como cada columna puede tener selectores
-                    # combinados, es posible que al demultiplexar haya
-                    # creado una combinacion invalida... asi que
-                    # simplemente la ignoro.
-                    pass
-                else:
-                    valid.add(group)
-            # Si no hay combinaciones validas, habra que lanzar un
-            # error, digo yo...
-            if not valid:
-                raise SyntaxError("Ningun enlace valido")
-        except:
-            raise DataError(source, lineno)
+        valid = set()
+        for group in self.groups:
+            # Preparo cada uno de los bloques
+            try:
+                group.prepare(rootmeta, self)
+            except IndexError:
+                # Este error se lanza cuando el path es invalido.
+                # Como cada columna puede tener selectores
+                # combinados, es posible que al demultiplexar haya
+                # creado una combinacion invalida... asi que
+                # simplemente la ignoro.
+                pass
+            else:
+                valid.add(group)
+        # Si no hay combinaciones validas, habra que lanzar un
+        # error, digo yo...
+        if not valid:
+            raise SyntaxError("Ningun enlace valido")
         # A cada grupo valido le incluyo un sub-atributo:
         # - si solo hay dos grupos, el sub-atributo es "PEER"
         # - si hay mas de dos grupos, el subatributo es "PEERS"
@@ -452,8 +461,12 @@ class LinkBlock(object):
             # puede utilizar "FLIP" para cambiarla.
             group.meta.fields["POSITION"] = IntField(indexable=False)
             group.meta.fields[attrib] = ObjectField()
-        # Y ahora, voy procesando linea a linea
-        rootset = CSVDataSet(meta, (data,))
+        self.groups = valid
+
+    def process(self, rootset):
+        source, lineno = self.source, self.index
+        valid, attrib  = self.groups, "PEER"
+        # attrib = "PEER" if self.p2p else "PEERS"
         try:
             for row in CSVRow.normalize(self.body, self.columns):
                 lineno = row.lineno # por si lanzo excepcion
@@ -480,6 +493,8 @@ class LinkBlock(object):
                             setattr(item, attrib, peers)
         except:
             raise DataError(source, lineno)
+        finally:
+            self.body = tuple() # para que no se vuelva a ejecutar
 
     @property
     def depth(self):
@@ -502,6 +517,7 @@ class CSVSource(FileSource):
         return self._split(rows)        
 
     def _clean(self, lines, delimiter):
+        """Elimina las columnas comentario o vacias"""
         """Elimina las columnas comentario o vacias"""
         reader = csv.reader(lines, delimiter=delimiter)
         for lineno, row in enumerate(reader):
@@ -577,13 +593,27 @@ class CSVShelf(object):
                 if not fnames.symmetric_difference(snames):
                     if all(files[name] <= sfiles[name] for name in fnames):
                         # Todo correcto, los datos estan cargados
-                        self.data = dict(self.shelf[CSVShelf.DATA])
+                        backup = self.shelf[CSVShelf.DATA]
+                        # Convierto lo almacenado en el shelf en un DataObject
+                        meta = backup['_meta']
+                        data = DataObject(meta)
+                        # Le actualizo los datos y construyo el rootset
+                        data.__dict__.update(backup)
+                        self._add_rootset(meta, CSVDataSet(meta, (data,)))
+                        # Y me quedo solo con el diccionario, lo demas
+                        # me sobra.
+                        self.data = dict(data.__dict__)
                         return
         except:
             pass
         # Si el pickle falla o no es completo, recargamos los datos
         # (cualquiera que sea el error)
         self._update(files)
+
+    def _add_rootset(self, rootmeta, rootset):
+        rootmeta.rootset = rootset
+        for submeta in rootmeta.subtypes.values():
+            self._add_rootset(submeta, rootset)
 
     def _findcsv(self, dirname):
         """Encuentra todos los ficheros CSV en el path"""
@@ -596,10 +626,19 @@ class CSVShelf(object):
         """Procesa los datos y los almacena en el shelf"""
         nesting = self._read_blocks(files)
         meta = CSVMeta("", None)
-        data = DataObject(meta)
         for depth in sorted(nesting.keys()):
             for item in nesting[depth]:
-                item.process(data)
+                try:
+                    item.prepare(meta)
+                except:
+                    raise DataError(item.id, item.index)
+        # ejecuto la carga de datos (solo de las tablas de primer nivel,
+        # el resto se carga bajo demanda)
+        data = DataObject(meta)
+        rset = CSVDataSet(meta, (data,))
+        self._add_rootset(meta, rset)
+        for subtype in meta.subtypes.values():
+            subtype.process()
         # Proceso la tabla de variables
         self._set_vars(data)
         # OK, todo cargado... ahora guardo los datos en el shelf.
