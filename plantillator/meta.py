@@ -468,7 +468,6 @@ class DataSet(object):
     def __init__(self, meta, children=None, indexable=True):
         self._meta = meta
         self._children = set(children) if children is not None else set()
-        self._indexes = dict()
         self._indexable = indexable
 
     def __getstate__(self):
@@ -480,7 +479,6 @@ class DataSet(object):
         self._meta = state[0]
         self._children = state[1]
         self._indexable = True
-        self._indexes = dict()
 
     def _new(self, items=None, indexable=False):
         return DataSet(self._meta, items, indexable)
@@ -525,52 +523,58 @@ class DataSet(object):
 
     def _best_index(self, keys, dummy=tuple()):
         """Devuelve el atributo con el indice mas granular"""
-        index = None
         try:
             bestidx = self._bestidx[keys]
-            if bestidx:
-                # Si hay un resultado, el indice siempre tiene que
-                # existir.
-                index = self._indexes[bestidx]
-        except (AttributeError, KeyError):
-            def key(item, dummy=tuple()):
-                """Los atributos se compararan por la longitud del indice"""
-                return -len(self._indexes.get(item, dummy))
-            valid   = (k for (k, v) in self._meta.fields.iteritems()
-                         if v.indexable)
-            bestidx = sorted(keys.intersection(valid), key=key) or None
-            # Si alguno de los indices es valido, lo recupero.
-            if bestidx:
-                bestidx = bestidx[0]
-                # Obtengo el indice antes de cachear la decision, porque
-                # _index puede borrar el diccionario _bestidx si el indice
-                # no existia.
-                index = self._index(bestidx)
-            # y cacheo la decision.
-            self._bestidx[keys] = bestidx
+            index   = self._indexes[bestidx] if bestidx else None
+            return (bestidx, index)
+        except AttributeError:
+            self._indexes = dict()
+            self._bestidx = dict()
+        except KeyError:
+            pass
+        def key(item, dummy=tuple()):
+            """Los atributos se compararan por la longitud del indice"""
+            return -len(self._indexes.get(item, dummy))
+        valid   = (k for (k, v) in self._meta.fields.iteritems()
+                     if v.indexable)
+        bestidx = sorted(keys.intersection(valid), key=key) or None
+        index   = None
+        # Si alguno de los indices es valido, lo recupero.
+        if bestidx:
+            bestidx = bestidx[0]
+            # Obtengo el indice antes de cachear la decision, porque
+            # _index puede borrar el diccionario _bestidx si el indice
+            # no existia.
+            index = self._index(bestidx)
+        # y cacheo la decision.
+        self._bestidx[keys] = bestidx
         return (bestidx, index)
 
     def _index(self, attr):
         """Devuelve un indice sobre el campo indicado, si es indexable"""
         try:
             return self._indexes[attr]
+        except AttributeError:
+            self._indexes = dict()
+            self._bestidx = dict()
         except KeyError:
-            field = self._meta.fields[attr]
-            if not field.indexable:
-                # El field puede ser un DataSet o un BaseSet, que no se
-                # pueden comparar con las funciones _eq y _ne de los indices
-                # porque no se va a comparar igualdad, sino longitud.
-                index = None
+            pass
+        field = self._meta.fields[attr]
+        if not field.indexable:
+            # El field puede ser un DataSet o un BaseSet, que no se
+            # pueden comparar con las funciones _eq y _ne de los indices
+            # porque no se va a comparar igualdad, sino longitud.
+            index = None
+        else:
+            if self._indexable:
+                # Borro bestidx para que se vuelva a recalcular, ahora que
+                # hay indices nuevos.
+                self._bestidx = dict()
+                indextype = Index
             else:
-                if self._indexable:
-                    # Borro bestidx para que se vuelva a recalcular, ahora que
-                    # hay indices nuevos.
-                    self._bestidx = dict()
-                    indextype = Index
-                else:
-                    indextype = Linear
-                index = indextype(self._children, attr)
-            return self._indexes.setdefault(attr, index)
+                indextype = Linear
+            index = indextype(self._children, attr)
+        return self._indexes.setdefault(attr, index)
 
     class Indexer(object):
         def __init__(self, dataset):

@@ -66,15 +66,15 @@ class CSVDataSet(DataSet):
         return CSVDataSet(self._meta, items, indexable)
 
     def update(self, items):
-        assert(not self._indexes)
+        assert(not hasattr(self, '_indexes'))
         self._children.update(items)
 
     def add(self, item):
-        assert(not self._indexes)
+        assert(not hasattr(self, '_indexes'))
         self._children.add(item)
 
     def pop(self):
-        assert(not self._indexes)
+        assert(not hasattr(self, '_indexes'))
         item = self._children.pop()
 
 
