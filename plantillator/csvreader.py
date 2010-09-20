@@ -45,11 +45,14 @@ class CSVMeta(Meta):
             self.fields[name] = CSVDataSetField(submeta)
             return self.subtypes.setdefault(name, submeta)
 
-    def process(self):
+    def process(self, lazy=True):
         if hasattr(self, "blocks"):
             for blk in self.blocks:
                 blk.process(self.rootset)
             del(self.blocks)
+            if not lazy:
+                for subtype in self.subtypes.values():
+                    subtype.process(lazy)
 
 
 def flip(self):
@@ -569,7 +572,7 @@ class CSVShelf(object):
         self.shelf = shelf
         self.dirty = False
 
-    def set_datapath(self, datapath):
+    def set_datapath(self, datapath, lazy=True):
         """Busca todos los ficheros CSV en el path.
 
         Compara la lista de ficheros encontrados con la
@@ -608,7 +611,7 @@ class CSVShelf(object):
             pass
         # Si el pickle falla o no es completo, recargamos los datos
         # (cualquiera que sea el error)
-        self._update(files)
+        self._update(files, lazy)
 
     def _add_rootset(self, rootmeta, rootset):
         rootmeta.rootset = rootset
@@ -622,7 +625,7 @@ class CSVShelf(object):
         files = (f for f in files if os.path.isfile(f))
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
-    def _update(self, files):
+    def _update(self, files, lazy=True):
         """Procesa los datos y los almacena en el shelf"""
         nesting = self._read_blocks(files)
         meta = CSVMeta("", None)
@@ -638,7 +641,7 @@ class CSVShelf(object):
         rset = CSVDataSet(meta, (data,))
         self._add_rootset(meta, rset)
         for subtype in meta.subtypes.values():
-            subtype.process()
+            subtype.process(lazy)
         # Proceso la tabla de variables
         self._set_vars(data)
         # OK, todo cargado... ahora guardo los datos en el shelf.

@@ -135,6 +135,9 @@ parser.add_option("-d", "--debug",
 parser.add_option("-x", "--profile",
         action="store_true", dest="profile", default=False,
         help="Ejecutar en modo profile (solo carga datos)")
+parser.add_option("-l", "--lazy",
+        action="store_true", dest="lazy", default=False,
+        help="Demora parte del proceso de los datos CSV a tiempo de ejecucion")
 
 (options, args) = parser.parse_args()
 
@@ -165,7 +168,7 @@ except IndexError:
 @contextmanager
 def shelf_wrapper(fname):
     loader = ShelfLoader(shelfname)
-    loader.set_datapath(path)
+    loader.set_datapath(path, options.lazy)
     try:
         yield loader
     finally:

@@ -58,14 +58,17 @@ parser.add_option("-d", "--debug",
 parser.add_option("-s", "--shell",
         action="store_true", dest="shell", default=False,
         help="Carga los datos y entra en un interprete de comandos")
-parser.add_option("-l", "--loop",
-        action="store_true", dest="loop", default=False,
+parser.add_option("-t", "--test-mode",
+        action="store_true", dest="test", default=False,
         help="Itera sobre todos los posibles valores de los 'SELECT'")
 parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
         help="Extension del fichero resultado (por defecto, .cfg)")
 parser.add_option("-k", "--keep_comments",
         action="store_true", dest="keep_comments", default=False,
         help="Conserva los comentarios de la plantilla")
+parser.add_option("-l", "--lazy",
+        action="store_true", dest="lazy", default=False,
+        help="Demora parte del proceso de los datos CSV a tiempo de ejecucion")
 #parser.add_option("-n", "--new-engine",
 #        action="store_true", dest="new_engine", default=False,
 #        help="Activa el nuevo motor de plantillas")

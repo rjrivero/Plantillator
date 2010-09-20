@@ -29,7 +29,8 @@ class Consumer(object):
         'definitions': [],
         'inputfiles': [],
         'ext': ".cfg",
-        'loop': False,
+        'test': False,
+        'lazy': False,
     }
 
     def __init__(self):
@@ -45,7 +46,7 @@ class Consumer(object):
         self.tmplname = template
         self.loader = ShelfLoader(datashelf)
         try:
-            self.loader.set_datapath(self.path)
+            self.loader.set_datapath(self.path, self.lazy)
             self.loader.set_tmplpath(self.path)
             self.maker = ContextMaker(self.outpath, self.ext, self.collapse, self.overwrite)
             self.actor = Interactor()
@@ -148,7 +149,7 @@ class Consumer(object):
         for key, items in kw.iteritems():
             if key in self._pending.data:
                 continue
-            if not self.loop:
+            if not self.test:
                 item = self.actor.select(items, sort)
             else:
                 item = self.actor.exhaust(items)

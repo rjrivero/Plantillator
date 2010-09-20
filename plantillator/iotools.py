@@ -77,9 +77,9 @@ class ShelfLoader(CSVShelf):
         """Prepara la carga de plantillas del path"""
         self.path = PathFinder(tmplpath)
 
-    def set_datapath(self, datapath):
+    def set_datapath(self, datapath, lazy=True):
         """ejecuta la carga de datos"""
-        super(ShelfLoader, self).set_datapath(datapath)
+        super(ShelfLoader, self).set_datapath(datapath, lazy)
         self.data.update(self.glob)
 
     def add_symbols(self, symbols):
