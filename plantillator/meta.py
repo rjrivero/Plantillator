@@ -32,15 +32,6 @@ class DataError(Exception):
         self.index = index
         self.exc_info = sys.exc_info()
 
-    def __str__(self):
-        return "".join(chain(
-            ("DataError: Error en %s [%s]\n" % (str(self.source), str(self.index)),),
-            traceback.format_exception(*(self.exc_info))
-            ))
-
-    def __repr__(self):
-        return "DataError(%s[%s], %s)" % (repr(self.source), repr(self.index), repr(self.exc_info))
-
 
 def matches(item, crit, symbol=SYMBOL_SELF):
     """Comprueba si un objeto cumple un criterio.
@@ -56,18 +47,51 @@ def matches(item, crit, symbol=SYMBOL_SELF):
 
 
 class BaseSet(frozenset):
+    
     # Tienen que ser todo clases globales, por pickle, y ademas
     # frozen, para que se puedan hashear.
+
     def __pos__(self):
         assert(len(self) == 1)
         return tuple(self)[0]
+
     def __call__(self, *arg):
         return BaseSet(x for x in self if matches(x, arg))
+
     def __add__(self, other):
         return BaseSet(chain(self, other))
+
     @property
     def PLAIN(self):
         return BaseSet(chain(*self))
+
+    class Tester(object):
+        def __init__(self, data):
+            self._data = data
+        def __getattr__(self, attr):
+            if attr.startswith("_"):
+                raise AttributeError(attr)
+            return attr in self._data
+        def __call__(self, item):
+            return item in self._data
+
+    class TesterNot(object):
+        def __init__(self, data):
+            self._data = data
+        def __getattr__(self, attr):
+            if attr.startswith("_"):
+                raise AttributeError(attr)
+            return attr not in self._data
+        def __call__(self, item):
+            return item not in self._data
+
+    @property
+    def HAS(self):
+        return BaseSet.Tester(self)
+
+    @property
+    def HASNOT(self):
+        return BaseSet.TesterNot(self)
 
 
 class BaseList(tuple):
@@ -80,6 +104,12 @@ class BaseList(tuple):
         return BaseList(x for x in self if matches(x, arg))
     def __add__(self, other):
         return BaseList(chain(self, other))
+    @property
+    def HAS(self):
+        return BaseSet.Tester(self)
+    @property
+    def HASNOT(self):
+        return BaseSet.TesterNot(self)
 
 
 class Field(object):
@@ -210,6 +240,8 @@ class DataObject(object):
             if attr.startswith("_"):
                 raise AttributeError(attr)
             return attr in self._data
+        def __call__(self, item):
+            return attr in self._data
         def __init__(self, data, pos=True):
             self._data = data.__dict__
 
@@ -217,6 +249,8 @@ class DataObject(object):
         def __getattr__(self, attr):
             if attr.startswith("_"):
                 raise AttributeError(attr)
+            return attr not in self._data
+        def __call__(self, item):
             return attr not in self._data
         def __init__(self, data, pos=True):
             self._data = data.__dict__
@@ -244,6 +278,16 @@ class DataObject(object):
         """Itero sobre los elementos del objeto"""
         return (x for x in self.__dict__.iteritems()
             if x[1] is not None and not x[0].startswith("_"))
+
+    def copy(self, new_meta=None, new_parent=None):
+        """Para poder clonar objetos, hacer PEERs, etc"""
+        new_meta   = new_meta or self._meta
+        new_parent = new_parent or self.up
+        obj = DataObject(new_meta)
+        # cuidado con el update, que machaca tambien _meta y up
+        obj.__dict__.update(self.__dict__)
+        obj._meta, obj.up = new_meta, new_parent
+        return obj
 
 
 class Fallback(dict):

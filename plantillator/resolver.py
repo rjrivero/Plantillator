@@ -73,19 +73,19 @@ class Resolver(object):
 
     def __lt__(self, other): 
         # mini-especializacion: cuando se compara con un literal de
-        # cadena, menor significa "endswith")
+        # cadena, menor significa "not startswith")
         if isinstance(other, basestring):
             def operation(this, other):
-                return this.lower().endswith(other)
+                return not this.lower().startswith(other)
             return LogicalResolver(self, other.lower(), operation)
         return LogicalResolver(self, other, operator.lt)
 
     def __le__(self, other):
         # mini-especializacion: cuando se compara con un literal de
-        # cadena, menor significa "endswith")
+        # cadena, menor significa "not startswith")
         if isinstance(other, basestring):
             def operation(this, other):
-                return this.lower().endswith(other)
+                return not this.lower().startswith(other)
             return LogicalResolver(self, other.lower(), operation)
         return LogicalResolver(self, other, operator.le)
 

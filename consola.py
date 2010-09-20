@@ -125,7 +125,7 @@ def select_handler(opcode, command, glob, data):
 
 
 def break_handler(opcode, command, glob, data):
-    if options.debug and not options.loop:
+    if options.debug and not options.test:
         code.interact("Breakpoint %s" % (command.breakpoint or "<>"),
                       local={'glob': glob, 'data':data})
 
@@ -159,7 +159,7 @@ def handle(item):
     """Gestiona los comandos lanzados por el proceso de rendering"""
     global options
     handlers = {
-            "SELECT": select_handler if not options.loop else loop_select,
+            "SELECT": select_handler if not options.test else loop_select,
             "BREAK": break_handler,
     }
     handler = handlers.get(item.opcode, None)
@@ -215,7 +215,7 @@ try:
         local.update(plantillator.dataloader.data)
         code.interact("Shell de pruebas", local=local)
         exit(0)
-    if not options.loop:
+    if not options.test:
         for item in plantillator.render():
             handle(item)
     else:
