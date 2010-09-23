@@ -137,7 +137,7 @@ class Consumer(object):
         tmplid, template = self.loader.get_template(fname, self._pending.tmplid)
         self._queue.append(self._pending.dup(tmplid, template, outname))
 
-    def SELECT(self, sort=False, **kw):
+    def SELECT(self, sort=True, **kw):
         """Pide al usuario que seleccione elementos.
 
         Los argumentos opcionales son pares "nombre"="lista". La funcion

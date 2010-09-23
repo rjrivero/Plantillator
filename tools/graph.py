@@ -1,21 +1,47 @@
 #!/usr/bin/env python
 
 
+from copy import copy
 from collections import namedtuple, defaultdict
-from itertools import chain
+from itertools import chain, groupby, izip
 
 from plantillator.meta import SYMBOL_SELF
 
 
-# Descriptor de un elemento del grafo, bien un nodo o bien
-# un extremo de un enlace.
-ItemDescriptor = namedtuple("ItemDescriptor", "ID, label, attribs")
-
-
 # Estilos de linea
-LINK_SOLID  = 0
-LINK_DOTTED = 1
-LINK_DASHED = 2
+LINK_SOLID  = "solid"
+LINK_DOTTED = "dotted"
+LINK_DASHED = "dashed"
+
+
+class ItemDescriptor(object):
+
+    """
+    Descriptor de un elemento del grafo, bien un nodo o bien
+    un extremo de un enlace.
+    """
+
+    __slots__ = ("ID", "label", "attribs", "objID")
+
+    def __init__(self, objID, ID, label, attribs):
+        self.ID = ID
+        self.label = label
+        self.attribs = attribs or dict()
+        self.objID = objID
+
+    def update(self, other):
+        self.label = other.label
+        self.attribs.update(other.attribs)
+
+
+class LinkDescriptor(tuple):
+
+    """Descriptor de un enlace, combina los descriptores de ambos extremos"""
+
+    def __new__(cls, objID, src_desc, dst_desc):
+        obj = super(LinkDescriptor, cls).__new__(cls, (src_desc, dst_desc))
+        obj.objID = objID
+        return obj
 
 
 class OrderedFSet(tuple):
@@ -53,35 +79,32 @@ class StringWrapper(tuple):
         return self[0]
 
 
-class NodeList(tuple):
+class NodeProperties(object):
 
-    """Lista de nodos con atributos comunes"""
+    """Propiedades comunes de un grupo de nodos"""
 
-    def __new__(cls, items, id_resolver, label_resolver,
-                shape=None, rank=None, attribs=None):
+    DEFAULTS = {
+        "rank":  None,
+        "shape": None,
+    }
+
+    def __init__(self, attribs=None, **kw):
         """"Construye un grupo de nodos con atributos comunes.
         
-        items:      Nodos que forman el grupo
-        item_id:    Resolver que obtiene el ID de cada nodo
-        item_label: Resolver que obtiene el label de cada nodo.
         shape:      Nombre del icono que debe tener el objeto.
         rank:       Rango jerarquico del objeto (para dot, principalmente)
         attribs:    Nombres de los atributos que se exportaran.
         """
-        obj = super(NodeList, cls).__new__(cls, NodeList._process(
-            items, id_resolver, label_resolver, attribs))
-        obj.attribs = attribs
-        obj.IDs = frozenset(x.ID for x in obj)
-        obj.shape = shape
-        obj.rank = rank
-        return obj
+        self.attribs = attribs
+        for key, val in NodeProperties.DEFAULTS.iteritems():
+            setattr(self, key, kw.get(key, val))
 
     @staticmethod
-    def _process(items, id_resolver, label_resolver, attribs):
+    def process(items, id_resolver, label_resolver, attribs):
         """Itera sobre los objetos, devolviendo tuplas.
         
-        Las tuplas que devuelve contienen:
-        (ID, label, shape, { attribs })
+        Las tuplas que devuelve son ItemDescriptors:
+        ItemDescriptor(ID, label, { attribs })
         """
         for item in items:
             # Obtengo el ID y el label de cada atributo desde el resolver
@@ -95,67 +118,79 @@ class NodeList(tuple):
             else:
                 values = None
             # y devuelvo el descriptor
-            yield ItemDescriptor(ID, label, values)
+            yield ItemDescriptor(id(item), ID, label, values)
+
+    def combine(self, new_props, **kw):
+        """Crea un nuevo objeto con las propiedades combinadas"""
+        # Copio este objeto, y le agrego los atributos nuevos
+        anew = copy(self)
+        anew.attribs = OrderedFSet(chain(anew.attribs, new_props.attribs))
+        # Machaco todos los parametros existentes con los nuevos
+        defaults = NodeProperties.DEFAULTS
+        for key, val in kw.iteritems():
+            if key in defaults:
+                setattr(anew, key, val)
+        return anew
 
 
-class LinkList(tuple):
-    
-    """Lista de enlaces con atributos comunes"""
+class NodeList(tuple):
 
-    def __new__(cls, items,
-        src_id, src_label, src_attribs,
-        dst_id, dst_label, dst_attribs,
-        style=LINK_SOLID, width=1, color="#000000"):
+    """Lista de nodos con atributos comunes"""
+
+    def __new__(cls, properties, descriptors):
+        """"Construye un grupo de nodos con atributos comunes"""
+        obj = super(NodeList, cls).__new__(cls, descriptors)
+        obj.__dict__.update(properties.__dict__)
+        obj.IDs = frozenset(x.ID for x in descriptors)
+        return obj
+
+
+class LinkProperties(object):
+
+    """Propiedades comunes a un grupo de enlaces"""
+
+    DEFAULTS = {
+        "style": LINK_SOLID,
+        "width": 1,
+        "color": "#000000",
+    }
+
+    def __init__(self, src_attribs, dst_attribs, **kw):
         """"Construye un grupo de enlaces con atributos comunes.
         
-        items:       Nodos que forman el grupo
-        src_id:      Resolver que obtiene el ID del nodo padre del enlace
-        dst_id:      Resolver que obtiene el ID del nodo padre del PEER
-        src_label:   Resolver que obtiene el label del nodo padre del enlace
-        dst_label:   Resolver que obtiene el label del nodo padre del PEER
         src_attribs: Lista de atributos del nodo origen.
         dst_attribs: Lista de atributos del nodo destino.
         """
-        obj = super(LinkList, cls).__new__(cls, LinkList._process(
-            items,
-            src_id, src_label, src_attribs,
-            dst_id, dst_label, dst_attribs))
-        # Antes metia los atributos "origen" y "destino" a todos los enlaces.
-        # Ahora prefiero un atributo "description" de yEd, donde pongo 
-        # "%s --> %s" % (origen, destino)
-        # attribs = ["origen", "destino"]
         attribs = list()
         if src_attribs:
             attribs.extend("%s%s" % ("src_", attrib) for attrib in src_attribs)
         if dst_attribs:
             attribs.extend("%s%s" % ("dst_", attrib) for attrib in dst_attribs)
-        obj.style = style
-        obj.width = width
-        obj.color = color
-        obj.attribs = OrderedFSet(attribs)
-        return obj
+        self.attribs = OrderedFSet(attribs)
+        for key, val in LinkProperties.DEFAULTS.iteritems():
+            setattr(self, key, kw.get(key, val))
 
     @staticmethod
-    def _process(items, src_id, src_label, src_attribs, dst_id, dst_label, dst_attribs):
+    def process(items,
+        src_id, src_label, src_attribs,
+        dst_id, dst_label, dst_attribs):
         """Itera sobre los objetos, devolviendo tuplas.
         
-        Las tuplas que devuelve contienen un ItemDescriptor para el
-        origen y otro para el destino.
+        Las tuplas que devuelve contienen itemdescriptors:
+        - un ItemDescriptor para el origen.
+        - un ItemDescriptor para el destino.
         """
-        for item in items:
+        for item in (x for x in items if x._get("PEER")):
             # Obtengo el ID y el label de cada atributo desde el resolver
             src_table = { SYMBOL_SELF: item.up }
-            src_desc  = LinkList._descriptor(
+            src_desc  = LinkProperties._descriptor(
                 item, src_table,
                 src_id, src_label, src_attribs, "src_")
-            if item._get("PEER"):
-                dst_table = { SYMBOL_SELF: item.PEER.up }
-                dst_desc  = LinkList._descriptor(
-                    item.PEER, dst_table,
-                    dst_id, dst_label, dst_attribs, "dst_")
-            else:
-                dst_desc = None
-            yield (src_desc, dst_desc)
+            dst_table = { SYMBOL_SELF: item.PEER.up }
+            dst_desc  = LinkProperties._descriptor(
+                item.PEER, dst_table,
+                dst_id, dst_label, dst_attribs, "dst_")
+            yield LinkDescriptor(id(item), src_desc, dst_desc)
 
     @staticmethod
     def _descriptor(link, symbols, id_resolver, label_resolver, attribs, prefix):
@@ -167,18 +202,50 @@ class LinkList(tuple):
             values = dict((x, y) for (x, y) in values if y is not None)
         else:
             values = None
-        return ItemDescriptor(ID, label, values)
+        return ItemDescriptor(None, ID, label, values)
+
+    def combine(self, new_props, **kw):
+        """Crea un nuevo objeto con las propiedades combinadas"""
+        # Copio este objeto, y le agrego los atributos nuevos
+        anew = copy(self)
+        anew.attribs = OrderedFSet(chain(anew.attribs, new_props.attribs))
+        # Machaco todos los parametros existentes con los nuevos
+        defaults = LinkProperties.DEFAULTS
+        for key, val in kw.iteritems():
+            if key in defaults:
+                setattr(anew, key, val)
+        return anew
+
+
+class LinkList(tuple):
+    
+    """Lista de enlaces con atributos comunes"""
+
+    def __new__(cls, properties, descriptors):
+        """"Construye un grupo de enlaces con atributos comunes"""
+        obj = super(LinkList, cls).__new__(cls, descriptors)
+        obj.__dict__.update(properties.__dict__)
+        return obj
 
     def valid_links(self, IDs):
         return (link for link in self
-                     if link[1] is not None
-                     and link[0].ID in IDs
+                     if  link[0].ID in IDs
                      and link[1].ID in IDs
         )
 
 
-class NodeGroup(list):
+class NodeGroup(tuple):
 
+    """Lista de NodeLists pertenecientes a un mismo grupo"""
+
+    def __new__(cls, nodes):
+        def key(node):
+            return node.properties
+        def group():
+            for prop, subnodes in groupby(sorted(nodes, key=key), key):
+                yield NodeList(prop, (x.descriptor for x in subnodes))
+        return super(NodeGroup, cls).__new__(cls, group())
+            
     @property
     def attribs(self):
         return OrderedFSet(chain(*(x.attribs for x in self if x.attribs)))
@@ -190,6 +257,41 @@ class NodeGroup(list):
     @property
     def shapes(self):
         return frozenset(x.shape for x in self)
+
+
+class Node(object):
+
+    """Representa un nodo del grafo"""
+    
+    __slots__ = ("group", "properties", "descriptor")
+    
+    def __init__(self, group, properties, descriptor):
+        self.group = group
+        self.properties = properties
+        self.descriptor = descriptor
+
+    def update(self, new_node, new_properties):
+        """Actualiza el link con los nuevos datos y propiedades"""
+        self.descriptor.update(new_node.descriptor)
+        self.properties = new_properties
+
+
+class Link(object):
+
+    """Representa un enlace del grafo"""
+
+    __slots__ = ("properties", "descriptor")
+
+    def __init__(self, properties, descriptor):
+        self.properties = properties
+        self.descriptor = descriptor
+
+    def update(self, new_link, new_properties):
+        """Actualiza el link con los nuevos datos y propiedades"""
+        new_descriptor = new_link.descriptor
+        for anew, aold in izip(new_descriptor, self.descriptor):
+            aold.update(anew)
+        self.properties = new_properties
 
 
 class Graph(object):
@@ -205,39 +307,113 @@ class Graph(object):
     """
     
     def __init__(self):
-        self.groups = defaultdict(NodeGroup)
-        self.links = list()
+        self.node_dict = dict()
+        self.link_dict = dict()
+
+    @property
+    def node_properties(self):
+        return frozenset(x.properties for x in self.node_dict.values())
+
+    @property
+    def link_properties(self):
+        return frozenset(x.properties for x in self.link_dict.values())
 
     @property
     def node_attribs(self):
-        return OrderedFSet(chain(*(x.attribs for x in self.groups.values())))
+        return OrderedFSet(chain(*(x.attribs for x in self.node_properties if x.attribs)))
 
     @property
     def link_attribs(self):
-        return OrderedFSet(chain(*(x.attribs for x in self.links)))
+        return OrderedFSet(chain(*(x.attribs for x in self.link_properties if x.attribs)))
 
     @property
     def shapes(self):
-        return frozenset(chain(*(x.shapes for x in self.groups.values())))
+        return frozenset(x.shape for x in self.node_properties)
 
     @property
     def IDs(self):
-        return frozenset(chain(*tuple(x.IDs for x in self.groups.values())))
-
-    def add_links(self, items,
-        src_id, src_label, src_attribs,
-        dst_id, dst_label, dst_attribs,
-        style=LINK_SOLID, width=1, color="#000000"):
-        self.links.append(
-            LinkList(items,
-                src_id, src_label, src_attribs,
-                dst_id, dst_label, dst_attribs,
-                style=style, width=width, color=color
-            )
-        )
+        return frozenset(x.descriptor.ID for x in self.node_dict.values())
 
     def add_group(self, gname, items, id_resolver, label_resolver,
-                  shape=None, rank=None, attribs=None):
-        self.groups[gname].append(
-            NodeList(items, id_resolver, label_resolver, shape, rank, attribs)
-        )
+                  attribs=None, **kw):
+        """Agrega un grupo de nodos al grafo.
+
+        Si alguno de los nodos estaba ya en el grafo, sus propiedades
+        y atributos se reemplazan por los que se especifiquen ahora.
+
+        Los kw reconocidos son:
+            - "shape": nombre del icono
+            - "rank": rango de los nodos, para Dot.
+        """
+        # Creo un nuevo objeto Properties y convierto los items en descriptores.
+        properties  = NodeProperties(attribs, **kw)
+        descriptors = NodeProperties.process(items,
+            id_resolver, label_resolver, attribs)
+        # Si los nodos ya existen, lo que hago es actualizar sus propiedades.
+        # Para actualizarlas, se crea un nuevo objeto "Properties" con una
+        # combinacion de las propiedades antiguas, y las nuevas.
+        #
+        # No quiero crear un objeto Properties distinto por cada nodo solapado,
+        # sino solamente uno por cada combinacion encontrada de (properties
+        # antiguas, properties nuevas). Para eso, voy a crear un diccionario
+        # donde ire guardando esas combinaciones.
+        new_properties = dict()
+        for descriptor in descriptors:
+            new_node = Node(gname, properties, descriptor)
+            old_node = self.node_dict.setdefault(descriptor.objID, new_node)
+            if old_node is not new_node:
+                new_prop = new_properties.get(old_node.properties, None)
+                if not new_prop:
+                    new_prop = old_node.properties.combine(properties, **kw)
+                    new_properties[old_node.properties] = new_prop
+                old_node.update(new_node, new_prop)
+
+    def add_links(self, items,
+                  src_id, src_label, src_attribs,
+                  dst_id, dst_label, dst_attribs,
+                  **kw):
+        """Agrega un grupo de enlaces al grafo.
+
+        Si alguno de los enlaces estaba ya en el grafo, sus atributos
+        y propiedades se sustituyen por los que se especifiquen ahora.
+
+        Los kw reconocidos son:
+
+        - style: "dotted", "dashed", "solid"
+        - width: ancho de la linea
+        - color: color de la linea
+        """
+        properties  = LinkProperties(src_attribs, dst_attribs, **kw)
+        descriptors = LinkProperties.process(items,
+            src_id, src_label, src_attribs,
+            dst_id, dst_label, dst_attribs)
+        new_properties = dict()
+        for descriptor in descriptors:
+            new_link = Link(properties, descriptor)
+            old_link = self.link_dict.setdefault(descriptor.objID, new_link)
+            if old_link is not new_link:
+                new_prop = new_properties.get(old_link.properties)
+                if not new_prop:
+                    new_prop = old_link.properties.combine(properties, **kw)
+                    new_properties[old_link.properties] = new_prop
+                old_link.update(new_link, new_prop)
+
+    @property
+    def groups(self):
+        """Devuelve un diccionario donde:
+
+        - Cada clave es un nombre de grupo
+        - Cada valor es un NodeGroup con todos los NodeLists del grupo.
+        """
+        def key(item):
+            return item.group
+        return dict((group, NodeGroup(items)) for (group, items)
+            in groupby(sorted(self.node_dict.values(), key=key), key))
+
+    @property
+    def links(self):
+        """Devuelve una lista donde cada elemento es un LinkList"""
+        def key(item):
+            return item.properties
+        return tuple(LinkList(prop, (x.descriptor for x in items)) for (prop, items)
+            in groupby(sorted(self.link_dict.values(), key=key), key))

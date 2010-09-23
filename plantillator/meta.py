@@ -190,7 +190,7 @@ class Meta(object):
         - fields: diccionario { atributo: Field() }
         - summary: tupla de atributos para describir un dataobject
     """
-    def __init__(self, path, parent=None):
+    def __init__(self, parent=None):
         # Creo "up", aunque el parent sea None, para permitir que "up"
         # funcione tambien en los PeerSets que se crean al definir enlaces,
         # que no tienen parent en cuanto al set, pero si individualmente.
