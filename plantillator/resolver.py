@@ -6,11 +6,8 @@ import operator, re
 
 class Resolver(object):
 
-    def __init__(self, symbol):
-        self.symbol = symbol
-
-    def _resolve(self, symbol_table):
-        return symbol_table[self.symbol]
+    def _resolve(self, item):
+        return item
 
     def __getattr__(self, attrib):
         if attrib.startswith("_"):
@@ -129,8 +126,8 @@ class AttributeResolver(ChainedResolver):
     def __init__(self, parent, attrib):
         super(AttributeResolver, self).__init__(parent, attrib=attrib)
 
-    def _resolve(self, symbol_table):
-        return getattr(self.parent._resolve(symbol_table), self.attrib)
+    def _resolve(self, item):
+        return getattr(self.parent._resolve(item), self.attrib)
 
 
 class CallResolver(ChainedResolver):
@@ -138,8 +135,8 @@ class CallResolver(ChainedResolver):
     def __init__(self, parent, arg, kw):
         super(CallResolver, self).__init__(parent, arg=arg, kw=kw)
 
-    def _resolve(self, symbol_table):
-        return self.parent._resolve(symbol_table)(*self.arg, **self.kw)
+    def _resolve(self, item):
+        return self.parent._resolve(item)(*self.arg, **self.kw)
 
 
 class BinaryResolver(ChainedResolver):
@@ -147,10 +144,10 @@ class BinaryResolver(ChainedResolver):
     def __init__(self, parent, other, op):
         super(BinaryResolver, self).__init__(parent, other=other, op=op)
 
-    def _resolve(self, symbol_table):
-        this, other = self.parent._resolve(symbol_table), self.other
+    def _resolve(self, item):
+        this, other = self.parent._resolve(item), self.other
         if hasattr(other, '_resolve'):
-            other = other._resolve(symbol_table)
+            other = other._resolve(item)
         return self.op(this, other)
 
 
@@ -159,8 +156,8 @@ class UnaryResolver(ChainedResolver):
     def __init__(self, parent, op):
         super(UnaryResolver, self).__init__(parent, op=op)
 
-    def _resolve(self, symbol_table):
-        return self.op(self.parent._resolve(symbol_table))
+    def _resolve(self, item):
+        return self.op(self.parent._resolve(item))
 
 
 class LogicalResolver(ChainedResolver):
@@ -168,10 +165,10 @@ class LogicalResolver(ChainedResolver):
     def __init__(self, parent, other, op):
         super(LogicalResolver, self).__init__(parent, other=other, op=op)
 
-    def _resolve(self, symbol_table):
-        this, other = self.parent._resolve(symbol_table), self.other
+    def _resolve(self, item):
+        this, other = self.parent._resolve(item), self.other
         if hasattr(other, '_resolve'):
-            other = other._resolve(symbol_table)
+            other = other._resolve(item)
         if hasattr(this, '__iter__'):
             # Los operadores de comparacion no funcionan con listas. En ese
             # caso, lo que comparo es la longitud.
@@ -194,7 +191,7 @@ if __name__ == "__main__":
             x = X()
             for name, val in kw.iteritems():
                 setattr(x, name, val)
-            symbols = {'self': x}
+            symbols = x
             return resolver._resolve(symbols)
 
         def testAttr(self):
@@ -353,7 +350,7 @@ if __name__ == "__main__":
         """
 
         def setUp(self):
-            self.r = Resolver('self').secondLevel
+            self.r = Resolver().secondLevel
 
         def resolve(self, resolver, **kw):
             class X(object):
@@ -362,7 +359,7 @@ if __name__ == "__main__":
             x.secondLevel = X()
             for name, val in kw.iteritems():
                 setattr(x.secondLevel, name, val)
-            symbols = {'self': x}
+            symbols = x
             return resolver._resolve(symbols)
 
     unittest.main()

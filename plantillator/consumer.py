@@ -91,25 +91,24 @@ class Consumer(object):
 
     class Pending(object):
 
-        def __init__(self, tmplid, template, outname, data, loc=None):
+        def __init__(self, tmplid, template, outname, data):
             self.tmplid = tmplid
             self.template = template
             self.outname = outname
             self.data = dict(data)
-            self.loc = dict(loc) if loc is not None else dict()
 
         def key(self):
             return (self.tmplid, self.outname)
 
         def render(self, consumer):
             self.consumer = consumer
-            self.template.render(consumer, self.data, self.loc)
+            self.template.render(consumer, self.data)
 
         def dup(self, tmplid, template, outname):
-            return Consumer.Pending(tmplid, template, outname, self.data, self.loc)
+            return Consumer.Pending(tmplid, template, outname, self.data)
 
         def embed(self, template):
-            template.embed(self.consumer, self.data, self.loc)
+            template.embed(self.consumer, self.data)
 
     def render(self):
         try:
@@ -179,6 +178,4 @@ class Consumer(object):
             "  Para cancelar la ejecucion de la plantilla, excriba 'exit()'",
             "***",
         ))
-        self._pending.data.update(self._pending.loc)
-        self._pending.loc = dict()
         code.interact(banner=banner, local=self._pending.data)

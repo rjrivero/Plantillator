@@ -10,11 +10,6 @@ from itertools import chain
 from .resolver import Resolver
 
 
-# Simbolos para el resolver
-SYMBOL_SELF   = 1
-SYMBOL_FOLLOW = 2
-
-
 class DataError(Exception):
 
     """
@@ -33,15 +28,14 @@ class DataError(Exception):
         self.exc_info = sys.exc_info()
 
 
-def matches(item, crit, symbol=SYMBOL_SELF):
+def matches(item, crit):
     """Comprueba si un objeto cumple un criterio.
 
     Si la evaluacion del criterio lanza una exception durante la
     resolucion, se considera que el criterio no se cumple.
     """
     try:
-        symbol_map = {symbol: item}
-        return all(c._resolve(symbol_map) for c in crit)
+        return all(c(item) for c in crit)
     except (AttributeError, AssertionError):
         return False
 
@@ -56,6 +50,7 @@ class BaseSet(frozenset):
         return tuple(self)[0]
 
     def __call__(self, *arg):
+        arg = tuple((c._resolve if hasattr(c, '_resolve') else c) for c in arg)
         return BaseSet(x for x in self if matches(x, arg))
 
     def __add__(self, other):
@@ -93,6 +88,12 @@ class BaseSet(frozenset):
     def HASNOT(self):
         return BaseSet.TesterNot(self)
 
+    def __cmp__(self, other):
+        """Si lo comparo con un entero, el criterio es la longitud"""
+        if isinstance(other, int):
+            return cmp(len(self), other)
+        return cmp(id(self), id(other))
+
 
 class BaseList(tuple):
     # Tienen que ser todo clases globales, por pickle, y ademas
@@ -101,6 +102,7 @@ class BaseList(tuple):
         assert(len(self) == 1)
         return self[0]
     def __call__(self, *arg):
+        arg = tuple((c._resolve if hasattr(c, '_resolve') else c) for c in arg)
         return BaseList(x for x in self if matches(x, arg))
     def __add__(self, other):
         return BaseList(chain(self, other))
@@ -110,6 +112,11 @@ class BaseList(tuple):
     @property
     def HASNOT(self):
         return BaseSet.TesterNot(self)
+    def __cmp__(self, other):
+        """Si lo comparo con un entero, el criterio es la longitud"""
+        if isinstance(other, int):
+            return cmp(len(self), other)
+        return cmp(id(self), id(other))
 
 
 class Field(object):
@@ -471,20 +478,24 @@ class Index(object):
         return len(self._full)
 
 
-def search_crit(items, args, kw, resv=Resolver(SYMBOL_SELF)):
+def search_crit(items, args, kw):
     """Filtra una lista con los criterios dados, sin usar indices"""
-    args = list(args)
+    args = list((c._resolve if hasattr(c, '_resolve') else c) for c in args)
     for key, val in kw.iteritems():
+        # Mucho cuidado con los closures! si hago algo como:
+        # lambda x: x.get(key) == val
+        # El binding que se establece entre el lambda y la variable
+        # local es por referencia, no por valor. Es decir, cuando el
+        # lambda se ejecuta, los valores de "key" y "val" que utiliza
+        # son los que tengan las variables EN EL MOMENTO FINAL, no
+        # cuando se crea el lambda. Es decir, todos los lambdas
+        # utilizarian el mismo "key" y "val", los ultimos del bucle.
         if val is DataSet.NONE:
-            crit = getattr(resv, "HASNOT")
-            crit = getattr(crit, key)
+            args.append(lambda x, k=key: x.get(k) is None)
         elif val is DataSet.ANY:
-            crit = getattr(resv, "HAS")
-            crit = getattr(crit, key)
+            args.append(lambda x, k=key: x.get(k) is not None)
         else:
-            crit = getattr(resv, key)
-            crit = (crit == val)
-        args.append(crit)
+            args.append(lambda x, k=key, v=val: x.get(k) == v)
     return tuple(x for x in items if matches(x, args))
 
 
@@ -620,15 +631,15 @@ class DataSet(object):
             index = indextype(self._children, attr)
         return self._indexes.setdefault(attr, index)
 
-    class Indexer(object):
-        def __init__(self, dataset):
-            self._dataset = dataset
-        def __getattr__(self, attr):
-            return self.__dict__.setdefault(attr, self._dataset._index(attr))
+    #class Indexer(object):
+        #def __init__(self, dataset):
+            #self._dataset = dataset
+        #def __getattr__(self, attr):
+            #return self.__dict__.setdefault(attr, self._dataset._index(attr))
 
-    @property
-    def INDEX(self):
-        return DataSet.Indexer(self)
+    #@property
+    #def INDEX(self):
+        #return DataSet.Indexer(self)
 
     def __add__(self, other):
         assert(self._meta == other._meta)
@@ -671,6 +682,12 @@ class DataSet(object):
     @property
     def SORTDESC(self):
         return DataSet.Sorter(self, False)
+
+    def __cmp__(self, other):
+        """Si lo comparo con un entero, el criterio es la longitud"""
+        if isinstance(other, int):
+            return cmp(len(self), other)
+        return cmp(id(self), id(other))
 
 
 class PeerSet(frozenset):
@@ -740,6 +757,12 @@ class PeerSet(frozenset):
     @property
     def SORTDESC(self):
         return DataSet.Sorter(self, False)
+
+    def __cmp__(self, other):
+        """Si lo comparo con un entero, el criterio es la longitud"""
+        if isinstance(other, int):
+            return cmp(len(self), other)
+        return cmp(id(self), id(other))
 
 
 if __name__ == "__main__":
@@ -978,7 +1001,7 @@ if __name__ == "__main__":
             self.failUnless(set(x.b for x in indexB._any()) == set(("aabb", "ccdd", "eeff", "gghh")))
             
         def testFilter(self):
-            x = resolver.Resolver(SYMBOL_SELF)
+            x = resolver.Resolver()
             expected = {"ccdd":0, "eeff":0}
             for item in self.d1.subfield(x.a >= 4):
                 if item.HAS.b:
@@ -986,12 +1009,12 @@ if __name__ == "__main__":
                     del(expected[item.b])
 
         def testEmptyFilter(self):
-            x = resolver.Resolver(SYMBOL_SELF)
+            x = resolver.Resolver()
             items = self.d1.subfield(x.a < 0)
             self.failUnless(len(items) == 0)
 
         def testCombinedFilter(self):
-            x = resolver.Resolver(SYMBOL_SELF)
+            x = resolver.Resolver()
             items = self.d1.subfield(x.a > 0, x.b.MATCH("bb"))
             self.failUnless(len(items) == 1)
             self.failUnless(+(items.a) == 3)
@@ -1016,12 +1039,12 @@ if __name__ == "__main__":
             self.failUnless(self.d2 in both)
 
         def testPos(self):
-            x = resolver.Resolver(SYMBOL_SELF)
+            x = resolver.Resolver()
             first = +(self.d1.subfield(x.a==3))
             self.failUnless(first.b == "aabb")
 
         def testInvalidPos(self):
-            x = resolver.Resolver(SYMBOL_SELF)
+            x = resolver.Resolver()
             self.assertRaises(AssertionError, operator.pos, self.d1.subfield(x.a>=3))
             self.assertRaises(AssertionError, operator.pos, self.d2.subfield(x.a<=3))
 

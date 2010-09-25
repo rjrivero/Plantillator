@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from .pathfinder import PathFinder, FileSource
 from .ciscopw import password, secret
 from .resolver import Resolver
-from .meta import SYMBOL_SELF, DataSet
+from .meta import DataSet
 from .csvreader import CSVShelf
 from .templite import Templite
 
@@ -55,7 +55,7 @@ class ShelfLoader(CSVShelf):
             # (cualquiera que sea el error)
             self.files = dict()
             self.dirty = True
-        solv = Resolver(SYMBOL_SELF)
+        solv = Resolver()
         self.glob = {
             "CISCOPASSWORD": password,
             "CISCOSECRET": secret,

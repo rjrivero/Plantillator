@@ -708,7 +708,7 @@ if __name__ == "__main__":
         shelf.close()
     symbols  = ("x", "y", "z", "X", "Y", "Z")
     for s in symbols:
-        data[s] = Resolver("self")
+        data[s] = Resolver()
     data['NONE'] = DataSet.NONE
     data['ANY'] = DataSet.ANY
     if len(sys.argv) > 1:

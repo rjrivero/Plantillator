@@ -1,14 +1,36 @@
 #!/usr/bin/env python
 
 
-import sys, re, copy, traceback, ast
-from collections import namedtuple
+import sys, re, copy, ast
+import os.path
+
 from itertools import izip, cycle, chain
+from collections import namedtuple
+from traceback import format_exception_only, extract_tb
 
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
+
+
+def add_error(errlist, template, filename, lineno, exc_info):
+    """Da formato a un mensaje de error provocado por una plantilla"""
+    lineno  = max(lineno-1, 0)
+    minline = max(lineno-2, 0)
+    maxline = lineno+3
+    tlines  = template.splitlines()
+    errlist.append("\n".join((
+        "***",
+        "Error en fichero %s:" % os.path.basename(filename),
+        "***",
+        "\n".join(tlines[minline:lineno]),
+        " >>> " + tlines[lineno] + " <<< ",
+        "\n".join(tlines[lineno+1:maxline]),
+        "***",
+    )))
+    errlist.append("".join(format_exception_only(*exc_info[:2])))
+    return "\n".join(errlist)
 
 
 class ParseError(Exception):
@@ -20,10 +42,18 @@ class ParseError(Exception):
     - self.exc_info: tupla (tipo, excepcion, traceback)
     """
 
-    def __init__(self, template):
+    def __init__(self, tmplid, template):
         super(ParseError, self).__init__()
         self.template = template
+        self.tmplid = tmplid
         self.exc_info = sys.exc_info()
+
+    def __str__(self):
+        template, filename, lineno = self.template, self.tmplid, 0
+        errlist, inner = list(), self.exc_info[1]
+        if hasattr(inner, "filename") and hasattr(inner, "lineno") and inner.filename == self.tmplid:
+            lineno = inner.lineno
+        return add_error(errlist, template, filename, lineno, self.exc_info)
 
 
 class TemplateError(Exception):
@@ -31,17 +61,30 @@ class TemplateError(Exception):
     """
     Encapsula las excepciones lanzadas durante la ejecucion de un template.
 
+    - self.tmplid: Nombre de fichero de la plantilla.
     - self.template: plantilla (procesada) que ha provocado la excepcion
-    - self.local: diccionario con las variables locales de la plantilla en el
+    - self.glob: diccionario con las variables de la plantilla en el
                   momento de la excepcion.
     - self.exc_info: tupla (tipo, excepcion, traceback)
     """
 
-    def __init__(self, template, local):
+    def __init__(self, tmplid, template, glob):
         super(TemplateError, self).__init__()
+        self.tmplid = tmplid
         self.template = template
-        self.local = local
+        self.glob = glob
         self.exc_info = sys.exc_info()
+
+    def __str__(self):
+        errlist = list()
+        # Busco el error que se origino en el template.
+        template, filename, lineno = self.template, self.tmplid, 0
+        for tb in extract_tb(self.exc_info[2]):
+            fname, lno, funcname, text = tb
+            if fname == filename:
+                lineno = lno
+                break
+        return add_error(errlist, template, filename, lineno, self.exc_info)
 
 
 class Accumulator(object):
@@ -264,6 +307,7 @@ class Templite(object):
 
     Las variables miembros de una plantilla son:
 
+    - tmplid:     Nombre de fichero de la plantilla.
     - timestamp:  una marca de tiempo que identifica el momento en que
                   se proceso el template. 
     - translated: el codigo python de la plantilla, interpretada y
@@ -464,7 +508,7 @@ class Templite(object):
             tree = ast.parse(translated, tmplid, 'exec')
             return Templite.State(tmplid, timestamp, translated, tree)
         except Exception as details:
-            raise ParseError(translated)
+            raise ParseError(tmplid, translated)
 
     # ----------------
     # Parte "publica"
@@ -501,7 +545,7 @@ class Templite(object):
         self.ast = state['ast']
         self.code = compile(self.ast, self.tmplid, 'exec')
 
-    def render(self, consumer, glob=None, loc=None):
+    def render(self, consumer, glob=None):
         """Ejecuta la plantilla con el consumidor y datos dados.
 
         El consumidor es una corutina. Cada vez que la plantilla genera
@@ -536,8 +580,6 @@ class Templite(object):
         """
         if glob is None:
             glob = dict()
-        if loc is None:
-            loc = dict()
         glob["_consumer"] = consumer
         glob["_accumulator"] = Accumulator(consumer)
         glob["UNIQ"] = UNIQ
@@ -545,42 +587,29 @@ class Templite(object):
         glob["SKIP"] = SKIP
         glob["REVERSE"] = REVERSE
         consumer.next()
-        if self.embed(consumer, glob, loc):
+        if self.embed(consumer, glob):
             result = "".join(glob["_accumulator"].collect())
             if result:
                 consumer.send(result)
             consumer.close()
 
-    def embed(self, consumer, glob, loc):
+    def embed(self, consumer, glob):
         """Ejecuta una plantilla embebida.
 
         Es como "render", pero considera que el consumidor y los datos
         ya estan inicializados.
         """
         try:
-            exec self.code in glob, loc
+            exec self.code in glob
             return True
         except:
             try:
-                consumer.throw(TemplateError(self.translated, loc))
+                consumer.throw(TemplateError(self.tmplid, self.translated, glob))
             except StopIteration:
                 # No tengo ni idea de por que me lanza un StopIteration
                 # despues de hacer el throw... me parece una tonteria, pero
                 # bueno, lo capturo.
                 pass
-        finally:
-            # paso al scope global las variables locales aceptadas.
-            self._promote(glob, loc)
-
-    def _promote(self, glob, loc):
-        """Pasa a scope global ciertas variables del scope local"""
-        promoted = list()
-        for key, value in loc.iteritems():
-            if hasattr(value, '__call__') or type(value).__name__ in ('classobj', 'module'):
-                glob[key] = value
-                promoted.append(key)
-        for key in promoted:
-            del(loc[key])
 
 
 if __name__ == '__main__':

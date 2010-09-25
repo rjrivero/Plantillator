@@ -169,27 +169,9 @@ def handle(item):
         print "NO SE RECONOCE COMANDO %s" % item.opcode
 
 
-def add_error(errlist, template, filename, lineno):
-    """Da formato a un mensaje de error provocado por una plantilla"""
-    lineno  = max(lineno-1, 0)
-    minline = max(lineno-2, 0)
-    maxline = lineno+3
-    tlines  = template.splitlines()
-    errlist.append("\n".join((
-        "***",
-        "Error en fichero %s:" % os.path.basename(filename),
-        "***",
-        "\n".join(tlines[minline:lineno]),
-        " >>> " + tlines[lineno] + " <<< ",
-        "\n".join(tlines[lineno+1:maxline]),
-        "***",
-    )))
-
-
-def exit_with_errors(errlist, exc_info):
+def exit_with_errors(details):
     """Sale volcando todos los mensajes de error."""
-    errlist.append("".join(format_exception_only(exc_info[0], exc_info[1])))
-    sys.stderr.write("\n".join(errlist))
+    print >> sys.stderr, str(details) 
     if options.debug:
         print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)    
@@ -211,8 +193,7 @@ try:
 
     plantillator.prepare()
     if options.shell:
-        local = dict(plantillator.dataloader.glob)
-        local.update(plantillator.dataloader.data)
+        local = dict(plantillator.loader.glob)
         code.interact("Shell de pruebas", local=local)
         exit(0)
     if not options.test:
@@ -247,26 +228,11 @@ try:
 #except NewParseError as details:
 except ParseError as details:
 
-    errlist, inner = list(), details.exc_info[1]
-    if hasattr(inner, "filename") and hasattr(inner, "lineno"):
-        template = details.template
-        filename = inner.filename
-        lineno   = inner.lineno
-        add_error(errlist, template, filename, lineno)
-    exit_with_errors(errlist, details.exc_info)
+    exit_with_errors(details)
 
 except TemplateError as details:
 
-    errlist = list()
-    # Busco el error que se origino en el template.
-    for tb in extract_tb(details.exc_info[2]):
-        filename, lineno, funcname, text = tb
-        if filename.lower().endswith(".txt"):
-            # es una plantilla, intentamos obtener los datos.
-            template = plantillator.loader.get_template(filename)
-            if template:
-                add_error(errlist, template[1].translated, filename, lineno)
-    exit_with_errors(errlist, details.exc_info)
+    exit_with_errors(details)
 
 #except (ParseError, TemplateError, DataError) as detail:
 except DataError as detail:

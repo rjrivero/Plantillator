@@ -5,8 +5,6 @@ from copy import copy
 from collections import namedtuple, defaultdict
 from itertools import chain, groupby, izip
 
-from plantillator.meta import SYMBOL_SELF
-
 
 # Estilos de linea
 LINK_SOLID  = "solid"
@@ -108,9 +106,8 @@ class NodeProperties(object):
         """
         for item in items:
             # Obtengo el ID y el label de cada atributo desde el resolver
-            symbol_table = { SYMBOL_SELF: item }
-            ID = id_resolver._resolve(symbol_table)
-            label = label_resolver._resolve(symbol_table)
+            ID = id_resolver(item)
+            label = label_resolver(item)
             # Obtengo los atributos del objeto pedidos
             if attribs:
                 values = ((attr, item.get(attr)) for attr in attribs)
@@ -182,21 +179,19 @@ class LinkProperties(object):
         """
         for item in (x for x in items if x._get("PEER")):
             # Obtengo el ID y el label de cada atributo desde el resolver
-            src_table = { SYMBOL_SELF: item.up }
             src_desc  = LinkProperties._descriptor(
-                item, src_table,
+                item, item.up,
                 src_id, src_label, src_attribs, "src_")
-            dst_table = { SYMBOL_SELF: item.PEER.up }
             dst_desc  = LinkProperties._descriptor(
-                item.PEER, dst_table,
+                item.PEER, item.PEER.up,
                 dst_id, dst_label, dst_attribs, "dst_")
             yield LinkDescriptor(id(item), src_desc, dst_desc)
 
     @staticmethod
-    def _descriptor(link, symbols, id_resolver, label_resolver, attribs, prefix):
+    def _descriptor(link, item, id_resolver, label_resolver, attribs, prefix):
         """Devuelve un descriptor"""
-        ID     = id_resolver._resolve(symbols)
-        label  = label_resolver._resolve(symbols)
+        ID     = id_resolver(item)
+        label  = label_resolver(item)
         if attribs:
             values = (("%s%s" % (prefix, attr), link.get(attr)) for attr in attribs)
             values = dict((x, y) for (x, y) in values if y is not None)
@@ -208,7 +203,12 @@ class LinkProperties(object):
         """Crea un nuevo objeto con las propiedades combinadas"""
         # Copio este objeto, y le agrego los atributos nuevos
         anew = copy(self)
-        anew.attribs = OrderedFSet(chain(anew.attribs, new_props.attribs))
+        anew.attribs = OrderedFSet(chain(
+            (x for x in anew.attribs if x.startswith("src_")),
+            (x for x in new_props.attribs if x.startswith("src_")),
+            (x for x in anew.attribs if x.startswith("dst_")),
+            (x for x in new_props.attribs if x.startswith("dst_")),
+        ))
         # Machaco todos los parametros existentes con los nuevos
         defaults = LinkProperties.DEFAULTS
         for key, val in kw.iteritems():
@@ -346,6 +346,10 @@ class Graph(object):
             - "rank": rango de los nodos, para Dot.
         """
         # Creo un nuevo objeto Properties y convierto los items en descriptores.
+        if hasattr(id_resolver, "_resolve"):
+            id_resolver = id_resolver._resolve
+        if hasattr(label_resolver, "_resolve"):
+            label_resolver = label_resolver._resolve
         properties  = NodeProperties(attribs, **kw)
         descriptors = NodeProperties.process(items,
             id_resolver, label_resolver, attribs)
@@ -383,6 +387,14 @@ class Graph(object):
         - width: ancho de la linea
         - color: color de la linea
         """
+        if hasattr(src_id, "_resolve"):
+            src_id = src_id._resolve
+        if hasattr(src_label, "_resolve"):
+            src_label = src_label._resolve
+        if hasattr(dst_id, "_resolve"):
+            dst_id = dst_id._resolve
+        if hasattr(dst_label, "_resolve"):
+            dst_label = dst_label._resolve
         properties  = LinkProperties(src_attribs, dst_attribs, **kw)
         descriptors = LinkProperties.process(items,
             src_id, src_label, src_attribs,
