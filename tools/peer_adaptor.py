@@ -15,8 +15,7 @@ def adapt_peers(from_dset, to_dset, adaptor):
 
     from_dset: Listado de interfaces donde estan los objetos que queremos
             convertir en PEERs.
-    to_dset:   Listado de objetos contra los que pueden ir conectados esas
-            interfaces.
+    to_dset:   Listado de interfaces contra los que pueden ir conectados
     adaptor:   Funcion que encuentra el objeto al que esta conectado una
             interfaz, y le crea un PEER. Se le invoca con tres parametros:
                 - El meta del objeto PEER.

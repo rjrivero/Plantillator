@@ -629,16 +629,6 @@ class DataSet(object):
             index = indextype(self._children, attr)
         return self._indexes.setdefault(attr, index)
 
-    #class Indexer(object):
-        #def __init__(self, dataset):
-            #self._dataset = dataset
-        #def __getattr__(self, attr):
-            #return self.__dict__.setdefault(attr, self._dataset._index(attr))
-
-    #@property
-    #def INDEX(self):
-        #return DataSet.Indexer(self)
-
     def __add__(self, other):
         assert(self._meta == other._meta)
         # Si uno de los dos datasets esta vacio, devolvemos
