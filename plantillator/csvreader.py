@@ -690,7 +690,6 @@ if __name__ == "__main__":
     import code
     import shelve
     import sys
-    from .resolver import Resolver
 
     shelfname = "data.shelf"
     csvpath = (".",)
@@ -706,9 +705,6 @@ if __name__ == "__main__":
         sys.exit(-1)
     finally:
         shelf.close()
-    symbols  = ("x", "y", "z", "X", "Y", "Z")
-    for s in symbols:
-        data[s] = Resolver()
     data['NONE'] = DataSet.NONE
     data['ANY'] = DataSet.ANY
     if len(sys.argv) > 1:

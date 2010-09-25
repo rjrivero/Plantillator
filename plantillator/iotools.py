@@ -11,7 +11,6 @@ from contextlib import contextmanager
 
 from .pathfinder import PathFinder, FileSource
 from .ciscopw import password, secret
-from .resolver import Resolver
 from .meta import DataSet
 from .csvreader import CSVShelf
 from .templite import Templite
@@ -55,21 +54,11 @@ class ShelfLoader(CSVShelf):
             # (cualquiera que sea el error)
             self.files = dict()
             self.dirty = True
-        solv = Resolver()
         self.glob = {
             "CISCOPASSWORD": password,
             "CISCOSECRET": secret,
             "ANY": DataSet.ANY,
             "NONE": DataSet.NONE,
-            "cualquiera": DataSet.ANY,
-            "ninguno": DataSet.NONE,
-            "ninguna": DataSet.NONE,
-            "X": solv,
-            "x": solv,
-            "Y": solv,
-            "y": solv,
-            "Z": solv,
-            "z": solv,
         }
         self.cache = dict()
 

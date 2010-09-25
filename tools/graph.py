@@ -346,10 +346,6 @@ class Graph(object):
             - "rank": rango de los nodos, para Dot.
         """
         # Creo un nuevo objeto Properties y convierto los items en descriptores.
-        if hasattr(id_resolver, "_resolve"):
-            id_resolver = id_resolver._resolve
-        if hasattr(label_resolver, "_resolve"):
-            label_resolver = label_resolver._resolve
         properties  = NodeProperties(attribs, **kw)
         descriptors = NodeProperties.process(items,
             id_resolver, label_resolver, attribs)
@@ -387,14 +383,6 @@ class Graph(object):
         - width: ancho de la linea
         - color: color de la linea
         """
-        if hasattr(src_id, "_resolve"):
-            src_id = src_id._resolve
-        if hasattr(src_label, "_resolve"):
-            src_label = src_label._resolve
-        if hasattr(dst_id, "_resolve"):
-            dst_id = dst_id._resolve
-        if hasattr(dst_label, "_resolve"):
-            dst_label = dst_label._resolve
         properties  = LinkProperties(src_attribs, dst_attribs, **kw)
         descriptors = LinkProperties.process(items,
             src_id, src_label, src_attribs,

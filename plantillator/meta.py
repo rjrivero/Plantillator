@@ -7,8 +7,6 @@ import traceback
 
 from itertools import chain
 
-from .resolver import Resolver
-
 
 class DataError(Exception):
 
@@ -26,6 +24,29 @@ class DataError(Exception):
         self.source = source
         self.index = index
         self.exc_info = sys.exc_info()
+
+
+def kw_as_crit(key, val):
+    """Convierte un criterio expresado como clave=valor en un callable"""
+    if val is DataSet.NONE:
+    	return lambda x: x.get(key, None) is None
+    if val is DataSet.ANY:
+        return lambda x: x.get(key, None) is not None
+    return lambda x: x.get(key, None) == val
+
+
+def search_crit(items, args, kw=None):
+    """Filtra una lista con los criterios dados, sin usar indices"""
+    if kw:
+        kw   = (kw_as_crit(k, v) for (k, v) in kw.iteritems())
+        args = tuple(chain(args, kw))
+    try:
+        # Intentamos el match en bloque. Si sale, nos ahorramos una
+        # llamada a funcion y un try - except en cada elemento...
+        return tuple(x for x in items if all(c(x) for c in args))
+    except (AttributeError, AssertionError):
+        # Si no sale, no queda mas remedio que ir uno por uno.
+        return tuple(x for x in items if matches(x, args))
 
 
 def matches(item, crit):
@@ -50,8 +71,7 @@ class BaseSet(frozenset):
         return tuple(self)[0]
 
     def __call__(self, *arg):
-        arg = tuple((c._resolve if hasattr(c, '_resolve') else c) for c in arg)
-        return BaseSet(x for x in self if matches(x, arg))
+        return BaseSet(search_crit(self, arg))
 
     def __add__(self, other):
         return BaseSet(chain(self, other))
@@ -102,8 +122,7 @@ class BaseList(tuple):
         assert(len(self) == 1)
         return self[0]
     def __call__(self, *arg):
-        arg = tuple((c._resolve if hasattr(c, '_resolve') else c) for c in arg)
-        return BaseList(x for x in self if matches(x, arg))
+        return BaseList(search_crit(self, arg))
     def __add__(self, other):
         return BaseList(chain(self, other))
     @property
@@ -478,27 +497,6 @@ class Index(object):
         return len(self._full)
 
 
-def search_crit(items, args, kw):
-    """Filtra una lista con los criterios dados, sin usar indices"""
-    args = list((c._resolve if hasattr(c, '_resolve') else c) for c in args)
-    for key, val in kw.iteritems():
-        # Mucho cuidado con los closures! si hago algo como:
-        # lambda x: x.get(key) == val
-        # El binding que se establece entre el lambda y la variable
-        # local es por referencia, no por valor. Es decir, cuando el
-        # lambda se ejecuta, los valores de "key" y "val" que utiliza
-        # son los que tengan las variables EN EL MOMENTO FINAL, no
-        # cuando se crea el lambda. Es decir, todos los lambdas
-        # utilizarian el mismo "key" y "val", los ultimos del bucle.
-        if val is DataSet.NONE:
-            args.append(lambda x, k=key: x.get(k) is None)
-        elif val is DataSet.ANY:
-            args.append(lambda x, k=key: x.get(k) is not None)
-        else:
-            args.append(lambda x, k=key, v=val: x.get(k) == v)
-    return tuple(x for x in items if matches(x, args))
-
-
 class DataSet(object):
 
     """
@@ -768,7 +766,6 @@ class PeerSet(frozenset):
 if __name__ == "__main__":
 
     import unittest
-    import resolver
     import operator
     import sys
     try:
@@ -1001,21 +998,18 @@ if __name__ == "__main__":
             self.failUnless(set(x.b for x in indexB._any()) == set(("aabb", "ccdd", "eeff", "gghh")))
             
         def testFilter(self):
-            x = resolver.Resolver()
             expected = {"ccdd":0, "eeff":0}
-            for item in self.d1.subfield(x.a >= 4):
+            for item in self.d1.subfield(lambda x: x.a >= 4):
                 if item.HAS.b:
                     self.failUnless(item.b in expected )
                     del(expected[item.b])
 
         def testEmptyFilter(self):
-            x = resolver.Resolver()
-            items = self.d1.subfield(x.a < 0)
+            items = self.d1.subfield(lambda x: x.a < 0)
             self.failUnless(len(items) == 0)
 
         def testCombinedFilter(self):
-            x = resolver.Resolver()
-            items = self.d1.subfield(x.a > 0, x.b.MATCH("bb"))
+            items = self.d1.subfield(lambda x: (x.a > 0) and ("bb" in x.b))
             self.failUnless(len(items) == 1)
             self.failUnless(+(items.a) == 3)
 
@@ -1039,14 +1033,12 @@ if __name__ == "__main__":
             self.failUnless(self.d2 in both)
 
         def testPos(self):
-            x = resolver.Resolver()
-            first = +(self.d1.subfield(x.a==3))
+            first = +(self.d1.subfield(lambda x: x.a==3))
             self.failUnless(first.b == "aabb")
 
         def testInvalidPos(self):
-            x = resolver.Resolver()
-            self.assertRaises(AssertionError, operator.pos, self.d1.subfield(x.a>=3))
-            self.assertRaises(AssertionError, operator.pos, self.d2.subfield(x.a<=3))
+            self.assertRaises(AssertionError, operator.pos, self.d1.subfield(lambda x: x.a>=3))
+            self.assertRaises(AssertionError, operator.pos, self.d2.subfield(lambda x: x.a<=3))
 
         def testSortBy(self):
             result = tuple(x.b for x in self.d1.subfield.SORTBY.b if x.HAS.b)

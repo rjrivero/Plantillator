@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 
 
-# He copiado la funcionalidad que necesito de pydot, porque
-# solo me hace falta la parte de localizar los ejecutables y llamarlos.
-# No voy a manipular graficos como objetos python ni nada de eso.
-
-
 import os
 import os.path
 import re
@@ -18,7 +13,7 @@ from plantillator.pathfinder import FileSource
 from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, StringWrapper
 
 
-VIEWBOX = re.compile(r'viewBox="\d+\s+\d+\s+(?P<width>\d+(\.\d+)?)\s+(?P<height>\d+(\.\d+)?)"')
+VIEWBOX = re.compile(r'viewBox="\d+(\.\d+)?\s+\d+(\.\d+)?\s+(?P<width>\d+(\.\d+)?)\s+(?P<height>\d+(\.\d+)?)"')
 
 
 Resources = namedtuple("Resources", "nattribs, lattribs, shapes")

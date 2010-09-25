@@ -93,7 +93,7 @@ class DataNav(tk.Tk):
         if hasattr(data, 'iteritems'):
             data = dict((x, y) for (x, y) in data.iteritems()
                 if not any (y.__class__.__name__.endswith(s)
-                    for s in ("ANY", "NONE", "Meta", "Resolver")))
+                    for s in ("ANY", "NONE", "Meta")))
         self.canvas.show(name, data)
 
     def keyup(self, *skip):
