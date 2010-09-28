@@ -50,9 +50,13 @@ class CSVMeta(Meta):
             for blk in self.blocks:
                 blk.process(self.rootset)
             del(self.blocks)
-            if not lazy:
-                for subtype in self.subtypes.values():
-                    subtype.process(lazy)
+        # He detectado casos en que un meta puede no tener bloques. 
+        # pero aun asi puede tener submetas sin procesar. Es un caso raro, pero
+        # se da... tengo que sacar este "if lazy" fuera del "hasattr" porque,
+        # si no, los datos no se cargan correctamente.
+        if not lazy:
+            for subtype in self.subtypes.values():
+                subtype.process(lazy)
 
 
 def flip(self):
