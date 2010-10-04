@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 
-from contextlib import contextmanager
+import cgi
 
 
 class BuilderHelper(object):
@@ -160,6 +160,12 @@ class Builder(object):
         return "<DebugBuilder>"
 
 
+def escape(item, escape=cgi.escape, unicode=unicode):
+    if not isinstance(item, unicode):
+        item = item.decode("utf-8")
+    return escape(item, quote=True).encode('ascii', 'xmlcharrefreplace')
+
+
 class TagBuilder(object):
 
     """Builder de ejemplo para arboles de etiquetas (como HTML)"""
@@ -168,17 +174,17 @@ class TagBuilder(object):
         self._result = []
         self._indent = 0
 
-    def create_node(self, parent, name, kw):
-        attribs = " ".join('%s="%s"' % (k, v) for k, v in kw.iteritems())
+    def create_node(self, parent, name, kw, escape=escape):
+        attribs = " ".join('%s="%s"' % (k, escape(v)) for k, v in kw.iteritems())
         if attribs:
             attribs = " " + attribs
         self._result.append("  "*self._indent + "<" + name + attribs + ">")
         self._indent += 1
         return self
 
-    def add_content(self, node, content):
+    def add_content(self, node, content, escape=escape):
         if content is not self:
-            self._result.append("  "*self._indent + str(content))
+            self._result.append("  "*self._indent + escape(content))
 
     def node_completed(self, name, node):
         self._indent -= 1
