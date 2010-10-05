@@ -51,8 +51,6 @@ class BuilderHelper(object):
 
         """Constructor de objetos"""
 
-        __slots__ = ("name", "arg", "kw", "nested", "tail")
-
         def __init__(self, name, arg=None, kw=None):
             self.name   = name
             self.arg    = list(arg) if arg else []
@@ -72,12 +70,20 @@ class BuilderHelper(object):
 
         def build(self, builder, parent=None):
             """Construye el objeto usando el builder especificado"""
-            obj    = builder.create_node(parent, self.name, self.arg, self.kw)
-            nested = (item if not hasattr(item, 'build')
-                           else item.build(builder, obj)
-                           for item in self.nested)
-            for item in nested:
-                builder.add_content(obj, item)
+            obj = builder.create_node(parent, self.name, self.arg, self.kw)
+            # Forma antigua de hacerlo: todo se pasaba a addcontent
+            #nested = (item if not hasattr(item, 'build')
+            #               else item.build(builder, obj)
+            #               for item in self.nested)
+            #for item in nested:
+            #    builder.add_content(obj, item)
+            #
+            # Forma nueva de hacerlo: solo se pasan a add_content los literales
+            for item in self.nested:
+                if not hasattr(item, 'build'):
+                    builder.add_content(obj, item)
+                else:
+                    item.build(builder, obj)
             builder.node_completed(self.name, obj)
             return obj
 
@@ -142,9 +148,9 @@ class Builder(object):
     def add_content(self, node, content):
         """Agrega contenido al nodo.
         
-        El contenido puede ser:
-            - Un valor literal
-            - Un sub-objeto
+        Solo se utiliza para valores literales. Los sub-objetos no se
+        indican con add_content, sino creando el subobjeto y llamando a su
+        create_node con este nodo como padre.
         """
         self._result.append("  "*self._indent + "add_content(node:%s, content:%s)"
                                               % (repr(node), repr(content)))
@@ -164,7 +170,7 @@ class Builder(object):
 
 def escape(item, escape=cgi.escape, unicode=unicode):
     if not isinstance(item, unicode):
-        item = item.decode("utf-8")
+        item = str(item).decode("utf-8")
     return escape(item, quote=True).encode('ascii', 'xmlcharrefreplace')
 
 

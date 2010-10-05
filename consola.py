@@ -13,7 +13,7 @@ import code
 from operator import itemgetter
 from optparse import OptionParser
 from itertools import chain
-from traceback import print_exc, format_exception_only, extract_tb, format_list
+from traceback import print_exc, print_exception, format_exception_only
 
 #from plantillator.engine import ParseError, CommandError
 #from plantillator import ParseError as NewParseError
@@ -173,7 +173,10 @@ def exit_with_errors(details):
     """Sale volcando todos los mensajes de error."""
     print >> sys.stderr, str(details) 
     if options.debug:
-        print_exc(file=sys.stderr)
+        try:
+            print_exception(*details.exc_info, file=sys.stderr)
+        except AttributeError:
+            print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)    
 
 
