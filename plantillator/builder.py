@@ -51,27 +51,28 @@ class BuilderHelper(object):
 
         """Constructor de objetos"""
 
-        __slots__ = ("name", "attr", "nested", "tail")
+        __slots__ = ("name", "arg", "kw", "nested", "tail")
 
-        def __init__(self, name, attr=None):
-            self.name = name
-            self.attr = attr or dict()
+        def __init__(self, name, arg=None, kw=None):
+            self.name   = name
+            self.arg    = list(arg) if arg else []
+            self.kw     = kw or dict()
             self.nested = list()
-            self.tail = None
+            self.tail   = None
 
         def flatten(self, nested):
             """Aplasta una lista compuesta por objetos, callables y sublistas"""
             if hasattr(nested, '__call__'):
                 nested = nested()
-            if not hasattr(nested, '__iter__'):
+            if not hasattr(nested, '__iter__') or hasattr(nested, 'iteritems'):
                 self.nested.append(nested)
                 return
             for item in nested:
                 self.flatten(item)
-            
+
         def build(self, builder, parent=None):
             """Construye el objeto usando el builder especificado"""
-            obj    = builder.create_node(parent, self.name, self.attr)
+            obj    = builder.create_node(parent, self.name, self.arg, self.kw)
             nested = (item if not hasattr(item, 'build')
                            else item.build(builder, obj)
                            for item in self.nested)
@@ -97,9 +98,10 @@ class BuilderHelper(object):
                 self.tail = other
             return self
 
-        def __call__(self, **kw):
+        def __call__(self, *arg, **kw):
             """Agrega atributos al objeto"""
-            self.attr.update(kw)
+            self.kw.update(kw)
+            self.arg.extend(arg)
             return self
 
     def __getattr__(self, name):
@@ -130,10 +132,10 @@ class Builder(object):
         self._result = []
         self._indent = 0
 
-    def create_node(self, parent, name, kw):
+    def create_node(self, parent, name, arg, kw):
         """Crea un nodo con el parent, name y atributos especificados"""
-        self._result.append("  "*self._indent + "create_node(parent:%s, name:%s, kw:%s)"
-                                              % (repr(parent), repr(name), repr(kw)))
+        self._result.append("  "*self._indent + "create_node(parent:%s, name:%s, arg:%s, kw:%s)"
+                                              % (repr(parent), repr(name), repr(arg), repr(kw)))
         self._indent += 1
         return name if parent else self
 
@@ -174,7 +176,7 @@ class TagBuilder(object):
         self._result = []
         self._indent = 0
 
-    def create_node(self, parent, name, kw, escape=escape):
+    def create_node(self, parent, name, arg, kw, escape=escape):
         attribs = " ".join('%s="%s"' % (k, escape(v)) for k, v in kw.iteritems())
         if attribs:
             attribs = " " + attribs
@@ -223,6 +225,7 @@ if __name__ == "__main__":
             ]
         ]
     ]
+
     print(html.build(TagBuilder()))
     
     if len(sys.argv) > 1 and "-d" in sys.argv[1:]:
