@@ -2,6 +2,7 @@
 
 
 import cgi
+from contextlib import contextmanager
 
 
 class BuilderHelper(object):
@@ -59,9 +60,9 @@ class BuilderHelper(object):
             self.tail   = None
 
         def flatten(self, nested):
-            """Aplasta una lista compuesta por objetos, callables y sublistas"""
-            if hasattr(nested, '__call__'):
-                nested = nested()
+            """Aplasta una lista compuesta por objetos y sublistas"""
+            # Ya no acepto callables como shortcuts para generar sublistas.
+            # Mucho mejor usar list comprehensions en ese caso.
             if not hasattr(nested, '__iter__') or hasattr(nested, 'iteritems'):
                 self.nested.append(nested)
                 return
@@ -70,21 +71,14 @@ class BuilderHelper(object):
 
         def build(self, builder, parent=None):
             """Construye el objeto usando el builder especificado"""
-            obj = builder.create_node(parent, self.name, self.arg, self.kw)
-            # Forma antigua de hacerlo: todo se pasaba a addcontent
-            #nested = (item if not hasattr(item, 'build')
-            #               else item.build(builder, obj)
-            #               for item in self.nested)
-            #for item in nested:
-            #    builder.add_content(obj, item)
-            #
-            # Forma nueva de hacerlo: solo se pasan a add_content los literales
-            for item in self.nested:
-                if not hasattr(item, 'build'):
-                    builder.add_content(obj, item)
-                else:
-                    item.build(builder, obj)
-            builder.node_completed(self.name, obj)
+            with builder(parent, self.name, self.arg, self.kw) as (obj, append):
+                if not append:
+                    append = lambda item: None
+                for item in self.nested:
+                    if not hasattr(item, 'build'):
+                        append(item)
+                    else:
+                        item.build(builder, obj)
             return obj
 
         def __lshift__(self, other):
@@ -115,59 +109,6 @@ class BuilderHelper(object):
         return BuilderHelper.ObjEntry(name)
 
 
-class Builder(object):
-
-    """Objeto que implementa el patron Builder.
-    
-    Tiene tres metodos:
-    
-    - create_node(Node parent, String name, Dict kw):
-        Crea el nodo con el nombre, ancestro y atributos especificados.
-
-    - add_content(Node obj, <variable> data):
-        Agrega el objeto o dato "data" al nodo "obj".
-
-    - node_completed(String name, Node obj):
-        Marca el fin de la construccion del objeto.
-
-    El Builder por defecto es un objeto de depuracion, muestra las
-    secuencias de llamadas a los nodos.
-    """
-
-    def __init__(self):
-        self._result = []
-        self._indent = 0
-
-    def create_node(self, parent, name, arg, kw):
-        """Crea un nodo con el parent, name y atributos especificados"""
-        self._result.append("  "*self._indent + "create_node(parent:%s, name:%s, arg:%s, kw:%s)"
-                                              % (repr(parent), repr(name), repr(arg), repr(kw)))
-        self._indent += 1
-        return name if parent else self
-
-    def add_content(self, node, content):
-        """Agrega contenido al nodo.
-        
-        Solo se utiliza para valores literales. Los sub-objetos no se
-        indican con add_content, sino creando el subobjeto y llamando a su
-        create_node con este nodo como padre.
-        """
-        self._result.append("  "*self._indent + "add_content(node:%s, content:%s)"
-                                              % (repr(node), repr(content)))
-
-    def node_completed(self, name, node):
-        """Marca el nodo como finalizado"""
-        self._indent -= 1
-        self._result.append("  "*self._indent + "node_completed(name:%s, node:%s)"
-                                              % (repr(name), repr(node)))
-
-    def __str__(self):
-        return "\n".join(self._result)
-
-    def __repr__(self):
-        return "<DebugBuilder>"
-
-
 def escape(item, escape=cgi.escape, unicode=unicode):
     if not isinstance(item, unicode):
         item = str(item).decode("utf-8")
@@ -176,27 +117,41 @@ def escape(item, escape=cgi.escape, unicode=unicode):
 
 class TagBuilder(object):
 
-    """Builder de ejemplo para arboles de etiquetas (como HTML)"""
+    """Objeto que implementa el patron Builder.
+    
+    Se puede utilizar como un contextmanager, pasandole los siguientes
+    parametros:
+    
+        Node parent, String name, Tuple arg, Dict kw
+
+    Al utilizarlo devuelve dos elementos:
+    
+        - Un objeto que se puede usar como parent para todos los objetos
+          anidados
+        - Una funcion que sirve para procesar elementos anidados que no
+          sean objetos.
+    """
 
     def __init__(self):
         self._result = []
         self._indent = 0
 
-    def create_node(self, parent, name, arg, kw, escape=escape):
-        attribs = " ".join('%s="%s"' % (k, escape(v)) for k, v in kw.iteritems())
-        if attribs:
-            attribs = " " + attribs
-        self._result.append("  "*self._indent + "<" + name + attribs + ">")
+    @contextmanager
+    def __call__(self, parent, name, arg, kw, escape=escape):
+        tag, indent = name, "  " * self._indent
+        if arg:
+            comments = " ".join(escape(v) for v in arg)
+            self._result.append("%s<!-- %s -->" % (indent, comments))
+        if kw:
+            attribs = ('%s="%s"' % (k, escape(v)) for k, v in kw.iteritems())
+            tag = "%s %s" % (name, " ".join(attribs))
+        self._result.append("%s<%s>" % (indent, tag))
         self._indent += 1
-        return self
-
-    def add_content(self, node, content, escape=escape):
-        if content is not self:
-            self._result.append("  "*self._indent + escape(content))
-
-    def node_completed(self, name, node):
+        def append(literal, indent="  "*self._indent, result=self._result):
+            result.append("%s%s" % (indent, escape(literal)))
+        yield(name, append)
         self._indent -= 1
-        self._result.append("  "*self._indent + "</" + name + ">")
+        self._result.append("%s</%s>" % (indent, name))
 
     def __str__(self):
         return "\n".join(self._result)
