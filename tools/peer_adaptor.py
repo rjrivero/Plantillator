@@ -2,8 +2,8 @@
 
 """
 Esta libreria tiene como objetivo permitir adaptar el formato
-de los peerings en el Ayto. de Sevilla al nuevo modelo de datos, con PEERs
-y PeerSets
+de los peerings en el Ayto. de Sevilla al nuevo modelo de datos,
+con PEERs y PeerSets
 """
 
 from plantillator.meta import ObjectField

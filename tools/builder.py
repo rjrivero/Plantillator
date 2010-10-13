@@ -175,6 +175,8 @@ class BuilderHelper(object):
 
 
 def escape(item, escape=cgi.escape, unicode=unicode):
+    if item is None:
+        return "&nbsp;"
     if not isinstance(item, unicode):
         item = str(item).decode("utf-8")
     return escape(item, quote=True).encode('ascii', 'xmlcharrefreplace')
@@ -334,7 +336,7 @@ class SpecBuilder(object):
                 self.min = self.max = num
             self.name   = name
             self.args   = len(args.split(",")) if args else 0
-            self.kwargs = kwargs.keys() if kwargs else None
+            self.kwargs = list(x.strip() for x in kwargs.split(",")) if kwargs else None
 
         def validate(self, objentry):
             return self.get(objentry.name, None)

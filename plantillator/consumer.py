@@ -121,7 +121,6 @@ class Consumer(object):
                 if key not in self._done:
                     self._done.add(key)
                     self._pending.render(self._consume(*key))
-            return tuple() # para hacerlo compatible con consola.py
         finally:
             self.loader.close()
 

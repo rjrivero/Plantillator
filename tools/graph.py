@@ -5,6 +5,8 @@ from copy import copy
 from collections import namedtuple, defaultdict
 from itertools import chain, groupby, izip
 
+from .builder import SpecBuilder, BuilderHelper
+
 
 # Estilos de linea
 LINK_SOLID  = "solid"
@@ -417,3 +419,44 @@ class Graph(object):
             return item.properties
         return tuple(LinkList(prop, (x.descriptor for x in items)) for (prop, items)
             in groupby(sorted(self.link_dict.values(), key=key), key))
+
+
+x = BuilderHelper()
+
+GraphHelper = (x.grafo << [
+    x.grupo(args="id") << [
+        x.props(args="id_resolver, label_resolver, attribs") << [
+            x.estilo(kwargs="shape, rank") << "Nodos del grafo"
+        ]
+    ],
+    x.enlaces << [
+        x.props(args="src_id, src_label, src_attribs, dst_id, dst_label, dst_attribs") << [
+            x.estilo(kwargs="style, width, color") << "Enlaces del grafo"
+        ]
+    ]
+]).build(SpecBuilder())
+
+
+class GraphBuilder(object):
+
+    """Construye un objeto Graph a partir de un GraphHelper"""
+
+    def grafo(self, parent):
+        yield (Graph(), None)
+
+    def grupo(self, parent, groupid):
+        def func(*arg, **kw):
+            parent.add_group(groupid, *arg, **kw)
+        yield (func, None)
+
+    def enlaces(self, parent):
+        yield (parent.add_links, None)
+
+    def props(self, parent, *args):
+        yield ((parent, args), None)
+
+    def estilo(self, parent, **kw):
+        func, args = parent
+        items = list()
+        yield (None, items.append)
+        func(items, *args, **kw)

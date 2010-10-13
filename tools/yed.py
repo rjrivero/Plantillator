@@ -55,6 +55,9 @@ def YedGraph(graph, shapedir="iconos", plain=False):
     if any(x is None for x in sfiles.values()):
         return "*** ERROR: could not read all shapes"""
     # Primero, encontrar cuantos IDs de recurso tengo que reservar
+    # yEd es muy curioso... cuando cargue este grafico me va a mostrar
+    # los atributos alreves, pero cuando lo guarde les vuelve a dar
+    # la vuelta.
     reserved  = 10 # No. de IDs de atributo que dejamos libres, por si acaso.
     nattribs  = dict((v, i+reserved) for (i, v) in enumerate(graph.node_attribs))
     reserved  = len(nattribs) + reserved
@@ -82,13 +85,15 @@ def _graph_yed(graph, resources, sfiles, plain):
     # IDs de recursos
     #----------------
     # Para ordenar los atributos en funcion de su indice.
-    # Es importante porque el orden en el que se definan los atributos, es el
-    # orden en que yEd los presenta, pero invertido... tocate los webs.
+    # Es importante porque el orden en el que se definan los atributos,
+    # es el orden en que yEd los presenta, pero invertido... tocate los
+    # webs. De todas formas, despues de guardar, les vuelve a dar la
+    # vuelta!
     def key(item):
         return item[1]
-    for attrib, index in reversed(sorted(resources.nattribs.iteritems(), key=key)):
+    for attrib, index in sorted(resources.nattribs.iteritems(), key=key):
         yield '  <key attr.name="%s" attr.type="string" for="node" id="d%d"><default/></key>' % (attrib, index)
-    for attrib, index in reversed(sorted(resources.lattribs.iteritems(), key=key)):
+    for attrib, index in sorted(resources.lattribs.iteritems(), key=key):
         yield '  <key attr.name="%s" attr.type="string" for="edge" id="d%d"><default/></key>' % (attrib, index)
     yield '<graph edgedefault="undirected" id="G">'
     # Grupos
@@ -127,9 +132,9 @@ def _graph_yed(graph, resources, sfiles, plain):
                 '<y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>',
                 '<y:LineStyle color="%s" type="%s" width="%s"/>' % (sublist.color, STYLES[sublist.style], sublist.width),
                 '<y:Arrows source="none" target="none"/>',
-                '<!--',
-                '<y:EdgeLabel alignment="center" distance="2.0" fontFamily="Calibri" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="six_pos" modelPosition="tail" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true"></y:EdgeLabel>',
-                '-->',
+                '<!-- ',
+                '<y:EdgeLabel alignment="center" distance="2.0" fontFamily="Calibri" fontSize="9" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="side_slider" preferredPlacement="source" ratio="0.0" textColor="#000000" visible="true">%s  -&gt; %s</y:EdgeLabel>' % (escape(link[0].label), escape(link[1].label)),
+                '  -->',
                 '<y:BendStyle smoothed="false"/>',
                 '</y:PolyLineEdge>',
                 '</data>',

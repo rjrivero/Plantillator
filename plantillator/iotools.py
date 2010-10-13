@@ -191,7 +191,39 @@ class ContextMaker(object):
 class Interactor(object):
     
     """Presenta al usuario una serie de opciones a elegir"""
-    
+
+    class Node(dict):
+        def __init__(self):
+            super(Interactor.Node, self).__init__()
+            self.exhausted = False
+
+    def __init__(self):
+        self.tree = Interactor.Node()
+        self.path = []
+
+    def exhaust(self, itemlist):
+        """Selecciona un elemento de la lista, y lo marca como usado"""
+        itemlist = dict((str(item), item) for item in itemlist)
+        # Voy bajando por el arbol hasta llegar al punto
+        # de insercion actual
+        prev = self.tree
+        for index in self.path:
+            prev = prev.setdefault(index, Interactor.Node())
+        if len(prev) == 0:
+            # Es la primera vez que vemos este nodo.
+            prev.update(dict((x, Interactor.Node()) for x in itemlist.keys()))
+        else:
+            # Me aseguro de que las opciones son las mismas que
+            # se hayan dado en otras visitas a este nodo del arbol.
+            assert(prev.keys() == itemlist.keys())
+        # Busco un elemento de la lista que no este usado.
+        for name, subdict in prev.iteritems():
+            if not subdict.exhausted:
+                self.path.append(name)
+                return itemlist[name]
+        # Aqui no se debe llegar nunca!
+        assert(False)
+
     def select(self, itemlist, sort=True):
         """Permite al usuario seleccionar un elemento de la lista dada"""
         itemlist = list((str(item), item) for item in itemlist)
@@ -214,6 +246,20 @@ class Interactor(object):
         item = itemlist[chosen-1]
         return item[1]
 
-    def exhaust(self, itemlist):
-        """Selecciona un elemento de la lista, y lo marca como usado"""
-        pass
+    @property
+    def exhausted(self):
+        # Voy a revisar el path y marcar como exhausted los
+        # nodos para los que ya no haya opciones
+        prev, path = self.tree, [self.tree]
+        for index in self.path:
+            prev = prev[index]
+            path.append(prev)
+        # Marco el ultimo nodo del trayecto como agotado.
+        path[-1].exhausted = True
+        # Y voy revisando los nodos anteriores, a ver si
+        # con esta eleccion he agotado las opciones
+        for item in reversed(path[:-1]):
+            if all(x.exhausted for x in item.values()):
+                item.exhausted = True
+        self.path = []
+        return self.tree.exhausted
