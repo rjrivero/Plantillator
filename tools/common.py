@@ -2,6 +2,7 @@
 
 
 from itertools import chain
+from copy import deepcopy
 
 from .builder import BuilderHelper, SpecBuilder, TagBuilder
 
@@ -100,9 +101,11 @@ class TableBuilder(object):
         
         Si repeat=True, se repite la cabecera en cada grupo de filas.
         """
-        self._style  = style or dict(TableBuilder.STYLE)
-        if not style and vertical:
+        self._style = deepcopy(TableBuilder.STYLE)
+        if vertical:
             self._style['table']['class'] = 'vtable'
+        if style:
+            self._style.update(style)
         self._table  = None
         self._trcss = Toggle("eventr", "oddtr")
         self._thcss = Toggle("eventh", "oddth")
