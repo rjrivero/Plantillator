@@ -658,6 +658,11 @@ class DataSet(object):
         def __getattr__(self, attr):
             value = self._dataset._index(attr)._sorted(self._asc)
             return self.__dict__.setdefault(attr, value)
+        def __call__(self, *fields, **kw):
+            asc = kw.get("asc", True)
+            def key(item):
+                return tuple(item.get(f) for f in fields)
+            return tuple(sorted(self._dataset._children, key=key, reverse=(not asc)))
 
     @property
     def SORTBY(self):

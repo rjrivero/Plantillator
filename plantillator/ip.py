@@ -83,6 +83,20 @@ class IPAddress(object):
             # de tiempo.
             # self.validate()
 
+    def v6(self, prefix):
+        """Devuelve una direccion IPv6 generada a partir de esta IPv4.
+
+        Para eso, pasa a 8 digitos hexadecimales los 32 bits de la direccion
+        IPv4, y los concatena con el prefijo definido. La mascara es la
+        correspondiente a la que tuviera la direccion IPv4, es decir,
+        (128-32+self.bits)
+
+        Por ejemplo, IPAddress(10.0.0.1/8).v6("FEC0::") == FEC0::1200:0001/104
+        """
+        assert(self.bitsize == 32)
+        hi, lo = (self.int >> 16) & 0x0FFFF, (self.int) & 0x0FFFF
+        return IPAddress("%s%04X:%04X /%s" % (prefix, hi, lo, 96+self.bits))
+
     def validate(self):
         """Valida una IP que se ha creado a partir de una cadena de texto"""
         try:

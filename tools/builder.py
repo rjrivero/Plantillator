@@ -6,6 +6,29 @@ import cgi
 from copy import copy
 
 
+class NodeDescriptor(dict):
+
+    """Descriptor de nodo de un arbol.
+    
+    Describe las caracteristicas que debe cumplir el nodo: cuantas
+    instancias de este nodo puede haber, que subnodos puede tener, que
+    atributos, etc.
+    """
+
+    def __init__(self, name, num, args=None, kwargs=None):
+        super(NodeDescriptor, self).__init__()
+        if hasattr(num, '__iter__'):
+            self.min , self.max = num
+        else:
+            self.min = self.max = num
+        self.name   = name
+        self.args   = len(args.split(",")) if args else 0
+        self.kwargs = list(x.strip() for x in kwargs.split(",")) if kwargs else None
+
+    def validate(self, objentry):
+        return self.get(objentry.name, None)
+
+
 class BuilderHelper(object):
 
     """
@@ -59,7 +82,7 @@ class BuilderHelper(object):
             self.kw         = kw or dict()
             self.nested     = list()
             self.tail       = None
-            # El descriptor lo meto aqui como ayuda para el SpecBuilder.
+            # El descriptor raiz lo meto aqui como ayuda para el SpecBuilder.
             # Ya se que no deberia acoplar tanto las clases, pero asi es
             # mucho mas facil hacerlo funcionar.
             self.descriptor = None
@@ -79,12 +102,12 @@ class BuilderHelper(object):
 
         def _propagate(self, validate, items, has=hasattr):
             """Propaga la actualizacion del descriptor a todos los elementos"""
-            for item in (x for x in items if has(x, 'set_descriptor')):
+            for item in (x for x in items if has(x, '_set_descriptor')):
                 subdesc = validate(item)
                 assert(subdesc is not None)
-                item.set_descriptor(subdesc)
+                item._set_descriptor(subdesc)
 
-        def set_descriptor(self, descriptor):
+        def _set_descriptor(self, descriptor):
             """Actualiza el descriptor y valida la estructura"""
             if self.descriptor:
                 assert(descriptor == self.descriptor)
@@ -326,24 +349,9 @@ class SpecBuilder(object):
     ]
     """
 
-    class NodeDescriptor(dict):
-
-        def __init__(self, name, num, args=None, kwargs=None):
-            super(SpecBuilder.NodeDescriptor, self).__init__()
-            if hasattr(num, '__iter__'):
-                self.min , self.max = num
-            else:
-                self.min = self.max = num
-            self.name   = name
-            self.args   = len(args.split(",")) if args else 0
-            self.kwargs = list(x.strip() for x in kwargs.split(",")) if kwargs else None
-
-        def validate(self, objentry):
-            return self.get(objentry.name, None)
-
     def make_class(self, rootname):
         """Construye una clase Builder"""
-        self._last = SpecBuilder.NodeDescriptor(rootname, 1)
+        self._last = NodeDescriptor(rootname, 1)
         ObjEntry   = BuilderHelper.ObjEntry
         def get(self, attr, ROOTDESC=self._last):
             obj = ObjEntry(attr)
@@ -362,7 +370,7 @@ class SpecBuilder(object):
             kwargs = kw.get("kwargs", 0)
             num    = kw.get("num", 0)
             # Anoto la dependencia.
-            anew = SpecBuilder.NodeDescriptor(name, num, args, kwargs)
+            anew = NodeDescriptor(name, num, args, kwargs)
             self._last[name] = anew
             # Proceso el nuevo nodo
             prev, self._last = self._last, anew

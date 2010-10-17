@@ -60,6 +60,7 @@ class TableBuilder(object):
         'titletd': {'class': 'title'},
         'eventr':  {'class': 'even'},
         'oddtr':   {'class': 'odd'},
+        'firstd':  {'class': 'first'},
         'eventd':  {'class': 'even'},
         'oddtd':   {'class': 'odd'},
         'eventh':  {'class': 'even'},
@@ -79,6 +80,7 @@ class TableBuilder(object):
         'titletd': <tbody><tr>.  Por defecto, {'class': 'title'},
         'eventr':  <tr> pares.   Por defecto, {'class': 'even'},
         'oddtr':   <tr> impares. Por defecto, {'class': 'odd'},
+        'firstd':  <td> primera. Por defecto, {'class': 'first'},
         'eventd':  <td> pares.   Por defecto, {'class': 'even'},
         'oddtd':   <td> impares. Por defecto, {'class': 'odd'},
         'eventh':  <th> pares.   Por defecto, {'class': 'even'},
@@ -118,11 +120,13 @@ class TableBuilder(object):
         self._header = list()
         self._body   = list()
         self._htitle = None
-        yield (self._table, None)
+        builder = TagBuilder()
+        yield (builder, None)
         if not self._vertical:
             self._layout_horizontal()
         else:
             self._layout_vertical()
+        self._table.build(builder)
 
     def _layout_horizontal(self, x=BuilderHelper()):
         style, colspan = self._style, len(self._header)
@@ -155,9 +159,12 @@ class TableBuilder(object):
             )
         for row in rows:
             tdtoggle.reset()
+            firstgetter = self._header[0][1]
+            othergetter = self._header[1:]
             yield x.tr(**style[trtoggle.next()]) << (
-                (x.td(**style[tdtoggle.next()]) << getter(row))
-                for (label, getter) in self._header
+                x.td(**style['firstd']) << firstgetter(row),
+                ((x.td(**style[tdtoggle.next()]) << getter(row))
+                for (label, getter) in othergetter)
             )
 
     def _layout_vertical(self, x=BuilderHelper()):
@@ -204,8 +211,3 @@ class TableBuilder(object):
         items = list()
         yield (None, (lambda it: items.append(it)))
         self._body.append((title, items))
-
-    def __str__(self):
-        builder = TagBuilder()
-        self._table.build(builder)
-        return str(builder)
