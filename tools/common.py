@@ -40,7 +40,7 @@ class Toggle(object):
 
     def __init__(self, even, odd):
         self.index = 1
-        self.values = (even, odd)
+        self.values = (odd, even)
 
     def next(self):
         self.index = 1 - self.index

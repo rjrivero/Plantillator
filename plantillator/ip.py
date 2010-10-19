@@ -20,7 +20,7 @@ NIBBLES_LIST = (
 def simple_check_ip(ip, socket=socket):
     """Trata de validar si una cadena representa una IP"""
     try:
-        ip, mask = ip.split("/")
+        ip, mask = tuple(x.strip() for x in ip.split("/"))
         if ":" in ip:
             af, ml = socket.AF_INET6, 128
         else:
@@ -100,9 +100,9 @@ class IPAddress(object):
     def validate(self):
         """Valida una IP que se ha creado a partir de una cadena de texto"""
         try:
-            address, mask = self._str.split('/')
+            address, mask = tuple(x.strip() for x in self._str.split('/'))
         except ValueError:
-            address, mask = self._str, None
+            address, mask = self._str.strip(), None
         ip = IP(address) 
         self.bitsize = ip.prefixlen()
         masklen = int(mask) if mask is not None else self.bitsize

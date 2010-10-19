@@ -104,7 +104,12 @@ class BuilderHelper(object):
             """Propaga la actualizacion del descriptor a todos los elementos"""
             for item in (x for x in items if has(x, '_set_descriptor')):
                 subdesc = validate(item)
-                assert(subdesc is not None)
+                if subdesc is None:
+                    errmsg = "\n".join((
+                        "'%s' no puede ir dentro de '%s'" % (item.name, self.name),
+                        "(posibles valores: '%s')" % "', '".join(self.descriptor.keys()),
+                    ))
+                    raise AssertionError(errmsg)
                 item._set_descriptor(subdesc)
 
         def _set_descriptor(self, descriptor):

@@ -6,6 +6,7 @@ import sys
 import traceback
 
 from itertools import chain
+from .oset import OrderedSet
 
 
 class DataError(Exception):
@@ -520,7 +521,7 @@ class DataSet(object):
 
     def __init__(self, meta, children=None, indexable=True):
         self._meta = meta
-        self._children = set(children) if children is not None else set()
+        self._children = OrderedSet(children) if children is not None else OrderedSet()
         self._indexable = indexable
 
     def __getstate__(self):
@@ -656,13 +657,15 @@ class DataSet(object):
             self._dataset = dataset
             self._asc = asc
         def __getattr__(self, attr):
-            value = self._dataset._index(attr)._sorted(self._asc)
+            items = self._dataset._index(attr)._sorted(self._asc)
+            value = DataSet(self._dataset._meta, items, False)
             return self.__dict__.setdefault(attr, value)
         def __call__(self, *fields, **kw):
             asc = kw.get("asc", True)
             def key(item):
                 return tuple(item.get(f) for f in fields)
-            return tuple(sorted(self._dataset._children, key=key, reverse=(not asc)))
+            items = tuple(sorted(self._dataset._children, key=key, reverse=(not asc)))
+            return DataSet(self._dataset._meta, items, False)
 
     @property
     def SORTBY(self):

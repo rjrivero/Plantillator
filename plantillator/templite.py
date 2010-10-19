@@ -13,6 +13,8 @@ try:
 except ImportError:
     import pickle
 
+from .oset import OrderedSet
+
 
 def add_error(errlist, template, filename, lineno, exc_info):
     """Da formato a un mensaje de error provocado por una plantilla"""
@@ -170,7 +172,7 @@ def REVERSE(strings):
 
 def UNIQ(strings):
     """Filtra los items y devuelve solo los unicos"""
-    return sorted(set(strings))
+    return OrderedSet(strings)
 
 
 def SKIP(strings):
@@ -385,7 +387,7 @@ class Templite(object):
             first = lines[0].strip()
             # Si la primera linea termina en ":", el cuerpo se indenta
             # un nivel adicional respecto a ella.
-            if first.endswith(":"):
+            if first.endswith(":") and not first.strip().startswith("#"):
                 body = 1
             elif offset < 0:
                 # Un fin de bloque que no inicie otro, se descarta
