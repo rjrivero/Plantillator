@@ -6,9 +6,10 @@ import os
 import os.path
 
 from itertools import count, chain, repeat, izip
+from copy import copy
 
 from .meta import DataError, Meta, DataObject, DataSet, PeerSet
-from .meta import ObjectField, DataSetField
+from .meta import ObjectField, DataSetField, Field
 from .pathfinder import FileSource
 from .fields import FieldMap, IntField
 
@@ -60,14 +61,32 @@ class CSVMeta(Meta):
 
 
 def flip(self):
+    """Da la vuelta a un enlace (cambia las POSITION)"""
     for item in self:
         item.POSITION, item.PEER.POSITION = item.PEER.POSITION, item.POSITION
+
+
+def split(self, attrib, new_attrib):
+    """Divide los enlaces en funcion del valor de un campo"""
+    if self._meta:
+        self._meta.fields[new_attrib] = Field()
+    new_items, dummy = [], [None]
+    for item in self:
+        for value in item.get(attrib, dummy):
+            new_item = copy(item)
+            setattr(new_item, new_attrib, value)
+            if item.PEER:
+                new_item.PEER = copy(item.PEER)
+                setattr(new_item.PEER, new_attrib, value)
+            new_items.append(new_item)
+    return self._new(new_items, False)
 
 
 class CSVDataSet(DataSet):
 
     """Incluye la funcion "FLIP", para darle la vuelta a los enlaces"""
-    FLIP = flip
+    FLIP  = flip
+    SPLIT = split
 
     def _new(self, items=None, indexable=False):
         return CSVDataSet(self._meta, items, indexable)
@@ -89,6 +108,7 @@ class CSVPeerSet(PeerSet):
 
     """Incluye la funcion "FLIP", para darle la vuelta a los enlaces"""
     FLIP = flip
+    SPLIT = split
 
     def _new(self, items, meta=None):
         if meta:
