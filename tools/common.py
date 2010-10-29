@@ -211,3 +211,47 @@ class TableBuilder(object):
         items = list()
         yield (None, (lambda it: items.append(it)))
         self._body.append((title, items))
+
+
+class GroupBuilder(object):
+
+    """Builder para agrupar objetos"""
+
+    def __init__(self):
+        self._attribs = dict()
+        self._peer_attribs = dict()
+        self._meta = Meta()
+        self._peer_meta = Meta()
+        self._ca = self._attribs
+        self._cm = self._meta
+
+    def _do_merge(self, meta, attribs, obj, items):
+        for key, func in attribs.iteritems():
+            if func is None:
+                val = items[0].get(key)
+                if not all(x.get(key) == val for x in items[1:]):
+                    raise ValueError("Not mergeable")
+            else:
+                val = func(items)
+            setattr(obj, key, val)
+
+    def _merge(self, items):
+        obj, peer = DataObject(self._meta), DataObject(self._meta)
+        self._do_merge(self._meta, self._attribs, obj, items)
+        self._do_merge(self._meta, self._peer_attribs, peer, items.PEER)
+        obj.PEER = PEER
+        return obj
+
+    def group(self, parent):
+        yield (self._merge, None)
+
+    def PEER(self, parent):
+        self._ca, self._cm = self._peer_attribs, self._peer_meta
+        yield (parent, None)
+        self._ca, self._cm = self._attribs, self._meta
+
+    def __call__(self, parent, key, arg, kw):
+        self._current[key] = None
+        def setkey(value):
+            self._current[key] = value
+        yield (parent, setkey)

@@ -82,6 +82,20 @@ def split(self, attrib, new_attrib):
     return self._new(new_items, False)
 
 
+def merge(self, key):
+    """Combina varios enlaces en funcion del valor de una clave"""
+    if self._meta:
+        self._meta.fields[self._meta.path[-1]] = DataSetField()
+    keys, values = dict(), list()
+    for item in self:
+        keys.setdefault(key(item), []).append(item)
+    for itemlist in keys.values():
+        if len(itemlist) == 1:
+            values.append(itemlist[0])
+        else:
+            return self._new(values, False)
+
+
 class CSVDataSet(DataSet):
 
     """Incluye la funcion "FLIP", para darle la vuelta a los enlaces"""
