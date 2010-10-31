@@ -386,11 +386,11 @@ class LinkBlock(object):
         Cada sub-lista tiene las columnas comunes y las especificas
         de una parte del enlace.
         """
-        groups, commons, columns = list(), list(), list(self.columns)
-        shared_selectors = list()
+        selectors, attribs, columns = list(), list(), list(self.columns)
+        shared_selectors, shared_attribs = list(), list()
         while columns:
             # Voy dividiendo las columnas en subgrupos
-            sublist, selindex = list(), len(shared_selectors)
+            subsel, subattr, selindex = list(), list(), len(shared_selectors)
             # Primera parte: columnas formadas por selectores
             while columns and columns[0].selector:
                 column = columns.pop(0)
@@ -402,7 +402,7 @@ class LinkBlock(object):
                     shared_selectors.append((selindex, column))
                 # Si no comienza por "*", es exclusivo de este grupo
                 else:
-                    sublist.append(column)
+                    subsel.append(column)
                 selindex += 1
             # Segunda parte: incluyo los "shared selectors" que haya
             # definidos hasta ahora.
@@ -411,22 +411,29 @@ class LinkBlock(object):
             # los peers, los selectores solo son comunes a partir del peer en
             # que se definen.
             for index, selector in shared_selectors:
-                sublist.insert(index, selector)
+                subsel.insert(index, selector)
             # Tercera parte: columnas formadas por campos
             while columns and not columns[0].selector:
                 column = columns.pop(0)
                 # si el campo empieza por "*", es comun a todos los grupos
                 if column.colname.startswith("*"):
                     column.colname = column.colname[1:].strip()
-                    commons.append(column)
+                    shared_attribs.append(column)
                 # Si no comienza por "*", es exclusivo de este grupo
                 else:
-                    sublist.append(column)
-            groups.append(sublist)
+                    subattr.append(column)
+            selectors.append(subsel)
+            attribs.append(subattr)
         # Extiendo cada grupo con los grupos comunes
+        groups = list()
+        for subsel, subattr in zip(selectors, attribs):
+            # Los campos comunes los pongo al principio de las listas,
+            # para que si un grupo los re-define despues, el nuevo
+            # valor tenga prioridad sobre el comun.
+            subsel.extend(shared_attribs)
+            subsel.extend(subattr)
+            groups.append(subsel)
         # self.p2p = (len(groups) == 2)
-        for group in groups:
-            group.extend(commons)
         # "des-multiplexo" los selectores y los convierto en ColumnLists.
         self.groups = list()
         for pos, group in enumerate(groups):
@@ -672,7 +679,7 @@ class CSVShelf(object):
                 try:
                     item.prepare(meta)
                 except:
-                    raise DataError(item.id, item.index)
+                    raise DataError(item.source, item.index)
         # ejecuto la carga de datos (solo de las tablas de primer nivel,
         # el resto se carga bajo demanda)
         data = DataObject(meta)

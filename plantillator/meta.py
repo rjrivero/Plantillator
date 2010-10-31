@@ -3,8 +3,9 @@
 
 import bisect
 import sys
-import traceback
+import os.path
 
+from traceback import format_exception_only
 from itertools import chain
 from .oset import OrderedSet
 
@@ -25,6 +26,14 @@ class DataError(Exception):
         self.source = source
         self.index = index
         self.exc_info = sys.exc_info()
+
+    def __str__(self):
+        return "\n".join((
+            "***",
+            "Error en fichero de datos %s [linea %s]" % (os.path.basename(self.source), self.index),
+            "***",
+            "".join(format_exception_only(*(self.exc_info[:2]))),
+        ))
 
 
 def kw_as_crit(key, val):

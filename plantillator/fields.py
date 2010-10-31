@@ -1,4 +1,5 @@
 #/usr/bin/env python
+# -*- coding: cp1252 -*-
 
 
 from itertools import chain
@@ -15,6 +16,19 @@ class IntField(Field):
             return converter(data) if data else None
         except ValueError:
             return None
+
+
+class BoolField(Field):
+
+    def convert(self, data,
+        truevals  = ("SI", "SÍ", "S", "YES", "Y", "1"),
+        falsevals = ("NO", "N", "0")):
+        data = data.upper()
+        if data in truevals:
+            return True
+        if data in falsevals:
+            return False
+        raise ValueError(data)
 
 
 class StrField(Field):
@@ -163,6 +177,7 @@ class FieldMap(object):
 
     ScalarFields = {
         'int': IntField,
+        'bool': BoolField,
         'string': StrField,
         'ip': IPv4Field,
         'ipv4': IPv4Field,

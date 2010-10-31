@@ -15,13 +15,13 @@ from optparse import OptionParser
 from contextlib import contextmanager
 
 try:
-    from plantillator import ShelfLoader
+    from plantillator import ShelfLoader, DataError
     from tree import TreeCanvas
 except ImportError:
     import os.path
     import sys
     sys.path.append(".")
-    from plantillator import ShelfLoader
+    from plantillator import ShelfLoader, DataError
     from tree import TreeCanvas
 
 
@@ -212,9 +212,20 @@ try:
     # - pongo un diccionario vacio como locals.
     if not options.profile:
         DataNav(data, geometry).mainloop()
-except Exception, detail:
+
+except DataError as details:
+
+    print >> sys.stderr, str(details) 
+    if options.debug:
+        try:
+            print_exception(*details.exc_info, file=sys.stderr)
+        except AttributeError:
+            print_exc(file=sys.stderr)
+    sys.exit(PARSE_ERRNO)    
+    
+except Exception as details:
     for detail in format_exception_only(sys.exc_type, sys.exc_value):
-        sys.stderr.write(str(detail))
+        sys.stderr.write(str(details))
     if options.debug:
         print_exc(file=sys.stderr)
     sys.exit(UNKNOWN_ERRNO)

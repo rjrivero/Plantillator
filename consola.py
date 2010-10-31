@@ -59,15 +59,9 @@ parser.add_option("-t", "--test-mode",
         help="Itera sobre todos los posibles valores de los 'SELECT'")
 parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
         help="Extension del fichero resultado (por defecto, .cfg)")
-#parser.add_option("-k", "--keep_comments",
-#        action="store_true", dest="keep_comments", default=False,
-#        help="Conserva los comentarios de la plantilla")
 parser.add_option("-l", "--lazy",
         action="store_true", dest="lazy", default=False,
         help="Demora parte del proceso de los datos CSV a tiempo de ejecucion")
-#parser.add_option("-n", "--new-engine",
-#        action="store_true", dest="new_engine", default=False,
-#        help="Activa el nuevo motor de plantillas")
 
 (options, args) = parser.parse_args()
 if len(args) < 1 and not options.shell:
@@ -95,75 +89,6 @@ for name in args:
     else:
         inputfiles.append(name)
 
-# manejadores para los eventos definidos
-#def select_handler(opcode, command, glob, data):
-    #"""Gestiona el comando 'select'"""
-    #var = command.var
-    #art = command.art
-    #itemlist = list((str(item), item) for item in command.pick)
-    #if len(itemlist) == 1:
-        #item = itemlist[0]
-        #print "** SE SELECCIONA %s = %s" % (var, item[0])
-        #data[var] = item[1]
-    #elif len(itemlist) > 1:
-        #print "****"
-        #print "Selecciona %s %s de la siguiente lista:\n" % (art, var)
-        #itemlist.sort()
-        #for index, item in enumerate(itemlist):
-            #print "  %s.- %s" % (index+1, item[0])
-        #print ""
-        #chosen = 0
-        #while chosen < 1 or chosen > len(itemlist):
-            #userdata = input("Seleccione [1-%d]: " % len(itemlist))
-            #if type(userdata) == int:
-                #chosen = userdata
-        #data[var] = itemlist[chosen-1][1]
-
-
-#def break_handler(opcode, command, glob, data):
-    #if options.debug and not options.test:
-        #code.interact("Breakpoint %s" % (command.breakpoint or "<>"),
-                      #local={'glob': glob, 'data':data})
-
-
-## manejador para el caso de loop
-
-#WASTED, PICKS = dict(), list()
-
-#def loop_select(opcode, command, glob, data):
-    #"""Gestiona el comando 'select' en un bucle"""
-    #global WASTED, PICKS
-    #var = command.var
-    ## busco un elemento que no este totalmente usado.
-    #hit, hitcount = False, 0
-    #for current in sorted(command.pick, cmp=lambda a, b: cmp(str(a), str(b))):
-        #if str(current) not in WASTED:
-            #hitcount += 1
-            #hit = current
-            ## recorro toda la lista porque en cada iteracion puede estar
-            ## ordenada de una forma distinta, si no la recorro no me entero
-            ## de si todos los elementos estan wasted o no.
-    #if hit:
-        #print "AUTO-SELECCIONADO ELEMENTO %s" % str(hit)
-        #data[var] = hit
-        #PICKS.append((hitcount, str(hit)))
-    ## si he agotado la lista, marco como usado el elemento
-    ## que se haya seleccionado en el ultimo select anterior a este.
-
-
-#def handle(item):
-    #"""Gestiona los comandos lanzados por el proceso de rendering"""
-    #global options
-    #handlers = {
-            #"SELECT": select_handler if not options.test else loop_select,
-            #"BREAK": break_handler,
-    #}
-    #handler = handlers.get(item.opcode, None)
-    #if handler:
-        #handler(*item)
-    #else:
-        #print "NO SE RECONOCE COMANDO %s" % item.opcode
-
 
 def exit_with_errors(details):
     """Sale volcando todos los mensajes de error."""
@@ -177,7 +102,6 @@ def exit_with_errors(details):
 
 
 # y cargo a PLANTILLATOR!
-# plantillator = Plantillator() if not options.new_engine else Consumer()
 plantillator = Consumer()
 plantillator.path = path
 plantillator.outpath = options.outpath
@@ -188,7 +112,6 @@ plantillator.ext = options.ext
 plantillator.overwrite = True
 plantillator.lazy = options.lazy
 plantillator.test = options.test
-#plantillator.keep_comments = options.keep_comments
 
 try:
 
@@ -204,29 +127,7 @@ try:
             plantillator.render()
             if plantillator.actor.exhausted:
                 break
-                #handle(item)
-            #plantillator.overwrite = False
-            #if not PICKS:
-                #break
-            #hitcount, hitstr = PICKS.pop()
-            #WASTED[hitstr] = True
-            #while hitcount <= 1 and PICKS:
-                #hitcount, hitstr = PICKS.pop()
-                #WASTED[hitstr] = True
-            #if hitcount <= 1:
-                #break
 
-#except CommandError as detail:
-
-    #for msg in format_exception_only(sys.exc_type, sys.exc_value):
-        #sys.stderr.write(str(msg))
-    #if options.debug:
-        #print_exc(file=sys.stderr)
-        #detail.data['error'] = detail
-        #code.interact("Consola de depuracion", local={'data':detail.data})
-    #sys.exit(TRANSLATION_ERRNO)
-
-#except NewParseError as details:
 except ParseError as details:
 
     exit_with_errors(details)
@@ -235,14 +136,9 @@ except TemplateError as details:
 
     exit_with_errors(details)
 
-#except (ParseError, TemplateError, DataError) as detail:
-except DataError as detail:
+except DataError as details:
 
-    for msg in format_exception_only(sys.exc_type, sys.exc_value):
-        sys.stderr.write(str(msg))
-    if options.debug:
-        print_exc(file=sys.stderr)
-    sys.exit(PARSE_ERRNO)
+    exit_with_errors(details)
 
 except Exception as detail:
 
