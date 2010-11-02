@@ -333,16 +333,25 @@ class Templite(object):
         def __init__(self, part, delim):
             # Para evitar demasiadas newlines, si la primera linea
             # del texto entre bloques esta vacia, la elimino.
+            self.parts = list()
             first = part.find("\n")
             if first >= 0:
                 if part[:(first+1)].isspace():
                     part = part[(first+1):]
-            self.parts = list()
-            actions, accum = cycle((self.odd, self.even)), ""
-            for subpart in part.split(delim):
-                accum = actions.next()(subpart, accum, delim)
-            if accum:
-                self.parts.append(accum)
+            # Si una linea entre bloques esta completamente vacia,
+            # la quito.
+            # y para evitar demasiados espacios, elimino el whitespace
+            # no significativo en la ultima linea.
+            last = part.rfind("\n")
+            if last >= 0:
+                if part[last:].isspace():
+                    part = part[:(last+1)]
+            if not part.isspace():
+                actions, accum = cycle((self.odd, self.even)), ""
+                for subpart in part.split(delim):
+                    accum = actions.next()(subpart, accum, delim)
+                if accum:
+                    self.parts.append(accum)
 
         def odd(self, subpart, accum, delim):
             """Posiciones impares: todo es simplemente texto"""
@@ -508,6 +517,16 @@ class Templite(object):
             if self.offset:
                 raise SyntaxError("%i block statement(s) not terminated" % self.offset)
             tree = ast.parse(translated, tmplid, 'exec')
+            try:
+                # Intento sacar el codigo del template como un fichero .py
+                # Esto ayuda a la depuracion y demas.
+                dirname = os.path.dirname(tmplid)
+                filname = os.path.basename(tmplid)
+                pyname  = os.path.join(dirname, "_%s.py" % filname)
+                with open(pyname, "w+b") as outfile:
+                    outfile.write(translated)
+            except IOError:
+                pass
             return Templite.State(tmplid, timestamp, translated, tree)
         except Exception as details:
             raise ParseError(tmplid, translated)
