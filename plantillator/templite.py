@@ -154,10 +154,11 @@ class Accumulator(object):
             self.group = None
         return result
 
-    def add(self, string):
+    def __lshift__(self, string):
         """manda la cadena al buffer actual"""
         if string:
             self.current.append(string)
+        return self
 
 
 def SORT(strings):
@@ -405,7 +406,7 @@ class Templite(object):
                 parts.append('"".join')
                 # Los filtros se aplican en orden inverso
                 filt = "".join("%s(" % x.strip() for x in reversed(parts))
-                filt += "_accumulator.pop()" + ")" * len(parts)
+                filt += "_out.pop()" + ")" * len(parts)
                 first, lines = None, None
             # Dedentamos las lineas que siguen a la primera.
             if lines:
@@ -439,7 +440,7 @@ class Templite(object):
             #             una lista interna diferente.
             if self.offset == 0 and self.body == 1:
                 yield 0
-                yield ("_accumulator.push()",)
+                yield ("_out.push()",)
             yield self.offset
             if self.first:
                 yield (self.first,)
@@ -450,25 +451,32 @@ class Templite(object):
                     for x in ("for", "while", "if", "try"))
                 if self.body == 1 and (self.offset == -1 or is_loop):
                     self.lines = tuple(chain((
-                            "_accumulator.refresh()",
+                            "_out.refresh()",
                         ), self.lines or tuple()))
                 yield self.body
                 if self.lines:
                     yield self.lines
             else:
-                # El filtro por defecto es '"".join(_accumulator.pop())'
-                yield ("_accumulator.add(%s)" % self.filt,)
+                # El filtro por defecto es '"".join(_out.pop())'
+                yield ("_out << %s" % self.filt,)
 
     def do_literal(self, part, start, end, delim, indent):
         """Procesa un trozo de plantilla fuera de bloques"""
         indent = self.offset * indent
-        def odd(subpart):
-            return indent + ("_accumulator.add(%s)" % repr(subpart))
-        def even(subpart):
-            return indent + ("_accumulator.add(str(%s))" % subpart)
+        def odd(subpart,  prefix=""):
+            return prefix + repr(subpart)
+        def even(subpart, prefix=""):
+            return prefix + "str(%s)" % subpart
         actions = cycle((odd, even))
-        for subpart in Templite.Literal(part, delim):
-            yield actions.next()(subpart)
+        parts   = list(Templite.Literal(part, delim))
+        if parts:
+            if len(parts) == 1:
+                yield indent + "_out << %s" % actions.next()(parts[0])
+            else:
+                yield indent + "_out << ''.join(("
+                prefix = indent + "    "
+                yield ",\n".join(actions.next()(part, prefix) for part in parts)
+                yield indent + "))"
 
     def do_block(self, part, start, end, delim, indent):
         """Procesa un trozo de plantilla dentro de un bloque."""
@@ -581,9 +589,9 @@ class Templite(object):
         Se convierte (aproximadamente) en la siguiente secuencia de llamadas:
 
             consumer.next()
-            accumulator.add("Hola, ")
-            accumulator.add("Pedro")
-            accumulator.add(" !")
+            _out << "Hola, "
+            _out << "Pedro"
+            _out << " !"
             consumer.send("".join(accumulator))
             consumer.close()
 
@@ -602,14 +610,14 @@ class Templite(object):
         if glob is None:
             glob = dict()
         glob["_consumer"] = consumer
-        glob["_accumulator"] = Accumulator(consumer)
+        glob["_out"] = Accumulator(consumer)
         glob["UNIQ"] = UNIQ
         glob["SORT"] = SORT
         glob["SKIP"] = SKIP
         glob["REVERSE"] = REVERSE
         consumer.next()
         if self.embed(consumer, glob):
-            result = "".join(glob["_accumulator"].collect())
+            result = "".join(glob["_out"].collect())
             if result:
                 consumer.send(result)
             consumer.close()
