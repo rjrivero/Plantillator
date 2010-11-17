@@ -640,7 +640,7 @@ class DataSet(object):
         return self._indexes.setdefault(attr, index)
 
     def __add__(self, other):
-        assert(self._meta == other._meta)
+        # assert(self._meta == other._meta)
         # Si uno de los dos datasets esta vacio, devolvemos
         # el otro (en lugar de la suma) para poder aprovechar
         # los indices.
@@ -649,7 +649,9 @@ class DataSet(object):
         if not self._children:
             return other
         # Si los dos tiene datos, devolvemos un dataset no indexable.
-        return self._new(self._children.union(other), False)
+        if self._meta == other._meta:
+            return self._new(self._children.union(other), False)
+        return PeerSet(self._children.union(other))
 
     def __pos__(self):
         assert(len(self._children) == 1)

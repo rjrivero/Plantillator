@@ -6,6 +6,7 @@
 #
 
 import collections
+from itertools import chain
 
 
 class OrderedSet(collections.MutableSet):
@@ -68,3 +69,6 @@ class OrderedSet(collections.MutableSet):
 
     def __del__(self):
         self.clear() # remove circular references
+
+    def union(self, other):
+        return OrderedSet(chain(self, other))

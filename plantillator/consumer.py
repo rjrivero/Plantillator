@@ -37,12 +37,16 @@ class Consumer(object):
         self.__dict__.update(self.OPTIONS)
 
     def prepare(self):
-        if len(self.inputfiles) > 1:
+        inputfiles = len(self.inputfiles)
+        if inputfiles > 1:
             datashelf = self.inputfiles[0]
             template  = self.inputfiles[1]
-        else:
+        elif inputfiles == 1:
             datashelf = "data.shelf"
             template  = self.inputfiles[0]
+        else:
+            datashelf = "data.shelf"
+            template  = None
         self.tmplname = template
         self.loader = ShelfLoader(datashelf)
         try:
