@@ -525,16 +525,16 @@ class Templite(object):
             if self.offset:
                 raise SyntaxError("%i block statement(s) not terminated" % self.offset)
             tree = ast.parse(translated, tmplid, 'exec')
-            try:
-                # Intento sacar el codigo del template como un fichero .py
-                # Esto ayuda a la depuracion y demas.
-                dirname = os.path.dirname(tmplid)
-                filname = os.path.basename(tmplid)
-                pyname  = os.path.join(dirname, "_%s.py" % filname)
-                with open(pyname, "w+b") as outfile:
-                    outfile.write(translated)
-            except IOError:
-                pass
+#            try:
+#                # Intento sacar el codigo del template como un fichero .py
+#                # Esto ayuda a la depuracion y demas.
+#                dirname = os.path.dirname(tmplid)
+#                filname = os.path.basename(tmplid)
+#                pyname  = os.path.join(dirname, "_%s.py" % filname)
+#                with open(pyname, "w+b") as outfile:
+#                    outfile.write(translated)
+#            except IOError:
+#                pass
             return Templite.State(tmplid, timestamp, translated, tree)
         except Exception as details:
             raise ParseError(tmplid, translated)
