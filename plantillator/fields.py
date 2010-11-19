@@ -92,6 +92,9 @@ class ListField(Field):
         value = converter(x for x in value if x is not None)
         return value or None
 
+    def dynamic(self, item, attr):
+        return BaseList()
+
 
 class SetField(Field):
 
@@ -108,6 +111,9 @@ class SetField(Field):
         value = (self.nestedfld.convert(i.strip()) for i in data.split(","))
         value = converter(x for x in value if x is not None)
         return value or None
+
+    def dynamic(self, item, attr):
+        return BaseSet()
 
 
 class RangeField(Field):
@@ -141,6 +147,9 @@ class RangeField(Field):
                 rango.append(value)
         return converter(rango) or None
 
+    def dynamic(self, item, attr):
+        return BaseList()
+
 
 class ListRangeField(RangeField):
 
@@ -152,6 +161,9 @@ class ListRangeField(RangeField):
         ranges = (super(ListRangeField, self).convert(x.strip()) for x in data.split(","))
         ranges = (x for x in ranges if x is not None)
         return converter(chain(*ranges)) or None
+
+    def dynamic(self, item, attr):
+        return BaseList()
 
 
 class ComboField(Field):
@@ -178,6 +190,7 @@ class FieldMap(object):
     ScalarFields = {
         'int': IntField,
         'bool': BoolField,
+        'boolean': BoolField,
         'string': StrField,
         'ip': IPv4Field,
         'ipv4': IPv4Field,
