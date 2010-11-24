@@ -10,7 +10,9 @@ from xml.sax.saxutils import escape
 from collections import namedtuple
 
 from plantillator.pathfinder import FileSource
-from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, StringWrapper
+from .graph import StringWrapper
+from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
+from .graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
 
 
 VIEWBOX = re.compile(r'viewBox="\d+(\.\d+)?\s+\d+(\.\d+)?\s+(?P<width>\d+(\.\d+)?)\s+(?P<height>\d+(\.\d+)?)"')
@@ -40,6 +42,12 @@ STYLES = {
     LINK_SOLID: "line",
     LINK_DOTTED: "dotted",
     LINK_DASHED: "dashed",
+}
+
+ARROWS = {
+    ARROW_SMALL: "standard",
+    ARROW_LARGE: "delta",
+    ARROW_NONE: "none",
 }
 
 
@@ -130,8 +138,8 @@ def _graph_yed(graph, resources, sfiles, plain):
                 '<data key="d5">',
                 '<y:PolyLineEdge>',
                 '<y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>',
-                '<y:LineStyle color="%s" type="%s" width="%s"/>' % (sublist.color, STYLES[sublist.style], sublist.width),
-                '<y:Arrows source="none" target="none"/>',
+                '<y:LineStyle color="%s" type="%s" width="%s"/>' % (sublist.color, STYLES.get(sublist.style, "solid"), sublist.width),
+                '<y:Arrows source="%s" target="%s"/>' % (ARROWS.get(sublist.source_arrow, "none"), ARROWS.get(sublist.target_arrow, "none")),
                 '<!-- ',
                 '<y:EdgeLabel alignment="center" distance="2.0" fontFamily="Calibri" fontSize="9" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="side_slider" preferredPlacement="source" ratio="0.0" textColor="#000000" visible="true">%s  -&gt; %s</y:EdgeLabel>' % (escape(link[0].label), escape(link[1].label)),
                 '  -->',

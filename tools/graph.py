@@ -13,6 +13,11 @@ LINK_SOLID  = "solid"
 LINK_DOTTED = "dotted"
 LINK_DASHED = "dashed"
 
+# Estilos de flecha
+ARROW_SMALL = "small"
+ARROW_LARGE = "large"
+ARROW_NONE  = "none"
+
 
 class ItemDescriptor(object):
 
@@ -152,6 +157,8 @@ class LinkProperties(object):
         "style": LINK_SOLID,
         "width": 1,
         "color": "#000000",
+        "source_arrow": ARROW_NONE,
+        "target_arrow": ARROW_NONE,
     }
 
     def __init__(self, src_attribs, dst_attribs, **kw):
@@ -384,6 +391,8 @@ class Graph(object):
         - style: "dotted", "dashed", "solid"
         - width: ancho de la linea
         - color: color de la linea
+        - source_arrow: flecha en el origen
+        - target_arrow: flecha en el destino
         """
         properties  = LinkProperties(src_attribs, dst_attribs, **kw)
         descriptors = LinkProperties.process(items,

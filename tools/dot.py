@@ -10,7 +10,9 @@ import subprocess
 import os
 import os.path
 
-from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, StringWrapper
+from .graph import StringWrapper
+from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
+from .graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
 
 
 class DotFilter(str):
@@ -188,6 +190,14 @@ STYLES = {
     LINK_DASHED: "dashed",
 }
 
+
+ARROWS = {
+    ARROW_SMALL: "normal",
+    ARROW_LARGE: "dot",
+    ARROW_NONE:  "none",
+}
+
+
 def DotGraph(graph, shapedir="iconos", scale=False):
     """Convierte un grafo en texto en formato dot"""
     return StringWrapper("\n".join(_graph_dot(graph, shapedir, scale)))
@@ -208,7 +218,7 @@ def _graph_dot(graph, shapedir, scale):
     - scale: True si se quiere escalar el grafico a A4
     """
     yield "\n".join((
-        "Graph full {",
+        "Digraph full {",
         '  charset="UTF-8";',
     ))
     if scale:
@@ -231,9 +241,11 @@ def _graph_dot(graph, shapedir, scale):
     IDs = graph.IDs
     for sublist in graph.links:
         for link in sublist.valid_links(IDs):
-            yield '  %s -- %s [ color="%s", penwidth="%s", style="%s" ];' % (
+            yield '  %s -> %s [ color="%s", penwidth="%s", style="%s", arrowhead="%s", arrowtail="%s" ];' % (
                 link[0].ID, link[1].ID, sublist.color, sublist.width,
-                STYLES[sublist.style]
+                STYLES.get(sublist.style, "solid"),
+                ARROWS.get(sublist.source_arrow, "none"),
+                ARROWS.get(sublist.target_arrow, "none"),
             )
     yield "}"
 

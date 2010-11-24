@@ -184,12 +184,15 @@ class ObjectField(Field):
         super(ObjectField, self).__init__(indexable=False)
         self.meta = meta
 
+    def _new(self, items=None, indexable=False):
+        if self.meta:
+            return DataSet(self.meta, items, indexable)
+        return PeerSet(items)
+        
     def collect(self, dset, attr):
         items = (item._get(attr) for item in dset._children)
         items = (item for item in items if item is not None)
-        if self.meta:
-            return DataSet(self.meta, items, indexable=False)
-        return PeerSet(items)
+        return self._new(items)
 
 
 class DataSetField(Field):
@@ -202,7 +205,9 @@ class DataSetField(Field):
 
     def _new(self, items=None, indexable=True):
         """Crea un DataSet nuevo"""
-        return DataSet(self.meta, items, indexable)
+        if self.meta:
+            return DataSet(self.meta, items, indexable)
+        return PeerSet(items)
 
     def dynamic(self, item, attr):
         return self._new()
@@ -543,8 +548,10 @@ class DataSet(object):
         self._children = state[1]
         self._indexable = True
 
-    def _new(self, items=None, indexable=False):
-        return DataSet(self._meta, items, indexable)
+    def _new(self, meta, items=None, indexable=False):
+        if meta:
+            return DataSet(meta, items, indexable)
+        return PeerSet(items)
 
     def __call__(self, *crit, **shortcut):
         # Mini-especializacion: es muy habitual buscar un objeto
@@ -572,7 +579,7 @@ class DataSet(object):
             # si el resultado del filtro es el dataset entero,
             # devuelvo el propio dataset para aprovechar los indices.
             return self
-        return self._new(items, False)
+        return self._new(self._meta, items, False)
 
     def __getattr__(self, attr):
         """Obtiene el atributo elegido, en funcion de su tipo"""
@@ -644,14 +651,15 @@ class DataSet(object):
         # Si uno de los dos datasets esta vacio, devolvemos
         # el otro (en lugar de la suma) para poder aprovechar
         # los indices.
-        if not other._children:
+        if not other:
             return self
-        if not self._children:
+        if not self:
             return other
         # Si los dos tiene datos, devolvemos un dataset no indexable.
-        if self._meta == other._meta:
-            return self._new(self._children.union(other), False)
-        return PeerSet(self._children.union(other))
+        meta = self._meta
+        if meta != other.__dict__.get('_meta', None):
+            meta = None
+        return self._new(meta, self._children.union(other), False)
 
     def __pos__(self):
         assert(len(self._children) == 1)
@@ -731,16 +739,16 @@ class PeerSet(frozenset):
             value = BaseSet(items)
         return self.__dict__.setdefault(attr, value)
 
-    def _new(self, items, meta=None):
+    def _new(self, meta, items, indexable=False):
         if meta:
-            return DataSet(meta, items, indexable=False)
+            return DataSet(meta, items, indexable)
         return PeerSet(items)
 
     def _promote(self, items):
         """Devuelve un PeerSet o un DataSet, en funcion de 'items'."""
         meta = set(x._meta for x in items)
         meta = meta.pop() if len(meta) == 1 else None
-        return self._new(items, meta)
+        return self._new(meta, items, False)
 
     def __add__(self, other):
         return self._promote(tuple(chain(self, other)))

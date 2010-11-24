@@ -68,8 +68,9 @@ def flip(self):
 
 def split(self, attrib, new_attrib):
     """Divide los enlaces en funcion del valor de un campo"""
-    if self._meta:
-        self._meta.fields[new_attrib] = Field()
+    meta = self.__dict__.get('_meta', None)
+    if meta:
+        meta.fields[new_attrib] = Field()
     new_items, dummy = [], [None]
     for item in self:
         for value in item.get(attrib, dummy):
@@ -79,13 +80,14 @@ def split(self, attrib, new_attrib):
                 new_item.PEER = copy(item.PEER)
                 setattr(new_item.PEER, new_attrib, value)
             new_items.append(new_item)
-    return self._new(new_items, False)
+    return self._new(meta, new_items, False)
 
 
 def merge(self, key):
     """Combina varios enlaces en funcion del valor de una clave"""
-    if self._meta:
-        self._meta.fields[self._meta.path[-1]] = DataSetField()
+    meta = self.__dict__.get('_meta', None)
+    if meta:
+        meta.fields[meta.path[-1]] = CSVDataSetField(meta)
     keys, values = dict(), list()
     for item in self:
         keys.setdefault(key(item), []).append(item)
@@ -93,7 +95,7 @@ def merge(self, key):
         if len(itemlist) == 1:
             values.append(itemlist[0])
         else:
-            return self._new(values, False)
+            return self._new(meta, values, False)
 
 
 class CSVDataSet(DataSet):
@@ -102,8 +104,11 @@ class CSVDataSet(DataSet):
     FLIP  = flip
     SPLIT = split
 
-    def _new(self, items=None, indexable=False):
-        return CSVDataSet(self._meta, items, indexable)
+    def _new(self, meta, items=None, indexable=False):
+        if meta:
+            return CSVDataSet(meta, items, indexable)
+        else:
+            return CSVPeerSet(items)
 
     def update(self, items):
         assert(not hasattr(self, '_indexes'))
@@ -124,9 +129,17 @@ class CSVPeerSet(PeerSet):
     FLIP = flip
     SPLIT = split
 
-    def _new(self, items, meta=None):
+    def _new(self, meta, items, indexable=False):
         if meta:
-            return CSVDataSet(meta, items, indexable=False)
+            return CSVDataSet(meta, items, indexable)
+        return CSVPeerSet(items)
+
+
+class CSVObjectField(ObjectField):
+    
+    def _new(self, items=None, indexable=False):
+        if self.meta:
+            return CSVDataSet(self.meta, items, indexable)
         return CSVPeerSet(items)
 
 
@@ -134,7 +147,9 @@ class CSVDataSetField(DataSetField):
 
     def _new(self, items=None, indexable=True):
         """Crea objetos de tipo CSVDataSet"""
-        return CSVDataSet(self.meta, items, indexable)
+        if self.meta:
+            return CSVDataSet(self.meta, items, indexable)
+        return CSVPeerSet(items)
 
     def collect(self, dset, attrib):
         self.meta.process()
@@ -508,7 +523,7 @@ class LinkBlock(object):
             # La POSITION no va a ser un campo indexable, porque se
             # puede utilizar "FLIP" para cambiarla.
             group.meta.fields["POSITION"] = IntField(indexable=False)
-            group.meta.fields[attrib] = ObjectField()
+            group.meta.fields[attrib] = CSVObjectField()
         self.groups = valid
 
     def process(self, rootset):
