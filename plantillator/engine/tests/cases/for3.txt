@@ -1,5 +1,0 @@
-# comprueba que "por cada" elimina resultados repetidos
-{{por cada topping de pizzas.toppings
- topping.name: ?topping.name?, topping.type = ?topping.fb.type?
-}}
-

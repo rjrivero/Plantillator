@@ -1,4 +1,0 @@
-{{por cada topping de pizzas.toppings
- pizza.title: ?topping.up.title?, topping.name: ?topping.name?, topping.type = ?topping.fb.type?
-}}
-

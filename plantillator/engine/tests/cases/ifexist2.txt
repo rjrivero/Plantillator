@@ -1,5 +1,0 @@
-{{por cada topping de pizzas.toppings
- {{si hay type en topping
-  ?topping.name? de ?topping.up.title? (tipo ?topping.fb.type? NO HEREDADO)
- }}
-}}
