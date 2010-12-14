@@ -723,17 +723,21 @@ class PeerSet(frozenset):
             raise AttributeError(attr)
         items = tuple(x for x in (y.get(attr) for y in self) if x is not None)
         if not items:
-            # El resultado esta vacio, no podemos decidir que hacer
-            # con el... lanzamos AttributeError
-            raise AttributeError(attr)
-        if isinstance(items[0], DataSet):
-            # Asumo que todos los resultados son DataSets,
-            # y los encadeno.
-            value = self._promote(tuple(chain(*(x for x in items if x))))
+            # Si el resultado esta vacio no podemos decidir que hacer
+            # con el... asumimos que se esperaba un DataSet o DataObject, que
+            # sera lo mas habitual, y devolvemos un PeerSet.
+            value = self._promote(items)
         elif isinstance(items[0], DataObject):
             # Asumo que todos los resultados son DataObjects,
             # y los encadeno.
             value = self._promote(items)
+        elif isinstance(items[0], DataSet):
+            # Asumo que todos los resultados son DataSets,
+            # y los encadeno.
+            value = self._promote(tuple(chain(*(x for x in items if x))))
+        elif hasattr(items[0], '__iter__'):
+            # Si son iterables, los encadeno.
+            value = BaseSet(tuple(chain(*(x for x in items if x))))
         else:
             # En otro caso, los agrupo en un BaseSet.
             value = BaseSet(items)
