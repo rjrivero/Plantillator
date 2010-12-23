@@ -2,7 +2,10 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
-import shelve
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 import os
 import os.path
 import sys
@@ -36,19 +39,19 @@ class ShelfLoader(CSVShelf):
 
     def __init__(self, shelfname):
         """Inicializa el cargador"""
+        self.shelfname, shelf = shelfname, dict()
         try:
-            shelf = shelve.open(shelfname, protocol=2)
-            super(ShelfLoader, self).__init__(shelf)
-            self.files, self.dirty = None, False
-            try:
-                if self.shelf[ShelfLoader.VERSION] == ShelfLoader.CURRENT:
-                    self.files = self.shelf[ShelfLoader.FILES]
-            except KeyError:
-                pass
-        except:
-            # si el constructor falla, me aseguro de no dejar el shelf abierto.
-            shelf.close()
-            raise
+            with open(shelfname, "rb") as shelve:
+                shelf = pickle.load(shelve)
+        except IOError:
+            pass
+        super(ShelfLoader, self).__init__(shelf)
+        self.files, self.dirty = None, False
+        try:
+            if self.shelf[ShelfLoader.VERSION] == ShelfLoader.CURRENT:
+                self.files = self.shelf[ShelfLoader.FILES]
+        except KeyError:
+            pass
         if self.files is None:
             # Si el pickle falla o no es completo, recargamos los datos
             # (cualquiera que sea el error)
@@ -100,8 +103,8 @@ class ShelfLoader(CSVShelf):
         if self.dirty:
             self.shelf[ShelfLoader.FILES] = self.files
             self.shelf[ShelfLoader.VERSION] = ShelfLoader.CURRENT
-            self.shelf.sync()
-        self.shelf.close()
+            with open(self.shelfname, "wb") as shelve:
+                pickle.dump(self.shelf, shelve, protocol=2)
 
 
 class ContextMaker(object):

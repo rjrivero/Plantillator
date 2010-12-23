@@ -6,7 +6,11 @@ import os
 import os.path
 import sys
 import codecs
-import chardet
+
+try:
+    import chardet
+except ImportError:
+    pass
 
 from codecs import BOM_UTF8
 
@@ -78,8 +82,12 @@ class FileSource(InputSource):
             return unicode(data, FileSource.get_default_encoding())
         except UnicodeError:
             pass
-        codec = chardet.detect(data)["encoding"]
-        return unicode(data, codec)
+        try:
+            codec = chardet.detect(data)["encoding"]
+            return unicode(data, codec)
+        except (NameError, UnicodeError):
+            pass
+        return data
 
     def __init__(self, abspath, resolvepath=None):
         super(FileSource, self).__init__(abspath)

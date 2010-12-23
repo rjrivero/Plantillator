@@ -742,32 +742,3 @@ class CSVShelf(object):
         self.shelf[CSVShelf.DATA] = data
         self.shelf[CSVShelf.FILES] = files
         self.dirty = True
-
-
-if __name__ == "__main__":
-
-    import pprint
-    import code
-    import shelve
-    import sys
-
-    shelfname = "data.shelf"
-    csvpath = (".",)
-
-    if os.path.isfile(shelfname):
-        os.unlink(shelfname)
-    shelf = shelve.open(shelfname, protocol=2)
-    try:
-        csvshelf = CSVShelf(csvpath, shelf)
-        data = csvshelf.data
-    except DataError as details:
-        print details
-        sys.exit(-1)
-    finally:
-        shelf.close()
-    data['NONE'] = DataSet.NONE
-    data['ANY'] = DataSet.ANY
-    if len(sys.argv) > 1:
-        code.interact(local = data)
-    else:
-        print "USO: %s <cualquier cosa>" % sys.argv[0]
