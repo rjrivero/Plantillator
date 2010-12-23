@@ -2,13 +2,13 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent
 
 
+import os
+import os.path
+import sys
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
-import os
-import os.path
-import sys
 
 from contextlib import contextmanager
 
@@ -43,7 +43,7 @@ class ShelfLoader(CSVShelf):
         try:
             with open(shelfname, "rb") as shelve:
                 shelf = pickle.load(shelve)
-        except IOError:
+        except (IOError, EOFError, pickle.UnpicklingError):
             pass
         super(ShelfLoader, self).__init__(shelf)
         self.files, self.dirty = None, False
