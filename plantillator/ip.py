@@ -2,7 +2,7 @@
 # -*- vim: expandtab tabstop=4 shiftwidth=4 smarttab autoindent encoding=utf-8
 
 
-import socket
+import socket, array
 
 from itertools import chain
 from IPy import IP
@@ -63,6 +63,7 @@ class IPAddress(object):
         'bits',         # numero de bits de la mascara (entero)
         'bitsize',      # numero de bits totales de la direccion
         'wildmask',     # mascara invertida (estilo Cisco)
+        'bytes',        # bytes que componen la direccion (LSB first)
     ))
 
     def __init__(self, ip, host=None, check_ip=simple_check_ip):
@@ -111,7 +112,7 @@ class IPAddress(object):
         return self
 
     def asHost(self):
-        """Devuelve un objeto IPAddress con la misma IP y máscara FF...FF"""
+        """Devuelve un objeto IPAddress con la misma IP y mascara FF...FF"""
         return IPAddress(self.raw_network[self.host], 0)
 
     def agg(self, other):
@@ -171,6 +172,14 @@ class IPAddress(object):
         else:
             masks = IPAddress.WILDMASK_IPV6
         return masks[self.bits]
+
+    def _bytes(self):
+        """Bytes que forman la direccion IP (LSB first)"""
+        def stream(num, bitsize):
+            for index in xrange(bitsize>>3):
+                yield (num & 0x00FF)
+                num = num >> 8
+        return array.array("B", stream(self.int, self.bitsize))
 
     def __getattr__(self, attr):
         if attr not in IPAddress.ATTRIBS: 

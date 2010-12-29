@@ -732,6 +732,7 @@ class CSVShelf(object):
                     vval = vtyp.convert(vval)
                     if vval is not None:
                         setattr(data, vname, vval)
+                        meta.fields[vname] = vtyp
             delattr(data, str(vart))
             del(meta.fields[vart])
             del(meta.subtypes[vart])

@@ -99,6 +99,11 @@ class ShelfLoader(CSVShelf):
             self.files[source] = template
         return self.cache.setdefault((tmplname, hint), (source, template))
 
+    def persist(self):
+        """Obliga a que se guarden cambios en los datos"""
+        self.shelf[CSVShelf.DATA] = self.data
+        self.dirty = True
+
     def close(self):
         if self.dirty:
             self.shelf[ShelfLoader.FILES] = self.files
