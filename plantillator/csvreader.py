@@ -24,6 +24,7 @@ class CSVMeta(Meta):
 
     def __init__(self, path, parent=None):
         super(CSVMeta, self).__init__(parent)
+        self.fields["PK"] = IntField(indexable=True)
         self.path = path
         self.subtypes = dict()
         self.blocks = list()
@@ -47,17 +48,34 @@ class CSVMeta(Meta):
             return self.subtypes.setdefault(name, submeta)
 
     def process(self, lazy=True):
+        """fuerza el proceso de un bloque cargado en modo lazy"""
         if hasattr(self, "blocks"):
             for blk in self.blocks:
                 blk.process(self.rootset)
             del(self.blocks)
-        # He detectado casos en que un meta puede no tener bloques. 
+        # He detectado casos en que un meta puede no tener bloques, 
         # pero aun asi puede tener submetas sin procesar. Es un caso raro, pero
         # se da... tengo que sacar este "if lazy" fuera del "hasattr" porque,
         # si no, los datos no se cargan correctamente.
         if not lazy:
             for subtype in self.subtypes.values():
                 subtype.process(lazy)
+
+
+class CSVDataObject(DataObject):
+
+    PK = 0
+
+    def __init__(self, meta, parent=None):
+        cls = CSVDataObject
+        super(cls, self).__init__(meta, parent)
+        self.PK = cls.next()
+
+    @classmethod
+    def next(cls):
+        pk = cls.PK+1
+        cls.PK = pk
+        return pk
 
 
 def flip(self):
@@ -300,7 +318,7 @@ class ColumnList(object):
             # si hemos tenido que bajar en la jerarquia (stack is not None).
             # En otro caso "item" es el objeto raiz y no queremos que los
             # objetos de primer nivel lo tengan como padre.
-            obj = DataObject(self.meta, item if self.stack else None)
+            obj = CSVDataObject(self.meta, item if self.stack else None)
             obj.__dict__.update(data)
             getattr(item, attrib).add(obj)
             nitems.append(obj)
@@ -653,19 +671,22 @@ class CSVShelf(object):
                 sfiles = self.shelf[CSVShelf.FILES]
                 fnames = set(files.keys())
                 snames = set(sfiles.keys())
-                if not fnames.symmetric_difference(snames):
-                    if all(files[name] <= sfiles[name] for name in fnames):
+                if not files or not fnames.symmetric_difference(snames):
+                    if not files or all(files[x] <= sfiles[x] for x in fnames):
                         # Todo correcto, los datos estan cargados
                         backup = self.shelf[CSVShelf.DATA]
                         # Convierto lo almacenado en el shelf en un DataObject
                         meta = backup['_meta']
-                        data = DataObject(meta)
+                        data = CSVDataObject(meta)
                         # Le actualizo los datos y construyo el rootset
                         data.__dict__.update(backup)
                         self._add_rootset(meta, CSVDataSet(meta, (data,)))
-                        # Y me quedo solo con el diccionario, lo demas
+                        # Me quedo solo con el diccionario, lo demas
                         # me sobra.
                         self.data = dict(data.__dict__)
+                        # Y actualizo el contador de Primary Keys, por si se
+                        # tienen que instanciar mas objetos (modo lazy)
+                        CSVDataObject.PK = data.PK
                         return
         except:
             pass
@@ -697,7 +718,7 @@ class CSVShelf(object):
                     raise DataError(item.source, item.index)
         # ejecuto la carga de datos (solo de las tablas de primer nivel,
         # el resto se carga bajo demanda)
-        data = DataObject(meta)
+        data = CSVDataObject(meta)
         rset = CSVDataSet(meta, (data,))
         self._add_rootset(meta, rset)
         for subtype in meta.subtypes.values():
@@ -705,6 +726,7 @@ class CSVShelf(object):
         # Proceso la tabla de variables
         self._set_vars(data)
         # OK, todo cargado... ahora guardo los datos en el shelf.
+        data.PK = CSVDataObject.next()
         self._save(files, data.__dict__)
 
     def _read_blocks(self, files):

@@ -126,21 +126,28 @@ class BaseSet(frozenset):
 
 
 class BaseList(tuple):
+
     # Tienen que ser todo clases globales, por pickle, y ademas
     # frozen, para que se puedan hashear
+
     def __pos__(self):
         assert(len(self) == 1)
         return self[0]
+
     def __call__(self, *arg):
         return BaseList(search_crit(self, arg))
+
     def __add__(self, other):
         return BaseList(chain(self, other))
+
     @property
     def HAS(self):
         return BaseSet.Tester(self)
+
     @property
     def HASNOT(self):
         return BaseSet.TesterNot(self)
+
     def __cmp__(self, other):
         """Si lo comparo con un entero, el criterio es la longitud"""
         if isinstance(other, int):
@@ -591,6 +598,12 @@ class DataSet(object):
         except KeyError:
             raise AttributeError(attr)
 
+    def get(self, attr, defval=None):
+        try:
+            return getattr(self, attr)
+        except AttributeError:
+            return defval
+        
     def _best_index(self, keys, dummy=tuple()):
         """Devuelve el atributo con el indice mas granular"""
         try:

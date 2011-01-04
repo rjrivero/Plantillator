@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/">
+  <head>
+    <title>Data Editor</title>
+  </head>
+  <body class="index">
+
+    <table border="1"  py:if="fields">
+    <thead>
+      <tr>
+      <th py:for="fname in fields">
+       $fname 
+      </th>
+      <th py:for="fname in subfields">
+       $fname 
+      </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr py:for="item in values">
+        <td py:for="fname in fields">
+        ${item.get(fname, "")}
+        </td>
+        <td py:for="fname in subfields">
+        <a href="/$path/${fname}?id=${item.get('PK','')}">$fname</a>
+        </td>
+      </tr>
+    </tbody>
+    </table>
+
+    <div id="footer">
+      <hr />
+      <p class="legalese">© 2007 Edgewall Software</p>
+    </div>
+  </body>
+</html>
