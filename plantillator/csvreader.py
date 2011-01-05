@@ -6,9 +6,10 @@ import os
 import os.path
 
 from itertools import count, chain, repeat, izip
+from collections import defaultdict
 from copy import copy
 
-from .meta import DataError, Meta, DataObject, DataSet, PeerSet
+from .meta import DataError, Meta, DataObject, DataSet, PeerSet, BaseSet
 from .meta import ObjectField, DataSetField, Field
 from .pathfinder import FileSource
 from .fields import FieldMap, IntField
@@ -161,6 +162,28 @@ class CSVObjectField(ObjectField):
         return CSVPeerSet(items)
 
 
+
+class DictField(ObjectField):
+
+    """Campo diccionario
+    
+    El campo es un diccionario formado por multiples columnas
+    que contribuyen al mismo objeto.
+    """
+
+    def collect(self, dset, attr):
+        """Devuelve un dict donde cada entrada es el compendio de entradas"""
+        sumup = defaultdict(set)
+        items = (item._get(attr) for item in dset._children)
+        items = (x for x in items if x)
+        for item in items:
+            for key, val in item.iteritems():
+                sumup[key].add(val)
+        # Convierto el resultado en un dict de BaseSets,
+        # para hacerlo inmutable.
+        return dict((key, BaseSet(val)) for key, val in sumup.iteritems())
+
+
 class CSVDataSetField(DataSetField):
 
     def _new(self, items=None, indexable=True):
@@ -206,13 +229,20 @@ class Column(object):
         de la tabla que filtra.
     - coltype: objeto Field que identifica el tipo de columna.
     - colname: nombre de la columna.
+    - colkey: Si la columna es tipo "diccionario", valor de la clave.
     """
 
     def __init__(self, index, selector, coltype, colname):
-        self.index = index
         self.selector = selector
+        self.index = index
         self.coltype = coltype
-        self.colname = colname
+        nameparts, colkey = colname.split("["), None
+        self.colname = nameparts.pop(0).strip()
+        if nameparts:
+            colkey = nameparts[0].split("]")[0].strip() or None
+            if colkey and colkey.isdigit():
+                colkey = int(colkey)
+        self.colkey = colkey
 
 
 class ColumnList(object):
@@ -230,9 +260,9 @@ class ColumnList(object):
         En caso de excepcion al construir el objeto, el constructor
         lanza la excepcion desnuda, sin envolver en un DataError.
         """
-        # Por si acaso columns es un iterator (no estaria definido __len__)
         self.source = source
         self.index = index
+        # Por si acaso columns es un iterator (no estaria definido __len__)
         self.path, self.columns = tuple(path), tuple(columns)
         self.selects = tuple(c for c in self.columns if c.selector)
         self.attribs = self.columns[len(self.selects):]
@@ -263,6 +293,14 @@ class ColumnList(object):
 
     def prepare(self, meta, block):
         """Prepara la carga de datos, analizando el path"""
+        # Separo los atributos que sean "diccionarios" de los que no
+        attribs = tuple(col for col in self.attribs if not col.colkey)
+        colkeys = tuple(col for col in self.attribs if col.colkey)
+        dicts   = defaultdict(list)
+        for col in colkeys:
+            dicts[col.colname].append(col)
+        self.attribs = attribs
+        self.dicts = dicts
         # Creo o accedo al meta y le inserto los nuevos campos.
         # Lo hago en esta fase y no en el constructor, porque aqui
         # ya compruebo que todos los tipos padres existan... eso
@@ -274,6 +312,8 @@ class ColumnList(object):
         meta.summary = tuple(c.colname for c in self.attribs)[:3]
         for col in self.attribs:
             meta.fields[col.colname] = col.coltype
+        for key, cols in self.dicts.iteritems():
+            meta.fields[key] = DictField()
         meta.blocks.append(block)        
         self.meta = meta
         # Creo una pila de operaciones, que filtra el dataset raiz
@@ -309,6 +349,10 @@ class ColumnList(object):
         # Creo un objeto con los datos, que luego ire copiando
         data = ((c.colname, row_cols[c.index]) for c in self.attribs)
         data = dict((k, v) for (k, v) in data if v is not None)
+        for key, cols in self.dicts.iteritems():
+            val = ((c.colkey, row_cols[c.index]) for c in cols)
+            val = dict((k, v) for (k, v) in val if v is not None)
+            data[key] = val
         if not data:
             return
         # Inserto el objeto en cada elemento del dataset.
@@ -354,10 +398,13 @@ class TableBlock(ColumnList):
             selector, nameparts = None, colname.split(".")
             if len(nameparts) > 1:
                 selector = nameparts.pop(0).strip()
-            colname = nameparts.pop(0).strip()
+                colname = nameparts[0].strip()
             if colname:
+                # Creo el objeto columna y lo lanzo, si es correcto.
                 coltype = FieldMap.resolve(coltype)
-                yield Column(index, selector, coltype, colname)
+                col = Column(index, selector, coltype, colname)
+                if col.colname:
+                    yield col
 
     def prepare(self, rootmeta):
         """Prepara los datos para su proceso"""
@@ -411,7 +458,9 @@ class LinkBlock(object):
                 continue
             selector = selector.strip() or None
             coltype = FieldMap.resolve(coltype)
-            yield Column(index, selector, coltype, colname.strip())
+            col = Column(index, selector, coltype, colname.strip())
+            if col.colname:
+                yield col
 
     def _groups(self):
         """Divide la lista de columnas en sub-listas.
