@@ -137,6 +137,12 @@ class ContextMaker(object):
                 self.output_dir = PathElem(os.getcwd())
             else:
                 self.output_dir = PathElem(os.path.dirname(self.outpath))
+                if self.overwrite:
+                    try:
+                        os.unlink(outpath)
+                    except IOError:
+                        pass
+            self.overwrite = False
         else:
             self.output_dir = PathElem(outpath or os.getcwd())
 
