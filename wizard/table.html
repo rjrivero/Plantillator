@@ -6,6 +6,15 @@
   </head>
   <body class="index">
 
+    <table border="1" py:if="crumbs">
+    <tbody><tr>
+    <th>Navegacion:</th>
+    <td py:for="crumb in crumbs">
+    <a href="/${crumb[2]}">${crumb[0]} ${crumb[1]}</a>
+    </td>
+    </tr></tbody> 
+    </table>
+
     <table border="1"  py:if="fields">
     <thead>
       <tr>

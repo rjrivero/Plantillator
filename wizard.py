@@ -86,7 +86,7 @@ class Root(object):
 
     @cherrypy.expose
     def table(self, *path, **params):
-        parent = None
+        parent, crumbs = None, list()
         # Si me pasan un ID, es el del penultimo elemento en el path
         if (len(path) > 1) and ("id" in params):
             parent = self.keys.get(params["id"], None)
@@ -101,6 +101,10 @@ class Root(object):
                 meta = values._meta
         else:
             meta, values = self.traverse(path)
+        crumbs.append(("root", "", "table/"))
+        for item in xrange(1, len(path)):
+            subpath = "table/" + "/".join(path[:item])
+            crumbs.append((path[item], "", subpath))
         fields, subfields = set(), set()
         for key, val in meta.fields.iteritems():
             if hasattr(val, "meta") and key != "up":
@@ -115,7 +119,8 @@ class Root(object):
             "fields": fields,
             "subfields": subfields,
             "values": values,
-            "path": path
+            "path": path,
+            "crumbs": crumbs,
         }
         return self.tmpl.table(**params)
 
