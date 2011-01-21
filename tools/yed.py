@@ -131,10 +131,21 @@ def _graph_yed(graph, resources, sfiles, plain):
     #dstindex = resources.lattribs["destino"]
     for sublist in graph.links:
         for link in sublist.valid_links(IDs):
+            edgecount += 1
             srcid = idmap[link[0].ID]
             dstid = idmap[link[1].ID]
             yield "\n".join((
                 '<edge id="e%d" source="%s" target="%s">' % (edgecount, srcid, dstid),
+                '<data key="d3">%s --&gt; %s</data>' % (escape(link[0].label), escape(link[1].label)),
+                #'<data key="d%d">%s</data>' % (srcindex, escape(link[0].label)),
+                #'<data key="d%d">%s</data>' % (dstindex, escape(link[1].label)),
+            ))
+            for linkside in (link[0], link[1]):
+                if linkside.attribs:
+                    for key, val in linkside.attribs.iteritems():
+                        idattrib = resources.lattribs[key]
+                        yield '<data key="d%d">%s</data>' % (idattrib, escape(str(val)))
+            yield "\n".join((
                 '<data key="d5">',
                 '<y:PolyLineEdge>',
                 '<y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>',
@@ -146,16 +157,8 @@ def _graph_yed(graph, resources, sfiles, plain):
                 '<y:BendStyle smoothed="false"/>',
                 '</y:PolyLineEdge>',
                 '</data>',
-                '<data key="d3">%s --&gt; %s</data>' % (escape(link[0].label), escape(link[1].label)),
-                #'<data key="d%d">%s</data>' % (srcindex, escape(link[0].label)),
-                #'<data key="d%d">%s</data>' % (dstindex, escape(link[1].label)),
+                '</edge>',
             ))
-            for linkside in (link[0], link[1]):
-                if linkside.attribs:
-                    for key, val in linkside.attribs.iteritems():
-                        idattrib = resources.lattribs[key]
-                        yield '<data key="d%d">%s</data>' % (idattrib, escape(str(val)))
-            yield '</edge>'
     # Recursos
     #---------
     yield "\n".join((
