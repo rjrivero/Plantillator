@@ -505,7 +505,7 @@ class Templite(object):
             for block in actions.next()(subpart, start, end, delim, indent):
                 yield block
 
-    CURRENT = (1, sys.version_info)
+    CURRENT = (1, tuple(sys.version_info))
     @classmethod
     def State(cls, tmplid, timestamp, template, ast):
         return {
@@ -861,7 +861,7 @@ if __name__ == '__main__':
             """Se lanza UnpicklingError si las versiones no coinciden"""
             def hookPatch(templite):
                 pickled = pickle.dumps(templite)
-                templite.__class__.CURRENT = (sys.maxint, sys.version_info)
+                templite.__class__.CURRENT = (sys.maxint, tuple(sys.version_info))
                 return pickle.loads(pickled)
             self.hookTemplite = hookPatch
             template = "  %(delim)s 4 + 2 %(delim)s  "
