@@ -770,8 +770,11 @@ class CSVShelf(object):
         data = CSVDataObject(meta)
         rset = CSVDataSet(meta, (data,))
         self._add_rootset(meta, rset)
-        for subtype in meta.subtypes.values():
+        for key, subtype in meta.subtypes.iteritems():
             subtype.process(lazy)
+            # Me aseguro de instanciar el atributo, porque si hay una
+            # tabla vacia, subtype.process no hace nada.
+            data.get(key)
         # Proceso la tabla de variables
         self._set_vars(data)
         # OK, todo cargado... ahora guardo los datos en el shelf.
