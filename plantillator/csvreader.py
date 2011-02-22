@@ -649,16 +649,20 @@ class CSVSource(FileSource):
     def _clean(self, lines, delimiter):
         """Elimina las columnas comentario o vacias"""
         """Elimina las columnas comentario o vacias"""
-        reader = csv.reader(lines, delimiter=delimiter)
-        for lineno, row in enumerate(reader):
-            for index, val in enumerate(row):
-                # Necesito el strip para que la comparacion de abajo
-                # (row[0].startswith("!")) sea fiable, lo mismo que el
-                # distinguir tipos de tabla por su marca
-                # ("*" => enlaces, resto => tablas)
-                row[index] = row[index].strip()
-            if len(row) >= 2 and (row[0] or row[1]) and not row[0].startswith("!"):
-                yield CSVRow(lineno, row)
+        lineno = 0
+        try:
+            reader = csv.reader(lines, delimiter=delimiter)
+            for lineno, row in enumerate(reader):
+                for index, val in enumerate(row):
+                    # Necesito el strip para que la comparacion de abajo
+                    # (row[0].startswith("!")) sea fiable, lo mismo que el
+                    # distinguir tipos de tabla por su marca
+                    # ("*" => enlaces, resto => tablas)
+                    row[index] = row[index].strip()
+                if len(row) >= 2 and (row[0] or row[1]) and not row[0].startswith("!"):
+                    yield CSVRow(lineno, row)
+        except Exception as details:
+            raise DataError(self.id, lineno)
 
     def _split(self, rows):
         """Divide el fichero en tablas"""

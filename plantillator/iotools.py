@@ -226,7 +226,7 @@ class Interactor(object):
         else:
             # Me aseguro de que las opciones son las mismas que
             # se hayan dado en otras visitas a este nodo del arbol.
-            assert(prev.keys() == itemlist.keys())
+            assert(not frozenset(prev.keys()).difference(itemlist.keys()))
         # Busco un elemento de la lista que no este usado.
         for name, subdict in prev.iteritems():
             if not subdict.exhausted:
