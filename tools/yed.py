@@ -151,9 +151,10 @@ def _graph_yed(graph, resources, sfiles, plain):
                 '<y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>',
                 '<y:LineStyle color="%s" type="%s" width="%s"/>' % (sublist.color, STYLES.get(sublist.style, "solid"), sublist.width),
                 '<y:Arrows source="%s" target="%s"/>' % (ARROWS.get(sublist.source_arrow, "none"), ARROWS.get(sublist.target_arrow, "none")),
-                '<!-- ',
-                '<y:EdgeLabel alignment="center" distance="2.0" fontFamily="Calibri" fontSize="9" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="side_slider" preferredPlacement="source" ratio="0.0" textColor="#000000" visible="true">%s  -&gt; %s</y:EdgeLabel>' % (escape(link[0].label), escape(link[1].label)),
-                '  -->',
+            ))
+            if link[2]:
+                yield '<y:EdgeLabel alignment="center" distance="2.0" fontFamily="Calibri" fontSize="9" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="side_slider" preferredPlacement="source" ratio="0.0" textColor="#000000" visible="true">%s</y:EdgeLabel>' % escape(str(link[2]))
+            yield "\n".join((
                 '<y:BendStyle smoothed="false"/>',
                 '</y:PolyLineEdge>',
                 '</data>',

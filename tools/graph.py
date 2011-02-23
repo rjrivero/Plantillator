@@ -43,8 +43,8 @@ class LinkDescriptor(tuple):
 
     """Descriptor de un enlace, combina los descriptores de ambos extremos"""
 
-    def __new__(cls, objID, src_desc, dst_desc):
-        obj = super(LinkDescriptor, cls).__new__(cls, (src_desc, dst_desc))
+    def __new__(cls, objID, src_desc, dst_desc, label=None):
+        obj = super(LinkDescriptor, cls).__new__(cls, (src_desc, dst_desc, label))
         obj.objID = objID
         return obj
 
@@ -179,12 +179,14 @@ class LinkProperties(object):
     @staticmethod
     def process(items,
         src_id, src_label, src_attribs,
-        dst_id, dst_label, dst_attribs):
-        """Itera sobre los objetos, devolviendo tuplas.
-        
+        dst_id, dst_label, dst_attribs,
+        label_resolver=None):
+        """Itera sobre los objetos, devolviendo LinkDescriptors.
+
         Las tuplas que devuelve contienen itemdescriptors:
         - un ItemDescriptor para el origen.
         - un ItemDescriptor para el destino.
+        - un label para el link, si se aplica.
         """
         for item in (x for x in items if x._get("PEER")):
             # Obtengo el ID y el label de cada atributo desde el resolver
@@ -194,7 +196,8 @@ class LinkProperties(object):
             dst_desc  = LinkProperties._descriptor(
                 item.PEER, item.PEER.up,
                 dst_id, dst_label, dst_attribs, "dst_")
-            yield LinkDescriptor(id(item), src_desc, dst_desc)
+            label = None if not label_resolver else label_resolver(item)
+            yield LinkDescriptor(id(item), src_desc, dst_desc, label)
 
     @staticmethod
     def _descriptor(link, item, id_resolver, label_resolver, attribs, prefix):
@@ -380,6 +383,7 @@ class Graph(object):
     def add_links(self, items,
                   src_id, src_label, src_attribs,
                   dst_id, dst_label, dst_attribs,
+                  label_resolver=None,
                   **kw):
         """Agrega un grupo de enlaces al grafo.
 
@@ -397,7 +401,8 @@ class Graph(object):
         properties  = LinkProperties(src_attribs, dst_attribs, **kw)
         descriptors = LinkProperties.process(items,
             src_id, src_label, src_attribs,
-            dst_id, dst_label, dst_attribs)
+            dst_id, dst_label, dst_attribs,
+            label_resolver)
         new_properties = dict()
         for descriptor in descriptors:
             new_link = Link(properties, descriptor)
@@ -439,7 +444,7 @@ GraphHelper = (x.grafo << [
         ]
     ],
     x.enlaces << [
-        x.props(args="src_id, src_label, src_attribs, dst_id, dst_label, dst_attribs") << [
+        x.props(args="src_id, src_label, src_attribs, dst_id, dst_label, dst_attribs, label") << [
             x.estilo(kwargs="style, width, color") << "Enlaces del grafo"
         ]
     ]
