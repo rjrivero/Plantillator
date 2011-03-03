@@ -402,9 +402,10 @@ class TableBlock(ColumnList):
             if colname:
                 # Creo el objeto columna y lo lanzo, si es correcto.
                 coltype = FieldMap.resolve(coltype)
-                col = Column(index, selector, coltype, colname)
-                if col.colname:
-                    yield col
+                for alias in colname.split("//"):
+                    col = Column(index, selector, coltype, alias)
+                    if col.colname:
+                        yield col
 
     def prepare(self, rootmeta):
         """Prepara los datos para su proceso"""
@@ -458,9 +459,10 @@ class LinkBlock(object):
                 continue
             selector = selector.strip() or None
             coltype = FieldMap.resolve(coltype)
-            col = Column(index, selector, coltype, colname.strip())
-            if col.colname:
-                yield col
+            for alias in colname.strip().split("//"):
+                col = Column(index, selector, coltype, alias)
+                if col.colname:
+                    yield col
 
     def _groups(self):
         """Divide la lista de columnas en sub-listas.
