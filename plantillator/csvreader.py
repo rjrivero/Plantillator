@@ -48,12 +48,13 @@ class CSVMeta(Meta):
             self.fields[name] = CSVDataSetField(submeta)
             return self.subtypes.setdefault(name, submeta)
 
-    def process(self, lazy=True):
+    def process(self, lazy=False):
         """fuerza el proceso de un bloque cargado en modo lazy"""
         if hasattr(self, "blocks"):
-            for blk in self.blocks:
+            blocks = self.blocks
+            del(self.blocks) # Para que no se vuelva a ejecutar
+            for blk in blocks:
                 blk.process(self.rootset)
-            del(self.blocks)
         # He detectado casos en que un meta puede no tener bloques, 
         # pero aun asi puede tener submetas sin procesar. Es un caso raro, pero
         # se da... tengo que sacar este "if lazy" fuera del "hasattr" porque,
@@ -419,13 +420,12 @@ class TableBlock(ColumnList):
         """
         source, lineno = self.source, self.index
         try:
-            for row in CSVRow.normalize(self.body, self.columns):
+            body, self.body = self.body, tuple() # para que no se vuelva a ejecutar
+            for row in CSVRow.normalize(body, self.columns):
                 lineno = row.lineno
                 self._addrow(row.cols, rootset)
         except:
             raise DataError(source, lineno)
-        finally:
-            self.body = tuple() # para que no se vuelva a ejecutar
 
 
 class LinkBlock(object):
@@ -600,7 +600,8 @@ class LinkBlock(object):
         valid, attrib  = self.groups, "PEER"
         # attrib = "PEER" if self.p2p else "PEERS"
         try:
-            for row in CSVRow.normalize(self.body, self.columns):
+            body, self.body = self.body, tuple() # para que no se vuelva a ejecutar
+            for row in CSVRow.normalize(body, self.columns):
                 lineno = row.lineno # por si lanzo excepcion
                 # Creo todos los objetos y los agrego a una lista
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
@@ -625,8 +626,6 @@ class LinkBlock(object):
                             setattr(item, attrib, peers)
         except:
             raise DataError(source, lineno)
-        finally:
-            self.body = tuple() # para que no se vuelva a ejecutar
 
     @property
     def depth(self):
@@ -705,7 +704,7 @@ class CSVShelf(object):
         self.shelf = shelf
         self.dirty = False
 
-    def set_datapath(self, datapath, lazy=True):
+    def set_datapath(self, datapath, lazy=False):
         """Busca todos los ficheros CSV en el path.
 
         Compara la lista de ficheros encontrados con la
@@ -761,7 +760,7 @@ class CSVShelf(object):
         files = (f for f in files if os.path.isfile(f))
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
-    def _update(self, files, lazy=True):
+    def _update(self, files, lazy=False):
         """Procesa los datos y los almacena en el shelf"""
         nesting = self._read_blocks(files)
         meta = CSVMeta("", None)
