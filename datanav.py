@@ -10,7 +10,7 @@ import glob
 import re
 import Tkinter as tk
 
-from traceback import print_exc, format_exception_only
+from traceback import print_exc, format_exception_only, print_exception
 from optparse import OptionParser
 from contextlib import contextmanager
 
