@@ -14,6 +14,7 @@ from contextlib import contextmanager
 
 from .pathfinder import PathFinder, FileSource
 from .ciscopw import password, secret
+from .alcatelpw import snmpHash
 from .meta import DataSet
 from .csvreader import CSVShelf
 from .templite import Templite
@@ -60,6 +61,7 @@ class ShelfLoader(CSVShelf):
         self.glob = {
             "CISCOPASSWORD": password,
             "CISCOSECRET": secret,
+            "ALUSNMPHASH": snmpHash,
             "ANY": DataSet.ANY,
             "NONE": DataSet.NONE,
         }
