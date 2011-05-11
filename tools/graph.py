@@ -48,6 +48,10 @@ class LinkDescriptor(tuple):
         obj.objID = objID
         return obj
 
+    def update(self, new_descriptor):
+        for idx in (0, 1): # source y destination
+            self[idx].update(new_descriptor[idx])
+
 
 class OrderedFSet(tuple):
     
@@ -300,9 +304,7 @@ class Link(object):
 
     def update(self, new_link, new_properties):
         """Actualiza el link con los nuevos datos y propiedades"""
-        new_descriptor = new_link.descriptor
-        for anew, aold in izip(new_descriptor, self.descriptor):
-            aold.update(anew)
+        self.descriptor.update(new_link.descriptor)
         self.properties = new_properties
 
 
