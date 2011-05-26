@@ -206,3 +206,7 @@ class IPAddress(object):
         if isinstance(other, basestring):
             return cmp(str(self), other)
         return cmp(self.int, other.int)
+
+    def __len__(self):
+        # Para que funcionen las comparaciones con ANY, NONE.
+        return 1

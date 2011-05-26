@@ -39,9 +39,13 @@ class DataError(Exception):
 def kw_as_crit(key, val):
     """Convierte un criterio expresado como clave=valor en un callable"""
     if val is DataSet.NONE:
-    	return lambda x: x.get(key, None) is None
+        # Cambio get(x, None) is None por esta comparacion, que tambien
+        # me vale para campos de tipo lista o set que esten vacios.
+    	return lambda x, dummy=tuple(): len(x.get(key, dummy)) == 0
     if val is DataSet.ANY:
-        return lambda x: x.get(key, None) is not None
+        # Cambio get(x, None) is not None por esta comparacion, que tambien
+        # me vale para campos de tipo lista o set que no esten vacios.
+        return lambda x, dummy=tuple(): len(x.get(key, dummy)) > 0
     return lambda x: x.get(key, None) == val
 
 
@@ -336,6 +340,10 @@ class DataObject(object):
         obj.__dict__.update(self.__dict__)
         obj._meta, obj.up = new_meta, new_parent
         return obj
+
+    def __len__(self):
+        # Para que funcionen los operadores ANY, NONE
+        return 1
 
 
 class Fallback(dict):
