@@ -18,22 +18,27 @@ class DataError(Exception):
 
     - self.source: identificador de la fuente de datos que se analiza.
     - self.index: indice (n. de linea, generalmente) del registro erroneo.
-    - self.exc_info: tupla (tipo, excepcion, traceback)
+    - self.exc_info: Si aplica, tupla (tipo, excepcion, traceback)
+    - self.warnings: Si aplica, lista de pares (n. de linea, lista de errores)
     """
 
-    def __init__(self, source, index):
+    def __init__(self, source, index, warnings=None, stack=True):
         super(DataError, self).__init__()
-        self.source = source
-        self.index = index
-        self.exc_info = sys.exc_info()
+        self.source   = source
+        self.index    = index
+        self.warnings = warnings
+        self.exc_info = sys.exc_info() if stack else None
 
     def __str__(self):
-        return "\n".join((
+        diag = list((
             "***",
-            "Error en fichero de datos %s [linea %s]" % (os.path.basename(self.source), self.index),
-            "***",
-            "".join(format_exception_only(*(self.exc_info[:2]))),
-        ))
+            "Error en fichero de datos %s [primer error en linea %s]" % (os.path.basename(self.source), self.index),
+            "***"))
+        if self.warnings:
+            diag.extend(("linea %d:\n  %s" % (w[0], "\n  ".join(w[1])) for w in self.warnings))
+        if self.exc_info:
+            diag.append("".join(format_exception_only(*(self.exc_info[:2]))))
+        return "\n".join(diag)
 
 
 def kw_as_crit(key, val):
@@ -176,8 +181,9 @@ class Field(object):
     def __init__(self, indexable=True):
         self.indexable = indexable
 
-    def convert(self, data):
-        raise NotImplemented("convert")
+    def convert(self, data, notify):
+        """Recibe un callback al que notificar las excepciones"""
+        notify("Not Implemented")
 
     def dynamic(self, item, attr):
         raise AttributeError(attr)

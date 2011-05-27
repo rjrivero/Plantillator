@@ -62,6 +62,9 @@ parser.add_option("-x", "--ext", dest="ext", metavar=".EXT", default=".cfg",
 parser.add_option("-l", "--lazy",
         action="store_true", dest="lazy", default=False,
         help="Demora parte del proceso de los datos CSV a tiempo de ejecucion")
+parser.add_option("-w", "--warnings",
+        action="store_true", dest="warnings", default=False,
+        help="Continuar con la carga de datos incorrectos, generando warnings")
 
 (options, args) = parser.parse_args()
 if len(args) < 1 and not options.shell:
@@ -116,6 +119,7 @@ plantillator.test = options.test
 try:
 
     plantillator.prepare()
+    plantillator.dump_warnings()
     if options.shell:
         local = dict(plantillator.loader.data)
         code.interact("Shell de pruebas", local=local)

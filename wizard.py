@@ -200,7 +200,7 @@ except IndexError:
 @contextmanager
 def shelf_wrapper(fname):
     loader = ShelfLoader(shelfname)
-    loader.set_datapath(path, options.lazy)
+    loader.set_datapath(path, lazy=options.lazy)
     try:
         yield loader
     finally:

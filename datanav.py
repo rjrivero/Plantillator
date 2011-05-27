@@ -114,9 +114,8 @@ class DataNav(tk.Tk):
 VERSION           = "0.1"
 OPTIONS_ERRNO     = -1
 FILE_ERRNO        = -2
-DATA_ERRNO        = -3
-TRANSLATION_ERRNO = -4
-UNKNOWN_ERRNO     = -5
+PARSE_ERRNO       = -3
+UNKNOWN_ERRNO     = -6
 usage = """uso: %prog [opciones] fichero [fichero...]
 Carga ficheros de datos (.csv)"""
 
@@ -140,9 +139,13 @@ parser.add_option("-x", "--profile",
 parser.add_option("-l", "--lazy",
         action="store_true", dest="lazy", default=False,
         help="Demora parte del proceso de los datos CSV a tiempo de ejecucion")
+parser.add_option("-w", "--warnings",
+        action="store_true", dest="warnings", default=False,
+        help="Continuar con la carga de datos incorrectos, generando warnings")
 
 (options, args) = parser.parse_args()
 
+options.warnings = dict() if options.warnings else None
 if options.debug:
     loglevel = logging.DEBUG
 if options.path:
@@ -169,8 +172,8 @@ except IndexError:
 
 @contextmanager
 def shelf_wrapper(fname):
-    loader = ShelfLoader(shelfname)
-    loader.set_datapath(path, options.lazy)
+    loader = ShelfLoader(shelfname, bootstrap=(options.warnings is not None))
+    loader.set_datapath(path, warnings=options.warnings, lazy=options.lazy)
     try:
         yield loader
     finally:
@@ -185,6 +188,7 @@ try:
     if options.profile and os.path.isfile(shelfname):
         os.unlink(shelfname)
     with shelf_wrapper(shelfname) as dataloader:
+        dataloader.dump_warnings(options.warnings)
         data = dataloader.data
         # me aseguro de instanciar todas las sublistas, que
         # pueden no estarlo.

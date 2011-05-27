@@ -31,6 +31,7 @@ class Consumer(object):
         'ext': ".cfg",
         'test': False,
         'lazy': False,
+        'warnings': False,
     }
 
     def __init__(self):
@@ -49,8 +50,9 @@ class Consumer(object):
             template  = None
         self.tmplname = template
         self.loader = ShelfLoader(datashelf)
+        self.warnings = dict() if self.warnings else None
         try:
-            self.loader.set_datapath(self.path, self.lazy)
+            self.loader.set_datapath(self.path, warnings=self.warnings, lazy=self.lazy)
             self.loader.set_tmplpath(self.path)
             self.maker = ContextMaker(self.outpath, self.ext, self.collapse, self.overwrite)
             self.actor = Interactor()
@@ -67,6 +69,9 @@ class Consumer(object):
         except:
             self.loader.close()
             raise
+
+    def dump_warnings(self):
+        self.loader.dump_warnings(self.warnings)
 
     def _add_objects(self):
         """Carga objetos predefinidos e indicados en la linea de comandos."""

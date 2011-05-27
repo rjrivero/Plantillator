@@ -38,12 +38,18 @@ class ShelfLoader(CSVShelf):
     VERSION  = "tmpl_version"
     CURRENT  = 1
 
-    def __init__(self, shelfname):
-        """Inicializa el cargador"""
+    def __init__(self, shelfname, bootstrap=False):
+        """Inicializa el cargador
+        
+        Si bootstrap=True, borra el shelf y lo carga desde cero.
+        """
         self.shelfname, shelf = shelfname, dict()
         try:
-            with open(shelfname, "rb") as shelve:
-                shelf = pickle.load(shelve)
+            if bootstrap:
+                os.unlink(shelfname)
+            else:
+                with open(shelfname, "rb") as shelve:
+                    shelf = pickle.load(shelve)
         except (IOError, EOFError, pickle.UnpicklingError):
             pass
         super(ShelfLoader, self).__init__(shelf)
@@ -71,9 +77,9 @@ class ShelfLoader(CSVShelf):
         """Prepara la carga de plantillas del path"""
         self.path = PathFinder(tmplpath)
 
-    def set_datapath(self, datapath, lazy=True):
+    def set_datapath(self, datapath, warnings=None, lazy=True):
         """ejecuta la carga de datos"""
-        super(ShelfLoader, self).set_datapath(datapath, lazy)
+        super(ShelfLoader, self).set_datapath(datapath, warnings=warnings, lazy=lazy)
         self.data.update(self.glob)
 
     def add_symbols(self, symbols):

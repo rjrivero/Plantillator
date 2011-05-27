@@ -48,20 +48,20 @@ class CSVMeta(Meta):
             self.fields[name] = CSVDataSetField(submeta)
             return self.subtypes.setdefault(name, submeta)
 
-    def process(self, lazy=False):
+    def process(self, warnings=None, lazy=False):
         """fuerza el proceso de un bloque cargado en modo lazy"""
         if hasattr(self, "blocks"):
             blocks = self.blocks
             del(self.blocks) # Para que no se vuelva a ejecutar
             for blk in blocks:
-                blk.process(self.rootset)
+                blk.process(self.rootset, warnings=warnings)
         # He detectado casos en que un meta puede no tener bloques, 
         # pero aun asi puede tener submetas sin procesar. Es un caso raro, pero
         # se da... tengo que sacar este "if lazy" fuera del "hasattr" porque,
         # si no, los datos no se cargan correctamente.
         if not lazy:
             for subtype in self.subtypes.values():
-                subtype.process(lazy)
+                subtype.process(warnings=warnings, lazy=lazy)
 
 
 class CSVDataObject(DataObject):
@@ -194,7 +194,7 @@ class CSVDataSetField(DataSetField):
         return CSVPeerSet(items)
 
     def collect(self, dset, attrib):
-        self.meta.process()
+        self.meta.process() # por si acaso los datos han entrado en modo lazy
         return super(CSVDataSetField, self).collect(dset, attrib)
 
 
@@ -209,16 +209,24 @@ class CSVRow(object):
         self.cols = cols
 
     @staticmethod
-    def normalize(rows, columns):
-        """Normaliza los datos de las filas en funcion del tipo"""
+    def normalize(lineno, rows, columns, warnings):
+        """Normaliza los datos de las filas en funcion del tipo
+        
+        Si se le pasa un array de warnings, el formato de los warnings que
+        devuelve son tuplas (numero de linea, lista de warnings)
+        """
         columns = tuple((col.index, col.coltype.convert) for col in columns)
-        for cols in (row.cols for row in rows):
+        errors  = list()
+        for loffset, row in enumerate(r.cols for r in rows):
             for index, convert in columns:
-                cols[index] = convert(cols[index])
+                row[index] = convert(row[index].strip(), errors.append)
+            if errors:
+                warnings.append((lineno + loffset, errors))
+                errors = list()
         return rows
 
     def __repr__(self):
-        return " (%s) " % ", ".join(self.cols)
+        return " (%s) " % ", ".join(str(x) for x in self.cols)
 
 
 class Column(object):
@@ -412,20 +420,42 @@ class TableBlock(ColumnList):
         """Prepara los datos para su proceso"""
         super(TableBlock, self).prepare(rootmeta, self)
 
-    def process(self, rootset):
+    def process(self, rootset, warnings=None):
         """Procesa las lineas del bloque actualizando los datos.
 
-        En caso de excepcion al procesar los objetos, la excepcion se
-        lanza envuelta en un DataError.
+        En caso de excepcion al procesar los objetos, si no se
+        ha pasado una lista de warnings, la excepcion se lanza envuelta en
+        un DataError.
+        
+        Si se ha pasado un diccionario en warnings, los errores se acumulan
+        en los warnings, con formato de diccionario:
+            [source] => (numero de linea, lista de warnings)
         """
-        source, lineno = self.source, self.index
-        try:
-            body, self.body = self.body, tuple() # para que no se vuelva a ejecutar
-            for row in CSVRow.normalize(body, self.columns):
+        if not self.body:
+            return 
+        source, lineno, errors = self.source, self.index, list()
+        body, self.body = self.body, None # para que no se vuelva a ejecutar
+        rows = CSVRow.normalize(lineno, body, self.columns, errors)
+        if warnings is None:
+            # No hay warnings, si se produce un error hay que lanzarlo.
+            if errors:
+                raise DataError(source, lineno, warnings=errors, stack=False)
+            try:
+                for row in rows:
+                    lineno = row.lineno
+                    self._addrow(row.cols, rootset)
+            except Exception as details:
+                raise DataError(source, lineno)
+            return
+        # Hay lista de warnings, se almacenan los errores.
+        for row in rows:
+            try:
                 lineno = row.lineno
                 self._addrow(row.cols, rootset)
-        except:
-            raise DataError(source, lineno)
+            except Exception as details:
+                errors.append((lineno, (str(details),)))
+        if errors:
+            warnings.setdefault(source, list()).extend(errors)
 
 
 class LinkBlock(object):
@@ -595,13 +625,28 @@ class LinkBlock(object):
             group.meta.fields[attrib] = CSVObjectField()
         self.groups = valid
 
-    def process(self, rootset):
-        source, lineno = self.source, self.index
+    def process(self, rootset, warnings=None):
+        """Procesa las lineas del bloque actualizando los datos.
+
+        En caso de excepcion al procesar los objetos, si no se
+        ha pasado una lista de warnings, la excepcion se lanza envuelta en
+        un DataError.
+        
+        Si se ha pasado un diccionario en warnings, los errores se acumulan
+        en los warnings, con formato de diccionario:
+            [source] => (numero de linea, lista de warnings)
+        """
+        if not self.body:
+            return
+        source, lineno, errors = self.source, self.index, list()
         valid, attrib  = self.groups, "PEER"
         # attrib = "PEER" if self.p2p else "PEERS"
-        try:
-            body, self.body = self.body, tuple() # para que no se vuelva a ejecutar
-            for row in CSVRow.normalize(body, self.columns):
+        body, self.body = self.body, None # para que no se vuelva a ejecutar
+        rows = CSVRow.normalize(lineno, body, self.columns, warnings)
+        if errors and (warnings is None):
+            raise DataError(source, lineno, warnings=errors, stack=False)
+        for row in rows:
+            try:
                 lineno = row.lineno # por si lanzo excepcion
                 # Creo todos los objetos y los agrego a una lista
                 inserted = ((g.position, g._addrow(row.cols, rootset)) for g in valid)
@@ -624,8 +669,12 @@ class LinkBlock(object):
                         peers = +peers
                         for item in items:
                             setattr(item, attrib, peers)
-        except:
-            raise DataError(source, lineno)
+            except Exception as details:
+                if warnings is None:
+                    raise DataError(source, lineno)
+                errors.append((lineno, (str(details),)))
+        if errors:
+            warnings.setdefault(source, list()).extend(errors)
 
     @property
     def depth(self):
@@ -704,7 +753,7 @@ class CSVShelf(object):
         self.shelf = shelf
         self.dirty = False
 
-    def set_datapath(self, datapath, lazy=False):
+    def set_datapath(self, datapath, warnings=None, lazy=False):
         """Busca todos los ficheros CSV en el path.
 
         Compara la lista de ficheros encontrados con la
@@ -717,6 +766,13 @@ class CSVShelf(object):
         - Si algun fichero es mas reciente en disco que
           en el shelf, carga los datos y actualiza el
           shelf.
+
+        Si se le pasa una lista en warnings, acumula ahi los posibles errores
+        que encuentre al procesar la lista de variables u otros elementos.
+        
+        Para generar los warnings hay que leer todos los ficheros y cargarlos
+        completos, asi que si [warnings is not None], el valor de lazy se
+        ignora.
         """
         files = dict(chain(*(self._findcsv(dirname) for dirname in datapath)))
         self.dirty = False
@@ -746,7 +802,17 @@ class CSVShelf(object):
             pass
         # Si el pickle falla o no es completo, recargamos los datos
         # (cualquiera que sea el error)
-        self._update(files, lazy)
+        if warnings is not None:
+            lazy = False
+        self._update(files, warnings=warnings, lazy=lazy)
+
+    def dump_warnings(self, warnings):
+        if not warnings:
+            return
+        for source, warn in warnings.iteritems():
+            print "Errores en fichero %s\n******************" % source
+            for lineno, msgs in warn:
+                print "linea %d\n  %s" % (lineno, "\n  ".join(msgs))
 
     def _add_rootset(self, rootmeta, rootset):
         rootmeta.rootset = rootset
@@ -760,7 +826,7 @@ class CSVShelf(object):
         files = (f for f in files if os.path.isfile(f))
         return ((os.path.abspath(f), os.stat(f).st_mtime) for f in files)
 
-    def _update(self, files, lazy=False):
+    def _update(self, files, warnings=None, lazy=False):
         """Procesa los datos y los almacena en el shelf"""
         nesting = self._read_blocks(files)
         meta = CSVMeta("", None)
@@ -776,12 +842,12 @@ class CSVShelf(object):
         rset = CSVDataSet(meta, (data,))
         self._add_rootset(meta, rset)
         for key, subtype in meta.subtypes.iteritems():
-            subtype.process(lazy)
+            subtype.process(warnings=warnings, lazy=lazy)
             # Me aseguro de instanciar el atributo, porque si hay una
             # tabla vacia, subtype.process no hace nada.
             data.get(key)
         # Proceso la tabla de variables
-        self._set_vars(data)
+        self._set_vars(data, warnings)
         # OK, todo cargado... ahora guardo los datos en el shelf.
         data.PK = CSVDataObject.next()
         self._save(files, data.__dict__)
@@ -794,7 +860,7 @@ class CSVShelf(object):
             nesting.setdefault(block.depth, list()).append(block)
         return nesting
 
-    def _set_vars(self, data):
+    def _set_vars(self, data, warnings=None):
         # proceso la tabla especial "variables"
         meta = data._meta
         keys = dict((k.lower(), k) for k in meta.subtypes.keys())
@@ -802,16 +868,20 @@ class CSVShelf(object):
         if vart:
             submeta = meta.subtypes[vart]
             key, val, typ = submeta.summary[:3]
+            vwarn = list()
             for item in getattr(data, str(vart)):
                 vname = str(item._get(key))
                 vtyp  = item._get(typ)
-                vval  = item._get(val)
+                vval  = item._get(val).strip()
                 if all(x is not None for x in (vname, vtyp, vval)):
                     vtyp = FieldMap.resolve(vtyp)
-                    vval = vtyp.convert(vval)
+                    vval = vtyp.convert(vval, vwarn) if vval else None
                     if vval is not None:
                         setattr(data, vname, vval)
                         meta.fields[vname] = vtyp
+                    elif vwarn and (warnings is not None):
+                        warnings.append((vname, vwarn))
+                        vwarn = list()
             delattr(data, str(vart))
             del(meta.fields[vart])
             del(meta.subtypes[vart])
