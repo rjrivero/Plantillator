@@ -46,11 +46,11 @@ def kw_as_crit(key, val):
     if val is DataSet.NONE:
         # Cambio get(x, None) is None por esta comparacion, que tambien
         # me vale para campos de tipo lista o set que esten vacios.
-    	return lambda x, dummy=tuple(): len(x.get(key, dummy)) == 0
+    	return lambda x: x.get(key, None) is None
     if val is DataSet.ANY:
         # Cambio get(x, None) is not None por esta comparacion, que tambien
         # me vale para campos de tipo lista o set que no esten vacios.
-        return lambda x, dummy=tuple(): len(x.get(key, dummy)) > 0
+        return lambda x: x.get(key, None) is not None
     return lambda x: x.get(key, None) == val
 
 
