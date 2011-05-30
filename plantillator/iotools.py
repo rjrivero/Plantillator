@@ -45,7 +45,7 @@ class ShelfLoader(CSVShelf):
         """
         self.shelfname, shelf = shelfname, dict()
         try:
-            if bootstrap:
+            if bootstrap and os.path.isfile(shelfname):
                 os.unlink(shelfname)
             else:
                 with open(shelfname, "rb") as shelve:

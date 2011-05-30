@@ -223,7 +223,7 @@ except DataError as details:
     if options.debug:
         try:
             print_exception(*details.exc_info, file=sys.stderr)
-        except AttributeError:
+        except (AttributeError, TypeError):
             print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)    
     

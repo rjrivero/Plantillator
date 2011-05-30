@@ -194,7 +194,29 @@ class CSVDataSetField(DataSetField):
         return CSVPeerSet(items)
 
     def collect(self, dset, attrib):
-        self.meta.process() # por si acaso los datos han entrado en modo lazy
+        #
+        # Recopilo los datos del meta actual en la jerarquia, pero
+        # con lazy=True me aseguro de que no va a profundizar y recolectar
+        # los datos de otros nodos hijo. Esto hay que hacerlo asi porque
+        # se me han dado casos como el siguiente:
+        #
+        # - sedes_fo se procesa.
+        # - la recursion (!lazy) se dispara, y empieza a procesarse
+        #   el primer hijo (sedes_fo.pilas)
+        # - durante el proceso, sedes_fo.pilas hace busquedas y dispara la
+        #   funcion "collect" de CSVDataSet, sobre sedes_fo.
+        # - sedes_fo ya no tiene bloques, asi que no procesa bloques. Pero
+        #   si que vuelve a disparar (!lazy), y vuelve a invocar "process"
+        #   en sedes_fo.pilas
+        # - sedes_fo.pilas tampoco tiene ya bloques (ha ejecutado el
+        #   del(self.blocks), asi que salta directamente al (!lazy)
+        #   sedes_fo.pilas.interfaces empieza a procesarse antes de que
+        #   termine sedes_fo.pilas.
+        #
+        # Es un caso muy jodido. Lo que hago es evitar que se procesen los
+        # sub-campos cuando no hace falta, con lazy=True.
+        #
+        self.meta.process(lazy=True)
         return super(CSVDataSetField, self).collect(dset, attrib)
 
 
@@ -446,6 +468,7 @@ class TableBlock(ColumnList):
                     self._addrow(row.cols, rootset)
             except Exception as details:
                 raise DataError(source, lineno)
+            # Cortamos aqui, el resto solo se procesa si warnings is not None
             return
         # Hay lista de warnings, se almacenan los errores.
         for row in rows:
