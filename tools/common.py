@@ -29,7 +29,7 @@ TableHelper = (x.table << [
             """
     ],
     x.body(num=1) << [
-        x.rows(title="titulo o None") << "row object list",
+        x.rows(args="titulo, escape") << "row object list",
     ]
 ]).build(SpecBuilder())
 
@@ -136,19 +136,19 @@ class TableBuilder(object):
                 for (colname, getter) in self._header
             ),
             x.tbody(**style['body']) << (
-                self._layout_horizontal_row(group, rows, colspan)
-                for (group, rows) in self._body
+                self._layout_horizontal_row(group, escape, rows, colspan)
+                for (group, escape, rows) in self._body
             )
         )
 
-    def _layout_horizontal_row(self, group, rows, colspan,
+    def _layout_horizontal_row(self, group, escape, rows, colspan,
                                tdtoggle=Toggle("eventd", "oddtd"),
                                x=BuilderHelper()):
         trtoggle, style = self._trcss, self._style
         if group:
             trtoggle.reset()
             yield x.tr(**style['titletr']) << (
-                x.td(colspan=colspan, **style['titletd']) << group
+                x.td(colspan=colspan, escape=escape, **style['titletd']) << group
             )
         if self._repeat:
             thtoggle = self._thcss
@@ -169,11 +169,11 @@ class TableBuilder(object):
 
     def _layout_vertical(self, x=BuilderHelper()):
         style, thtoggle = self._style, self._thcss
-        if self._htitle or any(group for (group, rows) in self._body):
+        if self._htitle or any(group for (group, escape, rows) in self._body):
             self._table << x.thead << x.tr(**style['head']) << (
                 x.th(**style[thtoggle.next()]) << self._htitle,
-                ((x.th(colspan=len(rows), **style[thtoggle.next()]) << group)
-                 for (group, rows) in self._body
+                ((x.th(colspan=len(rows), escape=escape, **style[thtoggle.next()]) << group)
+                 for (group, escape, rows) in self._body
                 )
             )
         self._table << x.tbody(**style['body']) << (
@@ -189,7 +189,7 @@ class TableBuilder(object):
         yield x.tr(**style[trtoggle.next()]) << (
             x.th(**style['eventh']) << colname,
             ((x.td(**style[tdtoggle.next()]) << getter(row))
-                for row in chain(*(rows for (group, rows) in self._body))
+                for row in chain(*(rows for (group, escape, rows) in self._body))
             )
         )
 
@@ -207,10 +207,10 @@ class TableBuilder(object):
         """Crea un nodo 'body'"""
         yield (None, None)
 
-    def rows(self, parent, title=None):
+    def rows(self, parent, title=None, escape=True):
         items = list()
         yield (None, (lambda it: items.append(it)))
-        self._body.append((title, items))
+        self._body.append((title, escape, items))
 
 
 class GroupBuilder(object):

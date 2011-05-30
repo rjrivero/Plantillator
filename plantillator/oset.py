@@ -14,25 +14,25 @@ class OrderedSet(collections.MutableSet):
     def __init__(self, iterable=None):
         self.end = end = [] 
         end += [None, end, end]         # sentinel node for doubly linked list
-        self.map = {}                   # key --> [key, prev, next]
+        self.keymap = {}                   # key --> [key, prev, next]
         if iterable is not None:
             self |= iterable
 
     def __len__(self):
-        return len(self.map)
+        return len(self.keymap)
 
     def __contains__(self, key):
-        return key in self.map
+        return key in self.keymap
 
     def add(self, key, KEY=0, PREV=1, NEXT=2):
-        if key not in self.map:
+        if key not in self.keymap:
             end = self.end
             curr = end[PREV]
-            curr[NEXT] = end[PREV] = self.map[key] = [key, curr, end]
+            curr[NEXT] = end[PREV] = self.keymap[key] = [key, curr, end]
 
     def discard(self, key, KEY=0, PREV=1, NEXT=2):
-        if key in self.map:        
-            key, prev, next = self.map.pop(key)
+        if key in self.keymap:        
+            key, prev, next = self.keymap.pop(key)
             prev[NEXT] = next
             next[PREV] = prev
 

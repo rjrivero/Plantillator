@@ -293,12 +293,43 @@ class TagBuilder(object):
 
         def __str__(self):
             return "\n".join(self._result)
+
+    Este TagBuilder se limita a construir una salida de texto en formato
+    pseudo-html, con los nodos indicados encerrados entre <>, y los parametros
+    dados a cada nodo como atributos (hay un atributo especial, "escape", que
+    se usa para definir explicitamente si se quiere escapar o no el valor.
+    Si no se dice nada, el valor por defecto se escapa). Por ejemplo:
+    
+    x = BuilderHelper()
+    ejemplo = x.root << [
+        x.head << "Hola",
+        x.body << [
+            x.row(attr="p1")               << "Este se escapa: <>",
+            x.row(attr="p2", escape=False) << "Este NO se escapa: <>",
+        ]
+    ]
+    
+    ejemplo.build(TagBuilder()) resulta en:
+    
+    <root>
+        <head>
+            Hola
+        </head>
+        <body>
+            <row attr="p1">
+                Este se escapa: &lt; &gt;
+            </row>
+            <row attr="p2">
+                Este NO se escapa: <>
+            </row>
+        </body>
+    </root>
     """
 
     def __init__(self):
         self._result = IndentList()
 
-    def __call__(self, parent, name, arg, kw, escape=escape):
+    def __call__(self, parent, name, arg, kw):
         tag = name
         if arg:
             comments = " ".join(escape(v) for v in arg)
@@ -308,8 +339,12 @@ class TagBuilder(object):
             tag = "%s %s" % (name, " ".join(attribs))
         self._result.append("<%s>" % tag)
         self._result.indent()
-        def append(literal, result=self._result):
-            result.append("%s" % escape(literal))
+        if kw.pop("escape", True):
+            def append(literal, result=self._result):
+                result.append("%s" % escape(literal))
+        else:
+            def append(literal, result=self._result):
+                result.append("%s" % literal)
         yield(self._result, append)
         self._result.dedent()
         self._result.append("</%s>" % name)
