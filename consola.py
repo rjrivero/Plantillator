@@ -97,9 +97,9 @@ def exit_with_errors(details):
     """Sale volcando todos los mensajes de error."""
     print >> sys.stderr, str(details) 
     if options.debug:
-        try:
+        if hasattr(details, 'exc_info') and details.exc_info:
             print_exception(*details.exc_info, file=sys.stderr)
-        except AttributeError:
+        else:
             print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)    
 
@@ -115,6 +115,7 @@ plantillator.ext = options.ext
 plantillator.overwrite = True
 plantillator.lazy = options.lazy
 plantillator.test = options.test
+plantillator.warnings = options.warnings
 
 try:
 

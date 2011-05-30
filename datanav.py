@@ -221,9 +221,9 @@ except DataError as details:
 
     print >> sys.stderr, str(details) 
     if options.debug:
-        try:
+        if hasattr(details, 'exc_info') and details.exc_info:
             print_exception(*details.exc_info, file=sys.stderr)
-        except (AttributeError, TypeError):
+        else:
             print_exc(file=sys.stderr)
     sys.exit(PARSE_ERRNO)    
     
