@@ -236,7 +236,7 @@ def _graph_dot(graph, shapedir, scale):
                 yield item
         for sublist in group:
             if sublist.rank is not None:
-                yield '  { rank=%s; %s };' % (sublist.rank, "; ".join(x.ID for x in sublist))
+                yield '  { rank=%s; %s };' % (sublist.rank, "; ".join(str(x.ID) for x in sublist))
         yield post
     IDs = graph.IDs
     for sublist in graph.links:
@@ -263,7 +263,7 @@ def _group_wrapper(cluster, label):
 def _list_dot(sublist, label, shapedir):
     """Crea un cluster dot por cada nodo del NodeList"""
     for item in sublist:
-        cluster, shape, label = item.ID.replace(" ", ""), "", label or ""
+        cluster, shape, label = str(item.ID).replace(" ", ""), "", label or ""
         if sublist.shape:
             shape = 'shapefile="%s.png",' % os.path.join(shapedir, sublist.shape)
         yield "\n".join((
