@@ -5,18 +5,15 @@
 # http://code.activestate.com/recipes/576694/
 #
 
-import collections
-from itertools import chain
+from collections import OrderedDict, MutableSet
+from itertools import repeat, chain
 
 
-class OrderedSet(collections.MutableSet):
+class OrderedSet(MutableSet):
 
-    def __init__(self, iterable=None):
-        self.end = end = [] 
-        end += [None, end, end]         # sentinel node for doubly linked list
-        self.keymap = {}                   # key --> [key, prev, next]
-        if iterable is not None:
-            self |= iterable
+    def __init__(self, iterable=tuple()):
+        iterable = zip(iterable, repeat(None))
+        self.keymap = OrderedDict(iterable)
 
     def __len__(self):
         return len(self.keymap)
@@ -24,51 +21,28 @@ class OrderedSet(collections.MutableSet):
     def __contains__(self, key):
         return key in self.keymap
 
-    def add(self, key, KEY=0, PREV=1, NEXT=2):
-        if key not in self.keymap:
-            end = self.end
-            curr = end[PREV]
-            curr[NEXT] = end[PREV] = self.keymap[key] = [key, curr, end]
+    def add(self, key):
+        self.keymap.setdefault(key, None)
 
-    def discard(self, key, KEY=0, PREV=1, NEXT=2):
-        if key in self.keymap:        
-            key, prev, next = self.keymap.pop(key)
-            prev[NEXT] = next
-            next[PREV] = prev
+    def discard(self, key):
+        self.keymap.pop(key, None)
 
-    def __iter__(self, KEY=0, PREV=1, NEXT=2):
-        end = self.end
-        curr = end[NEXT]
-        while curr is not end:
-            yield curr[KEY]
-            curr = curr[NEXT]
+    def __iter__(self):
+        return self.keymap.iterkeys()
 
-    def __reversed__(self, KEY=0, PREV=1, NEXT=2):
-        end = self.end
-        curr = end[PREV]
-        while curr is not end:
-            yield curr[KEY]
-            curr = curr[PREV]
+    def __reversed__(self):
+        return reversed(self.keymap.iterkeys())
 
     def pop(self, last=True):
-        if not self:
-            raise KeyError('set is empty')
-        key = next(reversed(self)) if last else next(iter(self))
-        self.discard(key)
-        return key
-
+        return self.keymap.popitem(last).key
+ 
     def __repr__(self):
         if not self:
             return '%s()' % (self.__class__.__name__,)
         return '%s(%r)' % (self.__class__.__name__, list(self))
 
     def __eq__(self, other):
-        if isinstance(other, OrderedSet):
-            return len(self) == len(other) and list(self) == list(other)
-        return set(self) == set(other)
-
-    def __del__(self):
-        self.clear() # remove circular references
+        return frozenset(self) == frozenset(other)
 
     def union(self, other):
         return OrderedSet(chain(self, other))

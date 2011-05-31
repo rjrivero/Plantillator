@@ -44,12 +44,12 @@ class DataError(Exception):
 def kw_as_crit(key, val):
     """Convierte un criterio expresado como clave=valor en un callable"""
     if val is DataSet.NONE:
-        # Cambio get(x, None) is None por esta comparacion, que tambien
-        # me vale para campos de tipo lista o set que esten vacios.
+        # Esto me vale para campos de tipo lista o set que esten vacios.
+        # (por lo menos, hasta que alguien los instancie con "__getattr__"...)
     	return lambda x: x.get(key, None) is None
     if val is DataSet.ANY:
-        # Cambio get(x, None) is not None por esta comparacion, que tambien
-        # me vale para campos de tipo lista o set que no esten vacios.
+        # Esto me vale para campos de tipo lista o set que no esten vacios.
+        # (por lo menos, hasta que alguien los instancie con "__getattr__"...)
         return lambda x: x.get(key, None) is not None
     return lambda x: x.get(key, None) == val
 
@@ -189,7 +189,7 @@ class Field(object):
         raise AttributeError(attr)
 
     def collect(self, dset, attr):
-        items = (item._get(attr) for item in dset._children)
+        items = (item.get(attr) for item in dset._children)
         return BaseSet((x for x in items if x is not None))
 
 
@@ -207,7 +207,7 @@ class ObjectField(Field):
         return PeerSet(items)
         
     def collect(self, dset, attr):
-        items = (item._get(attr) for item in dset._children)
+        items = (item.get(attr) for item in dset._children)
         items = (item for item in items if item is not None)
         return self._new(items)
 
@@ -230,7 +230,7 @@ class DataSetField(Field):
         return self._new()
 
     def collect(self, dset, attr):
-        items = (item._get(attr) for item in dset._children)
+        items = (item.get(attr) for item in dset._children)
         items = tuple(item for item in items if item is not None)
         if len(items) == 1:
             # Devuelvo el propio DataSet, para aprovechar indices
@@ -283,13 +283,6 @@ class DataObject(object):
             raise AttributeError(attr)
 
     def get(self, attr, default=None):
-        """Obtiene el atributo o lo genera si es dinamico o subtipo"""
-        try:
-            return getattr(self, attr)
-        except AttributeError:
-            return default
-
-    def _get(self, attr, default=None):
         """Obtiene el atributo solo si es estatico y esta definido"""
         return self.__dict__.get(attr, default)
 
@@ -326,7 +319,7 @@ class DataObject(object):
         return Fallback(self)
 
     def __str__(self):
-        summary = (self._get(x) for x in self._meta.summary)
+        summary = (self.get(x) for x in self._meta.summary)
         return ", ".join(str(x) for x in summary if x is not None)
 
     def __repr__(self):
@@ -384,7 +377,7 @@ class Fallback(dict):
             return default
 
     def get(self, attr, default=None):
-        return self._get(attr, default)
+        return self.get(attr, default)
     
     def __setattr__(self, attr, val):
         self[attr] = val
@@ -432,16 +425,16 @@ class Linear(object):
         self._attr = attr
 
     def _eq(self, index):
-        return tuple(x for x in self._items if x._get(self._attr) == index)
+        return tuple(x for x in self._items if x.get(self._attr) == index)
 
     def _ne(self, index):
-        return tuple(x for x in self._items if x._get(self._attr) != index)
+        return tuple(x for x in self._items if x.get(self._attr) != index)
 
     def _none(self):
-        return tuple(x for x in self._items if x._get(self._attr) is None)
+        return tuple(x for x in self._items if x.get(self._attr) is None)
 
     def _any(self):
-        return tuple(x for x in self._items if x._get(self._attr) is not None)
+        return tuple(x for x in self._items if x.get(self._attr) is not None)
 
     def _sorted(self, asc=True):
         def key(item):
@@ -489,7 +482,7 @@ class Index(object):
     def __init__(self, items, attr):
         # Separo los objetos en dos grupos: los que tienen el
         # atributo, y los que no.
-        values = tuple(x._get(attr) for x in items)
+        values = tuple(x.get(attr) for x in items)
         self._empty = tuple(y for (x, y) in zip(values, items) if x is None)
         self._full  = tuple(sorted(IndexItem(x, y) for (x, y) in zip(values, items) if x is not None))
         self._cache = dict()
@@ -888,9 +881,9 @@ if __name__ == "__main__":
         def testData_Get(self):
             """Funcion _get"""
             self.d1.x = -8
-            self.failUnless(self.d1._get("x") == -8)
-            self.failUnless(self.d1._get("y", "testpassed") == "testpassed")
-            self.failUnless(self.d1._get("subfield") is None)
+            self.failUnless(self.d1.get("x") == -8)
+            self.failUnless(self.d1.get("y", "testpassed") == "testpassed")
+            self.failUnless(self.d1.get("subfield") is None)
 
     class TestPickledData(TestData):
 
@@ -968,10 +961,10 @@ if __name__ == "__main__":
             """Funcion _get"""
             self.d1.a = -9
             self.d2.b = -4
-            self.failUnless(self.d2._get("a") == -9)
-            self.failUnless(self.d2._get("b") == -4)
-            self.failUnless(self.d2._get("x", "testpassed") == "testpassed")
-            self.failUnless(type(self.d2._get("subfield")) == DataSet)
+            self.failUnless(self.d2.get("a") == -9)
+            self.failUnless(self.d2.get("b") == -4)
+            self.failUnless(self.d2.get("x", "testpassed") == "testpassed")
+            self.failUnless(type(self.d2.get("subfield")) == DataSet)
 
     class TestDataSet(unittest.TestCase):
 

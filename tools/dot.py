@@ -263,7 +263,7 @@ def _group_wrapper(cluster, label):
 def _list_dot(sublist, label, shapedir):
     """Crea un cluster dot por cada nodo del NodeList"""
     for item in sublist:
-        cluster, shape, label = str(item.ID).replace(" ", ""), "", label or ""
+        cluster, shape, border, label = str(item.ID).replace(" ", ""), "", sublist.border, label or ""
         if sublist.shape:
             shape = 'shapefile="%s.png",' % os.path.join(shapedir, sublist.shape)
         yield "\n".join((
@@ -274,7 +274,7 @@ def _list_dot(sublist, label, shapedir):
             '      mindist=0;',
             '      pad=0;',
             '      label="%s";' % _dot_escape(item.label),
-            '      color=white;',
+            '      color=%s;' % border,
             '      %s [shape=box, pad=0, label="", penwidth=0, %s fontname=Calibri, fontsize=10];' % (item.ID, shape),
             '    }'
         ))

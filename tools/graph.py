@@ -93,8 +93,9 @@ class NodeProperties(object):
     """Propiedades comunes de un grupo de nodos"""
 
     DEFAULTS = {
-        "rank":  None,
-        "shape": None,
+        "border": "white",
+        "rank":    None,
+        "shape":   None,
     }
 
     def __init__(self, attribs=None, **kw):
@@ -102,6 +103,7 @@ class NodeProperties(object):
         
         shape:      Nombre del icono que debe tener el objeto.
         rank:       Rango jerarquico del objeto (para dot, principalmente)
+        "border":   Color del borde del nodo, para dot solo.
         attribs:    Nombres de los atributos que se exportaran.
         """
         self.attribs = attribs
@@ -192,7 +194,7 @@ class LinkProperties(object):
         - un ItemDescriptor para el destino.
         - un label para el link, si se aplica.
         """
-        for item in (x for x in items if x._get("PEER")):
+        for item in (x for x in items if x.get("PEER")):
             # Obtengo el ID y el label de cada atributo desde el resolver
             src_desc  = LinkProperties._descriptor(
                 item, item.up,
@@ -358,6 +360,7 @@ class Graph(object):
         Los kw reconocidos son:
             - "shape": nombre del icono
             - "rank": rango de los nodos, para Dot.
+            - "border": color del borde, para Dot.
         """
         # Creo un nuevo objeto Properties y convierto los items en descriptores.
         properties  = NodeProperties(attribs, **kw)
@@ -442,7 +445,7 @@ x = BuilderHelper()
 GraphHelper = (x.grafo << [
     x.grupo(args="id") << [
         x.props(args="id_resolver, label_resolver, attribs") << [
-            x.estilo(kwargs="shape, rank") << "Nodos del grafo"
+            x.estilo(kwargs="shape, rank, border") << "Nodos del grafo"
         ]
     ],
     x.enlaces << [

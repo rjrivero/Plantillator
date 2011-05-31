@@ -175,7 +175,7 @@ class DictField(ObjectField):
     def collect(self, dset, attr):
         """Devuelve un dict donde cada entrada es el compendio de entradas"""
         sumup = defaultdict(set)
-        items = (item._get(attr) for item in dset._children)
+        items = (item.get(attr) for item in dset._children)
         items = (x for x in items if x)
         for item in items:
             for key, val in item.iteritems():
@@ -770,7 +770,7 @@ class CSVShelf(object):
     FILES    = "data_files"
     DATA     = "data_root"
     VERSION  = "data_version"
-    CURRENT  = 1
+    CURRENT  = 2
 
     def __init__(self, shelf):
         self.shelf = shelf
@@ -868,7 +868,7 @@ class CSVShelf(object):
             subtype.process(warnings=warnings, lazy=lazy)
             # Me aseguro de instanciar el atributo, porque si hay una
             # tabla vacia, subtype.process no hace nada.
-            data.get(key)
+            # data.get(key)
         # Proceso la tabla de variables
         self._set_vars(data, warnings)
         # OK, todo cargado... ahora guardo los datos en el shelf.
@@ -893,9 +893,9 @@ class CSVShelf(object):
             key, val, typ = submeta.summary[:3]
             vwarn = list()
             for item in getattr(data, str(vart)):
-                vname = str(item._get(key))
-                vtyp  = item._get(typ)
-                vval  = item._get(val).strip()
+                vname = str(item.get(key))
+                vtyp  = item.get(typ)
+                vval  = item.get(val).strip()
                 if all(x is not None for x in (vname, vtyp, vval)):
                     vtyp = FieldMap.resolve(vtyp)
                     vval = vtyp.convert(vval, vwarn) if vval else None
