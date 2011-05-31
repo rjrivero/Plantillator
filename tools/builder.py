@@ -334,17 +334,17 @@ class TagBuilder(object):
         if arg:
             comments = " ".join(escape(v) for v in arg)
             self._result.append("<!-- %s -->" % comments)
-        if kw:
-            attribs = ('%s="%s"' % (k, escape(v)) for k, v in kw.iteritems())
-            tag = "%s %s" % (name, " ".join(attribs))
-        self._result.append("<%s>" % tag)
-        self._result.indent()
-        if kw.pop("escape", True):
+        if kw and kw.pop("escape", True):
             def append(literal, result=self._result):
                 result.append("%s" % escape(literal))
         else:
             def append(literal, result=self._result):
                 result.append("%s" % literal)
+        if kw:
+            attribs = ('%s="%s"' % (k, escape(v)) for k, v in kw.iteritems())
+            tag = "%s %s" % (name, " ".join(attribs))
+        self._result.append("<%s>" % tag)
+        self._result.indent()
         yield(self._result, append)
         self._result.dedent()
         self._result.append("</%s>" % name)

@@ -29,7 +29,7 @@ def adapt_peers(from_dset, to_dset, adaptor):
             meta.fields["PEER"] = ObjectField()
     meta = to_dset._meta
     for item in from_dset:
-        if item._get("POSITION") is not None:
+        if item.get("POSITION") is not None:
             continue
         item.POSITION = 0
         peer = adaptor(meta, item, to_dset)
