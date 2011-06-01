@@ -898,7 +898,7 @@ class CSVShelf(object):
                 vval  = item.get(val).strip()
                 if all(x is not None for x in (vname, vtyp, vval)):
                     vtyp = FieldMap.resolve(vtyp)
-                    vval = vtyp.convert(vval, vwarn) if vval else None
+                    vval = vtyp.convert(vval, vwarn.append) if vval else None
                     if vval is not None:
                         setattr(data, vname, vval)
                         meta.fields[vname] = vtyp
