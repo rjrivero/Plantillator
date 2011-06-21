@@ -12,9 +12,14 @@ from itertools import repeat, chain
 class OrderedSet(MutableSet):
 
     def __init__(self, iterable=tuple()):
-        iterable = zip(iterable, repeat(None))
-        self.keymap = OrderedDict(iterable)
+        self.__setstate__(iterable)
 
+    def __getstate__(self):
+        return self.keymap.keys()
+
+    def __setstate__(self, iterable):
+        self.keymap = OrderedDict(zip(iterable, repeat(None)))
+        
     def __len__(self):
         return len(self.keymap)
 
