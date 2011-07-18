@@ -204,7 +204,9 @@ class IPAddress(object):
         # una IP como tal, y otros una lista de IPs en formato texto
         # (por ejemplo, [IP("A.B.C.D/a"), "L.M.N.O/b, P.Q.R.S/c"]
         if isinstance(other, basestring):
-            return cmp(str(self), other)
+            if "/" in other:
+                return cmp(str(self), other)
+            return cmp(self.ip, other)
         return cmp(self.int, other.int)
 
     def __len__(self):
