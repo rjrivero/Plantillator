@@ -237,7 +237,10 @@ class CSVRow(object):
         Si se le pasa un array de warnings, el formato de los warnings que
         devuelve son tuplas (numero de linea, lista de warnings)
         """
-        columns = tuple((col.index, col.coltype.convert) for col in columns)
+        # Normalizamos todas las columnas menos los alias (evitamos
+        # normalizarlas dos veces)
+        columns = tuple((col.index, col.coltype.convert)
+                        for col in columns if not col.canonical)
         errors  = list()
         for loffset, row in enumerate(r.cols for r in rows):
             for index, convert in columns:
@@ -261,14 +264,16 @@ class Column(object):
     - coltype: objeto Field que identifica el tipo de columna.
     - colname: nombre de la columna.
     - colkey: Si la columna es tipo "diccionario", valor de la clave.
+    - canonical: Si la columna es un alias, nombre canonico.
     """
 
-    def __init__(self, index, selector, coltype, colname):
+    def __init__(self, index, selector, coltype, colname, canonical=None):
         self.selector = selector
         self.index = index
         self.coltype = coltype
         nameparts, colkey = colname.split("["), None
         self.colname = nameparts.pop(0).strip()
+        self.canonical = canonical
         if nameparts:
             colkey = nameparts[0].split("]")[0].strip() or None
             if colkey and colkey.isdigit():
@@ -325,8 +330,9 @@ class ColumnList(object):
     def prepare(self, meta, block):
         """Prepara la carga de datos, analizando el path"""
         # Separo los atributos que sean "diccionarios" de los que no
-        attribs = tuple(col for col in self.attribs if not col.colkey)
-        colkeys = tuple(col for col in self.attribs if col.colkey)
+        alias   = tuple(col for col in self.attribs if col.canonical)
+        attribs = tuple(col for col in self.attribs if not col.canonical and not col.colkey)
+        colkeys = tuple(col for col in self.attribs if not col.canonical and col.colkey )
         dicts   = defaultdict(list)
         for col in colkeys:
             dicts[col.colname].append(col)
@@ -341,9 +347,11 @@ class ColumnList(object):
             meta = meta.subtypes[step]
         meta = meta.child(self.path[-1])
         meta.summary = tuple(c.colname for c in self.attribs)[:3]
-        for col in self.attribs:
+        for col in alias:
+            meta.create_alias(col.colname, col.canonical)
+        for col in attribs:
             meta.fields[col.colname] = col.coltype
-        for key, cols in self.dicts.iteritems():
+        for key, cols in dicts.iteritems():
             meta.fields[key] = DictField()
         meta.blocks.append(block)        
         self.meta = meta
@@ -430,13 +438,23 @@ class TableBlock(ColumnList):
             if len(nameparts) > 1:
                 selector = nameparts.pop(0).strip()
                 colname = nameparts[0].strip()
-            if colname:
-                # Creo el objeto columna y lo lanzo, si es correcto.
-                coltype = FieldMap.resolve(coltype)
-                for alias in colname.split("//"):
-                    col = Column(index, selector, coltype, alias)
-                    if col.colname:
-                        yield col
+            if not colname:
+                return
+            # Creo el objeto columna principal y lo lanzo, si es correcto.
+            coltype  = FieldMap.resolve(coltype)
+            colalias = colname.split("//")
+            col = Column(index, selector, coltype, colalias.pop(0))
+            if not col.colname:
+                return
+            canonical = col.colname
+            while col:
+                if col.colname:
+                    yield col
+                col = None
+                # Y voy lanzando los alias, si hay.
+                if colalias:
+                    alias = colalias.pop(0)
+                    col = Column(index, selector, coltype, alias, canonical)
 
     def prepare(self, rootmeta):
         """Prepara los datos para su proceso"""

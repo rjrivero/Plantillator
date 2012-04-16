@@ -4,6 +4,7 @@
 import bisect
 import sys
 import os.path
+import re
 
 from traceback import format_exception_only
 from itertools import chain
@@ -255,6 +256,36 @@ class Meta(object):
         self.fields = { "up": ObjectField(parent) }
         self.up = parent
         self.summary = tuple()
+        self._alias = dict()
+
+    def create_alias(self, name, field):
+        """Agrega un alias al campo seleccionado"""
+        self._alias[name] = field
+
+    def resolve_alias(self, alias):
+        """Resuelve el nombre canonico de un alias"""
+        canonical = self._alias.get(alias, None)
+        if canonical is not None:
+            return canonical
+        # tambien aceptamos cualquier secuencia de letras que esten en
+        # el mismo orden dentro del nombre del campo, y que sirvan para
+        # identificarlo univocamente.
+        regexp    = re.compile(".*".join(letter for letter in alias))
+        matches   = tuple(x for x in self.fields.iterkeys() if regexp.match(x))
+        canonical = matches[0] if len(matches) > 0 else alias
+        return self._alias.setdefault(alias, canonical)
+
+    def resolve_get(self, item, alias):
+        """Resuelve el valor de un atributo"""
+        canonical = self.resolve_alias(alias)
+        if canonical != alias:
+            return getattr(item, canonical)
+        return self.fields[canonical].dynamic(item, canonical)
+
+    def resolve_collect(self, items, alias):
+        """Resuelve el valor de un atributo"""
+        canonical = self.resolve_alias(alias)
+        return self.fields[canonical].collect(items, canonical)
 
 
 class DataObject(object):
@@ -270,6 +301,7 @@ class DataObject(object):
     def __getattr__(self, attr):
         """Obtiene o crea el atributo.
 
+        - Si el atributo es un alias, lo copia.
         - Si el atributo es dinamico, lo calcula.
         - Si es un DataSet, crea uno vacio al vuelo en caso de no existir.
         - En el resto de situaciones, lanza AttributeError.
@@ -277,7 +309,7 @@ class DataObject(object):
         if attr.startswith("_"):
             raise AttributeError(attr)
         try:
-            value = self._meta.fields[attr].dynamic(self, attr)
+            value = self._meta.resolve_get(self, attr)
             return self.__dict__.setdefault(attr, value)
         except KeyError:
             raise AttributeError(attr)
@@ -577,6 +609,8 @@ class DataSet(object):
         # - Valor == cualquier otra cosa: se busca el valor.
         items = self._children
         if shortcut:
+            aresolve = self._meta.resolve_alias
+            shortcut = dict((aresolve(k), v) for (k, v) in shortcut.iteritems())
             key, index = self._best_index(frozenset(shortcut))
             if index:
                 val = shortcut.pop(key)
@@ -600,7 +634,7 @@ class DataSet(object):
         if attr.startswith("_"):
             raise AttributeError(attr)
         try:
-            value = self._meta.fields[attr].collect(self, attr)
+            value = self._meta.resolve_collect(self, attr)
             return self.__dict__.setdefault(attr, value)
         except KeyError:
             raise AttributeError(attr)

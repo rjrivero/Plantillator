@@ -9,4 +9,4 @@ from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
 from .graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
 from .yed import YedGraph
 from .dot import DOT, NEATO, CIRCO, FDP, SFDP, TWOPI, DotGraph
-from .common import TableHelper, TableBuilder
+from .common import TableHelper, TableBuilder, DefaultGetter

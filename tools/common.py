@@ -7,6 +7,16 @@ from copy import deepcopy
 from .builder import BuilderHelper, SpecBuilder, TagBuilder
 
 
+def DefaultGetter(attr, default):
+    """Factoria de attrgetters, con valores por defecto"""
+    def defaultget(item):
+        try:
+            return getattr(item, attr)
+        except AttributeError:
+            return default
+    return defaultget
+
+
 x = BuilderHelper()
 
 TableHelper = (x.table << [
