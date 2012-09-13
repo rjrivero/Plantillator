@@ -5,8 +5,13 @@
 # http://code.activestate.com/recipes/576694/
 #
 
-from collections import OrderedDict, MutableSet
+from collections import MutableSet
 from itertools import repeat, chain
+
+try:
+	from collections import OrderedDict
+except ImportError:
+	from odict import OrderedDict
 
 
 class OrderedSet(MutableSet):
