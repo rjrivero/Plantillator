@@ -15,7 +15,8 @@ from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
 from .graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
 
 
-VIEWBOX = re.compile(r'viewBox="\d+(\.\d+)?\s+\d+(\.\d+)?\s+(?P<width>\d+(\.\d+)?)\s+(?P<height>\d+(\.\d+)?)"')
+SVGDIMS = re.compile(r'<svg[^>]*width="(?P<width>[^"]+)"\s+height="(?P<height>[^"]+)"')
+VIEWBOX = re.compile(r'viewBox="-?\d+(\.\d+)?\s+-?\d+(\.\d+)?\s+(?P<width>\d+(\.\d+)?)\s+(?P<height>\d+(\.\d+)?)"')
 
 
 Resources = namedtuple("Resources", "nattribs, lattribs, shapes")
@@ -29,10 +30,17 @@ def read_svg(path):
     """
     try:
         data = FileSource(path).read()
+        dims = SVGDIMS.search(data)
+        if dims:
+            width  = dims.group("width")
+            height = dims.group("height")
+            return ShapeFile(width, height, data)
         vbox = VIEWBOX.search(data)
         if vbox:
-            width  = math.ceil(float(vbox.group("width")))
-            height = math.ceil(float(vbox.group("height")))
+            # width  = math.ceil(float(vbox.group("width")))
+            # height = math.ceil(float(vbox.group("height")))
+            width  = dims.group("width")
+            height = dims.group("height")
             return ShapeFile(width, height, data)
     except:
         pass
@@ -57,11 +65,13 @@ def YedGraph(graph, shapedir="iconos", plain=False):
     - shapedir: Directorio donde encontrar los iconos (en .svg)
     - plain: si es True, se ignora la clasificacion en grupos.
     """
-    # rimero, asegurarnos de que las shapes son legibles
+    # Primero, asegurarnos de que las shapes son legibles
     shapes    = graph.shapes
     sfiles    = dict((s, read_svg(os.path.join(shapedir, s)+".svg")) for s in shapes)
     if any(x is None for x in sfiles.values()):
-        return "*** ERROR: could not read all shapes"""
+		return "\n".join(["Could not read the following shapes:",
+  			   "\n".join(key for (key, value) in sfiles.iteritems() if value is None)
+			  ])
     # Primero, encontrar cuantos IDs de recurso tengo que reservar
     # yEd es muy curioso... cuando cargue este grafico me va a mostrar
     # los atributos alreves, pero cuando lo guarde les vuelve a dar
@@ -251,12 +261,14 @@ def _list_yed(group, gapx, sublist, resources, sfiles, idmap):
                 yield '<data key="d%d">%s</data>' % (ref, escape(str(val)))
         # Obtengo el icono y sus datos: alto, ancho, x e y
         shape = sfiles[sublist.shape]
-        item_bounds = (shape.height, shape.width, gapx+xpos*GAPX, 15+group.index*GAPY)
+#        item_bounds = (shape.height, shape.width, gapx+xpos*GAPX, 15+group.index*GAPY)
+        item_bounds = (gapx+xpos*GAPX, 15+group.index*GAPY)
         # Y vuelco el objeto.
         yield "\n".join((
             '  <data key="d4">',
             '  <y:SVGNode>',
-            '    <y:Geometry height="%d" width="%d" x="%d" y="%d"/>' % item_bounds,
+#            '    <y:Geometry height="%s" width="%s" x="%d" y="%d"/>' % item_bounds,
+            '    <y:Geometry x="%d" y="%d"/>' % item_bounds,
             '    <y:Fill color="#CCCCFF" transparent="false"/>',
             '    <y:BorderStyle color="#000000" type="line" width="1.0"/>',
             '    <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Calibri" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="15.0" width="80.0" modelName="sandwich" modelPosition="s" textColor="#000000" visible="true">%s</y:NodeLabel>' % label,
