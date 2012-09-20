@@ -202,7 +202,7 @@ class LinkProperties(object):
             dst_desc  = LinkProperties._descriptor(
                 item.PEER, item.PEER.up,
                 dst_id, dst_label, dst_attribs, "dst_")
-            label = None if not label_resolver else label_resolver(item)
+            label = None if not label_resolver else label_resolver(item, item.PEER)
             yield LinkDescriptor(id(item), src_desc, dst_desc, label)
 
     @staticmethod
