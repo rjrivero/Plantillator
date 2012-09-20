@@ -133,16 +133,24 @@ class Consumer(object):
         finally:
             self.loader.close()
 
-    def INSERT(self, fname):
+    def INSERT(self, fname, optional=False):
         """Inserta una plantilla en linea"""
         # Damos preferencia en el path al directorio de la plantilla actual
-        tmplid, template = self.loader.get_template(fname, self._pending.tmplid)
-        self._pending.embed(template)
+        try:
+            tmplid, template = self.loader.get_template(fname, self._pending.tmplid)
+            self._pending.embed(template)
+        except ValueError:
+            if not optional:
+                raise
         
-    def APPEND(self, fname, outname=None):
+    def APPEND(self, fname, outname=None, optional=False):
         """Ejecuta una plantilla a posteriori"""
-        tmplid, template = self.loader.get_template(fname, self._pending.tmplid)
-        self._queue.append(self._pending.dup(tmplid, template, outname))
+        try:
+            tmplid, template = self.loader.get_template(fname, self._pending.tmplid)
+            self._queue.append(self._pending.dup(tmplid, template, outname))
+        except ValueError:
+            if not optional:
+                raise
 
     def SELECT(self, sort=True, **kw):
         """Pide al usuario que seleccione elementos.
