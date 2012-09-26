@@ -151,7 +151,7 @@ class DotFilter(str):
             return cls.PATHS.get(prog, None)
         except AttributeError:
             pass
-        progs = DotFilter._find_graphviz()
+        progs = DotFilter._find_graphviz() or dict()
         if progs:
             for key in progs:
                 if not os.path.exists( progs[key] ) or not os.path.isfile( progs[key] ):

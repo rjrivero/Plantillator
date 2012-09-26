@@ -33,6 +33,9 @@ class BoolField(Field):
             return False
         notify("Not a Boolean value: %s" % data)
 
+    def dynamic(self, item, attr):
+        return False
+
 
 class StrField(Field):
 
