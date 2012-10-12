@@ -58,6 +58,7 @@ class IPAddress(object):
         'int',          # direccion IP como un entero
         'ip',           # IP (texto)
         'mascara',      # mascara (texto)
+        'bitmask',      # mascara (bits)
         'red',          # IP de la red (texto)
         'broadcast',    # IP de broadcast de la red (texto)
         'bits',         # numero de bits de la mascara (entero)
@@ -153,6 +154,10 @@ class IPAddress(object):
         """Mascara de la red en formato texto"""
         return self.raw_network.netmask().strNormal(0)
 
+    def _bitmask(self):
+        """Mascara de la red en formato binario"""
+        return self.raw_network.netmask().int()
+
     def _red(self):
         """Direccion de la red en formato texto"""
         return self.raw_network.strNormal(0)
@@ -198,6 +203,13 @@ class IPAddress(object):
 
     def __repr__(self):
         return "IPAddress('%s')" % str(self)
+
+    def __contains__(self, other):
+        if self.bits > other.bits:
+            return False
+        if self.host:
+            return self.int == other.int
+        return (self.int == other.int & self.bitmask)
 
     def __cmp__(self, other):
         # Para listas mixtas de IPs, donde algunos elementos sean
