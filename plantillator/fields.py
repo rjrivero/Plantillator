@@ -22,7 +22,7 @@ class IntField(Field):
 
 class CurrencyField(Field):
 
-    def convert(self, data, notify, converter=decimal.Decimal):
+    def convert(self, data, notify, converter=Decimal):
         if not data:
             return None
         try:
