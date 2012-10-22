@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from itertools import chain
+from decimal import Decimal, getcontext
 import re
 
 from .ip import IPAddress
@@ -19,10 +20,50 @@ class IntField(Field):
             notify("Not an Integer: %s" % data)
 
 
+class CurrencyField(Field):
+
+    def convert(self, data, notify, converter=decimal.Decimal):
+        if not data:
+            return None
+        try:
+            # Tego que lidiar con los locales. Decimal espera el "."
+            # como separador de decimales, y nada como separador de miles.
+            # Excel puede usar "."  "," como separador de miles,
+            # y "," o "." para los decimales, segun el locale que tenga
+            # configurado.
+            #
+            # El problema es que el locale que tenga el ordenador actual no
+            # tiene por que coincidir con el locale en el ordenador que genero
+            # el fichero csv... asi que en vez de confiar en los locales
+            # actuales, utilizo una heuristica para determinar si el
+            # separador de decimales es "." o ",".
+            #
+            # Inicialmente, miles = ".", decimal = ","
+            thou, dec = '.', ','
+            countcom = data.count(',')
+            countdot = data.count('.')
+            lastcom  = data.rfind(',')
+            lastdot  = data.rfind('.')
+            # Si hay más de una ",", entonces es que es el separador de miles
+            if (countcom > 1):
+                thou, dec = ',', '.'
+            # Si hay "." y ",", el primero separa miles y el segundo
+            # decimales
+            elif lastcom > 0 and lastdot > lastcom:
+                thou, dec = ',', '.'
+            # Y aquí habría muchas otras heuristicas que aplicar...
+            #
+            # Pero de momento, se queda asi. Borro los separadores de miles,
+            # y los de decimal los sustituyo por ".".
+            return converter(data.replace(thou, '').replace(dec, '.'))
+        except ValueError:
+            notify("Not a Decimal: %s" % data)
+
+
 class BoolField(Field):
 
     def convert(self, data, notify,
-        truevals  = ("SI", "S�", "S", "YES", "Y", "1"),
+        truevals  = ("SI", "SÍ", "S", "YES", "Y", "1"),
         falsevals = ("NO", "N", "0")):
         if not data:
             return None
@@ -222,6 +263,7 @@ class FieldMap(object):
         'ip': IPv4Field,
         'ipv4': IPv4Field,
         'ipv6': IPv6Field,
+        'currency': CurrencyField,
     }
 
     VectorFields = {
