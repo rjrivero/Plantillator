@@ -862,6 +862,8 @@ class CSVShelf(object):
 
     def _findcsv(self, dirname):
         """Encuentra todos los ficheros CSV en el path"""
+        if not os.path.isdir(dirname):
+            return tuple()
         files = (x for x in os.listdir(dirname) if x.lower().endswith(".csv"))
         files = (os.path.join(dirname, x) for x in files)
         files = (f for f in files if os.path.isfile(f))
