@@ -65,6 +65,7 @@ class IPAddress(object):
         'bitsize',      # numero de bits totales de la direccion
         'wildmask',     # mascara invertida (estilo Cisco)
         'bytes',        # bytes que componen la direccion (LSB first)
+        'hash',         # hash interno de la direccion (para dict, set)
     ))
 
     def __init__(self, ip, host=None, check_ip=simple_check_ip):
@@ -186,6 +187,10 @@ class IPAddress(object):
                 num = num >> 8
         return array.array("B", stream(self.int, self.bitsize))
 
+    def _hash(self):
+        """Hash unico del objeto, para indexar en mapas"""
+        return hash(self.int)
+
     def __getattr__(self, attr):
         if attr not in IPAddress.ATTRIBS: 
             raise AttributeError(attr)
@@ -210,6 +215,9 @@ class IPAddress(object):
         if self.host:
             return self.int == other.int
         return (self.int == other.int & self.bitmask)
+
+    def __hash__(self):
+      return self.hash
 
     def __cmp__(self, other):
         # Para listas mixtas de IPs, donde algunos elementos sean
