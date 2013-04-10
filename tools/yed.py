@@ -263,6 +263,9 @@ def _list_yed(group, gapx, sublist, resources, sfiles, idmap):
         shape = sfiles[sublist.shape]
 #        item_bounds = (shape.height, shape.width, gapx+xpos*GAPX, 15+group.index*GAPY)
         item_bounds = (gapx+xpos*GAPX, 15+group.index*GAPY)
+        labeldata = ('plain', '#000000', label)
+        if sublist.label:
+            labeldata = ('bold', sublist.label, label)
         # Y vuelco el objeto.
         yield "\n".join((
             '  <data key="d4">',
@@ -271,7 +274,7 @@ def _list_yed(group, gapx, sublist, resources, sfiles, idmap):
             '    <y:Geometry x="%d" y="%d"/>' % item_bounds,
             '    <y:Fill color="#CCCCFF" transparent="false"/>',
             '    <y:BorderStyle color="#000000" type="line" width="1.0"/>',
-            '    <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Calibri" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="15.0" width="80.0" modelName="sandwich" modelPosition="s" textColor="#000000" visible="true">%s</y:NodeLabel>' % label,
+            '    <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Calibri" fontSize="11" fontStyle="%s" hasBackgroundColor="false" hasLineColor="false" height="15.0" width="80.0" modelName="sandwich" modelPosition="s" textColor="%s" visible="true">%s</y:NodeLabel>' % labeldata,
             '    <y:SVGModel svgBoundsPolicy="0">',
             '      <y:SVGContent refid="%d"/>' % resources.shapes[sublist.shape],
             '    </y:SVGModel>',

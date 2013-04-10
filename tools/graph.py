@@ -94,6 +94,7 @@ class NodeProperties(object):
 
     DEFAULTS = {
         "border": "white",
+        "label": None,
         "rank":    None,
         "shape":   None,
     }
@@ -103,7 +104,8 @@ class NodeProperties(object):
         
         shape:      Nombre del icono que debe tener el objeto.
         rank:       Rango jerarquico del objeto (para dot, principalmente)
-        "border":   Color del borde del nodo, para dot solo.
+        border:     Color del borde del nodo, para dot solo.
+        label:      Color de la etiqueta en formato "#xxxxxx", para yEd solo.
         attribs:    Nombres de los atributos que se exportaran.
         """
         self.attribs = attribs
