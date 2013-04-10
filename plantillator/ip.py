@@ -57,15 +57,17 @@ class IPAddress(object):
         'base',         # objeto IPAddress con la misma red y host 0
         'int',          # direccion IP como un entero
         'ip',           # IP (texto)
-        'mascara',      # mascara (texto)
+        'mask',         # mascara (texto)
+        'network',	# IP de la red (texto)
         'bitmask',      # mascara (bits)
-        'red',          # IP de la red (texto)
         'broadcast',    # IP de broadcast de la red (texto)
         'bits',         # numero de bits de la mascara (entero)
         'bitsize',      # numero de bits totales de la direccion
         'wildmask',     # mascara invertida (estilo Cisco)
         'bytes',        # bytes que componen la direccion (LSB first)
         'hash',         # hash interno de la direccion (para dict, set)
+        'red',          # IP de la red (texto) (backward comp)
+        'mascara',      # mascara (texto) (backward comp.)
     ))
 
     def __init__(self, ip, host=None, check_ip=simple_check_ip):
@@ -151,6 +153,10 @@ class IPAddress(object):
         """Direccion IP en formato texto"""
         return self.raw_network[self.host].strNormal(0)
 
+    def _mask(self):
+        """Mascara de la red en formato texto"""
+        return self.raw_network.netmask().strNormal(0)
+
     def _mascara(self):
         """Mascara de la red en formato texto"""
         return self.raw_network.netmask().strNormal(0)
@@ -158,6 +164,10 @@ class IPAddress(object):
     def _bitmask(self):
         """Mascara de la red en formato binario"""
         return self.raw_network.netmask().int()
+
+    def _network(self):
+        """Direccion de la red en formato texto"""
+        return self.raw_network.strNormal(0)
 
     def _red(self):
         """Direccion de la red en formato texto"""
@@ -228,6 +238,11 @@ class IPAddress(object):
                 return cmp(str(self), other)
             return cmp(self.ip, other)
         return cmp(self.int, other.int)
+
+    def __div__(self, mask):
+        # Devuelve un objeto IPAddress com la mascara cambiada
+        # ejemplo: IP('1.2.3.4/32') / 24 ==> IP('1.2.3.4/24')
+        return IPAddress('/'.join((self.ip, str(mask))))
 
     def __len__(self):
         # Para que funcionen las comparaciones con ANY, NONE.
