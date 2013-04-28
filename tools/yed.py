@@ -66,12 +66,12 @@ def YedGraph(graph, shapedir="iconos", plain=False):
     - plain: si es True, se ignora la clasificacion en grupos.
     """
     # Primero, asegurarnos de que las shapes son legibles
-    shapes    = graph.shapes
-    sfiles    = dict((s, read_svg(os.path.join(shapedir, s)+".svg")) for s in shapes)
+    gshapes   = tuple(x for x in graph.shapes if x)
+    sfiles    = dict((s, read_svg(os.path.join(shapedir, s)+".svg")) for s in gshapes)
     if any(x is None for x in sfiles.values()):
-		return "\n".join(["Could not read the following shapes:",
-  			   "\n".join(key for (key, value) in sfiles.iteritems() if value is None)
-			  ])
+        return "\n".join(["Could not read the following shapes:",
+                 "\n".join(key for (key, value) in sfiles.iteritems() if value is None)
+              ])
     # Primero, encontrar cuantos IDs de recurso tengo que reservar
     # yEd es muy curioso... cuando cargue este grafico me va a mostrar
     # los atributos alreves, pero cuando lo guarde les vuelve a dar
@@ -81,7 +81,7 @@ def YedGraph(graph, shapedir="iconos", plain=False):
     reserved  = len(nattribs) + reserved
     lattribs  = dict((v, i+reserved) for (i, v) in enumerate(graph.link_attribs))
     reserved  = len(lattribs) + reserved
-    shapes    = dict((v, i+reserved) for (i, v) in enumerate(graph.shapes))
+    shapes    = dict((v, i+reserved) for (i, v) in enumerate(gshapes))
     resources = Resources(nattribs, lattribs, shapes)
     # Y devolvemos el resultado
     return StringWrapper("\n".join(_graph_yed(graph, resources, sfiles, plain)))
@@ -260,25 +260,39 @@ def _list_yed(group, gapx, sublist, resources, sfiles, idmap):
                 ref = resources.nattribs[key]
                 yield '<data key="d%d">%s</data>' % (ref, escape(str(val)))
         # Obtengo el icono y sus datos: alto, ancho, x e y
-        shape = sfiles[sublist.shape]
+        shape = None if not sublist.shape else sfiles[sublist.shape]
 #        item_bounds = (shape.height, shape.width, gapx+xpos*GAPX, 15+group.index*GAPY)
         item_bounds = (gapx+xpos*GAPX, 15+group.index*GAPY)
         labeldata = ('plain', '#000000', label)
         if sublist.label:
             labeldata = ('bold', sublist.label, label)
-        # Y vuelco el objeto.
-        yield "\n".join((
-            '  <data key="d4">',
-            '  <y:SVGNode>',
-#            '    <y:Geometry height="%s" width="%s" x="%d" y="%d"/>' % item_bounds,
-            '    <y:Geometry x="%d" y="%d"/>' % item_bounds,
-            '    <y:Fill color="#CCCCFF" transparent="false"/>',
-            '    <y:BorderStyle color="#000000" type="line" width="1.0"/>',
-            '    <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Calibri" fontSize="11" fontStyle="%s" hasBackgroundColor="false" hasLineColor="false" height="15.0" width="80.0" modelName="sandwich" modelPosition="s" textColor="%s" visible="true">%s</y:NodeLabel>' % labeldata,
-            '    <y:SVGModel svgBoundsPolicy="0">',
-            '      <y:SVGContent refid="%d"/>' % resources.shapes[sublist.shape],
-            '    </y:SVGModel>',
-            '  </y:SVGNode>',
-            '  </data>',
-            '  </node>',
-        ))
+        # Y vuelco el SVG, si lo hay.
+        if shape: # Grafico SVG
+            yield "\n".join((
+                '  <data key="d4">',
+                '  <y:SVGNode>',
+#               '    <y:Geometry height="%s" width="%s" x="%d" y="%d"/>' % item_bounds,
+                '    <y:Geometry x="%d" y="%d"/>' % item_bounds,
+                '    <y:Fill color="#CCCCFF" transparent="false"/>',
+                '    <y:BorderStyle color="#000000" type="line" width="1.0"/>',
+                '    <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Calibri" fontSize="11" fontStyle="%s" hasBackgroundColor="false" hasLineColor="false" height="15.0" width="80.0" modelName="sandwich" modelPosition="s" textColor="%s" visible="true">%s</y:NodeLabel>' % labeldata,
+                '    <y:SVGModel svgBoundsPolicy="0">',
+                '      <y:SVGContent refid="%d"/>' % resources.shapes[sublist.shape],
+                '    </y:SVGModel>',
+                '  </y:SVGNode>',
+                '  </data>',
+            ))
+        else: # Cuadradin
+            yield "\n".join((
+                '  <data key="d4">',
+                '  <y:ShapeNode>',
+#               '    <y:Geometry height="%s" width="%s" x="%d" y="%d"/>' % item_bounds,
+                '    <y:Geometry x="%d" y="%d"/>' % item_bounds,
+                '    <y:Fill color="#FFDD33" transparent="false"/>',
+                '    <y:BorderStyle color="#000000" type="line" width="1.0"/>',
+                '    <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Calibri" fontSize="11" fontStyle="%s" hasBackgroundColor="false" hasLineColor="false" height="15.0" width="80.0" modelName="internal" modelPosition="c" textColor="%s" visible="true">%s</y:NodeLabel>' % labeldata,
+                '    <y:Shape type="rectangle"/>',
+                '  </y:ShapeNode>',
+                '  </data>',
+            ))
+        yield '</node>'

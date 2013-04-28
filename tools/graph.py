@@ -122,7 +122,7 @@ class NodeProperties(object):
         for item in items:
             # Obtengo el ID y el label de cada atributo desde el resolver
             ID = id_resolver(item)
-            label = label_resolver(item)
+            label = str(label_resolver(item))
             # Obtengo los atributos del objeto pedidos
             if attribs:
                 values = ((attr, item.get(attr)) for attr in attribs)
@@ -204,14 +204,14 @@ class LinkProperties(object):
             dst_desc  = LinkProperties._descriptor(
                 item.PEER, item.PEER.up,
                 dst_id, dst_label, dst_attribs, "dst_")
-            label = None if not label_resolver else label_resolver(item, item.PEER)
+            label = None if not label_resolver else str(label_resolver(item, item.PEER))
             yield LinkDescriptor(id(item), src_desc, dst_desc, label)
 
     @staticmethod
     def _descriptor(link, item, id_resolver, label_resolver, attribs, prefix):
         """Devuelve un descriptor"""
         ID     = id_resolver(item)
-        label  = label_resolver(item)
+        label  = str(label_resolver(item))
         if attribs:
             values = (("%s%s" % (prefix, attr), link.get(attr)) for attr in attribs)
             values = dict((x, y) for (x, y) in values if y is not None)

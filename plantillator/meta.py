@@ -42,16 +42,26 @@ class DataError(Exception):
         return "\n".join(diag)
 
 
-def kw_as_crit(key, val):
+def kw_as_crit(key, val, dummy=tuple()):
     """Convierte un criterio expresado como clave=valor en un callable"""
     if val is DataSet.NONE:
         # Esto me vale para campos de tipo lista o set que esten vacios.
-        # (por lo menos, hasta que alguien los instancie con "__getattr__"...)
-    	return lambda x: x.get(key, None) is None
+        def is_NONE(x):
+            val = x.get(key, dummy)
+            if not hasattr(val, '__len__'):
+				return False
+            return len(val) == 0
+        return is_NONE
+#        return lambda x: x.get(key, None) is None
     if val is DataSet.ANY:
         # Esto me vale para campos de tipo lista o set que no esten vacios.
-        # (por lo menos, hasta que alguien los instancie con "__getattr__"...)
-        return lambda x: x.get(key, None) is not None
+        def is_ANY(x):
+            val = x.get(key, dummy)
+            if not hasattr(val, '__len__'):
+				return True
+            return len(val) > 0
+        return is_ANY
+#        return lambda x: x.get(key, None) is not None
     return lambda x: x.get(key, None) == val
 
 
