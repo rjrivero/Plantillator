@@ -712,7 +712,7 @@ class LinkBlock(object):
                             setattr(item, attrib, peers)
             except Exception as details:
                 if warnings is None:
-                    raise DataError(source, lineno)
+                    raise DataError(source, lineno, msg='Fila: %s' % str(row))
                 errors.append((lineno, (str(details),)))
         if errors:
             warnings.setdefault(source, list()).extend(errors)

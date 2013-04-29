@@ -23,18 +23,22 @@ class DataError(Exception):
     - self.warnings: Si aplica, lista de pares (n. de linea, lista de errores)
     """
 
-    def __init__(self, source, index, warnings=None, stack=True):
+    def __init__(self, source, index, warnings=None, stack=True, msg=None):
         super(DataError, self).__init__()
         self.source   = source
         self.index    = index
         self.warnings = warnings
         self.exc_info = sys.exc_info() if stack else None
+        self.msg = msg
 
     def __str__(self):
-        diag = list((
+        diag = [
             "***",
             "Error en fichero de datos %s [primer error en linea %s]" % (os.path.basename(self.source), self.index),
-            "***"))
+            "***"
+        ]
+        if self.msg:
+            diag.append(self.msg)
         if self.warnings:
             diag.extend(("linea %d:\n  %s" % (w[0], "\n  ".join(w[1])) for w in self.warnings))
         if self.exc_info:
