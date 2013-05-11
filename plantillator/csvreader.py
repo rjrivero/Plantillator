@@ -242,7 +242,13 @@ class CSVRow(object):
         columns = tuple((col.index, col.coltype.convert)
                         for col in columns if not col.canonical)
         errors  = list()
+        minlen  = max(x[0] for x in columns) + 1;
         for loffset, row in enumerate(r.cols for r in rows):
+            # Si la fila es demasiado corta, tengo que extenderla
+            # hasta que alcance una longitud minima, para que no me
+            # de error de "index out of range"
+            if len(row) < minlen:
+                row.extend(('',) * (minlen - len(row)))
             for index, convert in columns:
                 row[index] = convert(row[index].strip(), errors.append)
             if errors:
