@@ -781,7 +781,15 @@ class CSVSource(FileSource):
         source, lineno = self.id, -1
         try:
             for (lineno, blk), (j, skip) in zip(labels, labels[1:]):
-                yield blk(source, lineno, rows[lineno:j])
+                # Me quedo solo con las cabeceras hasta el primer '!'
+                headers = rows[lineno:j]
+                for hnum, hrow in enumerate(headers):
+                    for idx, hcol in enumerate(hrow):
+                        if hcol == '!':
+                            headers[hnum] = hrow[:idx]
+                            break
+                # Y creo un bloque
+                yield blk(source, lineno, headers)
         except:
             raise DataError(source, lineno)
 
