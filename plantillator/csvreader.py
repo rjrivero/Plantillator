@@ -256,6 +256,12 @@ class CSVRow(object):
                 errors = list()
         return rows
 
+    def __iter__(self):
+        return iter(self.cols)
+
+    def truncate(self, length):
+        self.cols = self.cols[:length]
+
     def __repr__(self):
         return " (%s) " % ", ".join(str(x) for x in self.cols)
 
@@ -786,7 +792,7 @@ class CSVSource(FileSource):
                 for hnum, hrow in enumerate(headers):
                     for idx, hcol in enumerate(hrow):
                         if hcol == '!':
-                            headers[hnum] = hrow[:idx]
+                            hrow.truncate(idx)
                             break
                 # Y creo un bloque
                 yield blk(source, lineno, headers)
