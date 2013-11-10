@@ -113,11 +113,14 @@ class ShelfLoader(CSVShelf):
         self.dirty = True
 
     def close(self):
-        if self.dirty:
-            self.shelf[ShelfLoader.FILES] = self.files
-            self.shelf[ShelfLoader.VERSION] = ShelfLoader.CURRENT
-            with open(self.shelfname, "wb") as shelve:
-                pickle.dump(self.shelf, shelve, protocol=2)
+        try:
+            if self.dirty:
+                self.shelf[ShelfLoader.FILES] = self.files
+                self.shelf[ShelfLoader.VERSION] = ShelfLoader.CURRENT
+                with open(self.shelfname, "wb") as shelve:
+                    pickle.dump(self.shelf, shelve, protocol=2)
+        except:
+            pass
 
 
 class ContextMaker(object):
