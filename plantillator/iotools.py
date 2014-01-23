@@ -120,6 +120,7 @@ class ShelfLoader(CSVShelf):
                 with open(self.shelfname, "wb") as shelve:
                     pickle.dump(self.shelf, shelve, protocol=2)
         except:
+            # No se pudieron salvar los cambios... no es gran cosa!
             pass
 
 

@@ -355,8 +355,12 @@ class ColumnList(object):
         # ya compruebo que todos los tipos padres existan... eso
         # solo funciona si el proceso se hace por orden, del nivel
         # mas alto al mas bajo.
-        for step in self.path[:-1]:
-            meta = meta.subtypes[step]
+        try:
+            for step in self.path[:-1]:
+                meta = meta.subtypes[step]
+        except KeyError:
+            print("No se encuentra %s en %s\n" % (step, repr(meta.path)))
+            raise
         meta = meta.child(self.path[-1])
         meta.summary = tuple(c.colname for c in self.attribs)[:3]
         for col in alias:
