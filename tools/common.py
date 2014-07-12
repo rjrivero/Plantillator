@@ -48,16 +48,21 @@ class Toggle(object):
 
     """Objeto que va altenando entre dos valores"""
 
-    def __init__(self, even, odd):
-        self.index = 1
+    def __init__(self, even, odd, first=None):
+        self.first  = first
         self.values = (odd, even)
+        self.reset()
 
     def next(self):
+	if self.doFirst:
+            self.doFirst = False
+            return self.first
         self.index = 1 - self.index
         return self.values[self.index]
 
     def reset(self):
-        self.index = 0
+        self.doFirst = True if self.first else False
+        self.index   = 0 if self.doFirst else 1
 
 
 class TableBuilder(object):
@@ -75,6 +80,7 @@ class TableBuilder(object):
         'oddtd':   {'class': 'odd'},
         'eventh':  {'class': 'even'},
         'oddth':   {'class': 'odd'},
+        'firsth':  {'class': 'first'},
     }
 
     def __init__(self, style=None, vertical=False, repeat=False):
@@ -120,7 +126,7 @@ class TableBuilder(object):
             self._style.update(style)
         self._table  = None
         self._trcss = Toggle("eventr", "oddtr")
-        self._thcss = Toggle("eventh", "oddth")
+        self._thcss = Toggle("eventh", "oddth", "firsth")
         self._vertical = vertical
         self._repeat = repeat
 
@@ -152,7 +158,7 @@ class TableBuilder(object):
         )
 
     def _layout_horizontal_row(self, group, escape, rows, colspan,
-                               tdtoggle=Toggle("eventd", "oddtd"),
+                               tdtoggle=Toggle("eventd", "oddtd", "firstd"),
                                x=BuilderHelper()):
         trtoggle, style = self._trcss, self._style
         if group:
@@ -172,9 +178,8 @@ class TableBuilder(object):
             firstgetter = self._header[0][1]
             othergetter = self._header[1:]
             yield x.tr(**style[trtoggle.next()]) << (
-                x.td(**style['firstd']) << firstgetter(row),
                 ((x.td(**style[tdtoggle.next()]) << getter(row))
-                for (label, getter) in othergetter)
+                for (label, getter) in self._header)
             )
 
     def _layout_vertical(self, x=BuilderHelper()):
