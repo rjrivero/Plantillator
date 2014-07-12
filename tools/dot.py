@@ -5,6 +5,7 @@
 # solo me hace falta la parte de localizar los ejecutables y llamarlos.
 # No voy a manipular graficos como objetos python ni nada de eso.
 
+from __future__ import with_statement
 
 import subprocess
 import os
@@ -170,9 +171,10 @@ class DotFilter(str):
         if prog is None:
             return ("*** ERROR: NO PROGRAM %s ***" % self,)
         outname = os.path.splitext(strings[0])[0] + ".png"
-        status = subprocess.call((prog, '-Tpng', "-o%s" % outname, strings[0]))
+        with open('/dev/null', 'wb') as nullfd: 
+            status = subprocess.call((prog, '-Tpng', "-o%s" % outname, strings[0]), stdout=nullfd, stderr=nullfd)
         if status != 0:
-            return ("*** ERROR %s RETURNED %d ***" % (self, status),)
+           return ("*** ERROR %s RETURNED %d ***" % (self, status),)
         return (outname,)
 
 
