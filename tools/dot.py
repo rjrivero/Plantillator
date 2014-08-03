@@ -12,7 +12,7 @@ import os
 import os.path
 
 from .graph import StringWrapper
-from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
+from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, LINK_DOUBLE
 from .graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
 
 
@@ -190,6 +190,7 @@ STYLES = {
     LINK_SOLID: "solid",
     LINK_DOTTED: "dotted",
     LINK_DASHED: "dashed",
+    LINK_DOUBLE: "solid",
 }
 
 
@@ -243,8 +244,11 @@ def _graph_dot(graph, shapedir, scale):
     IDs = graph.IDs
     for sublist in graph.links:
         for link in sublist.valid_links(IDs):
+	    color = sublist.color
+            if sublist.style == LINK_DOUBLE:
+                color = "%s:white:%s" % (color, color)
             yield '  %s -> %s [ color="%s", penwidth="%s", style="%s", arrowhead="%s", arrowtail="%s" ];' % (
-                link[0].ID, link[1].ID, sublist.color, sublist.width,
+                link[0].ID, link[1].ID, color, sublist.width,
                 STYLES.get(sublist.style, "solid"),
                 ARROWS.get(sublist.source_arrow, "none"),
                 ARROWS.get(sublist.target_arrow, "none"),

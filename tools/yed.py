@@ -11,7 +11,7 @@ from collections import namedtuple
 
 from plantillator.pathfinder import FileSource
 from .graph import StringWrapper
-from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED
+from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, LINK_DOUBLE
 from .graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
 
 
@@ -50,6 +50,7 @@ STYLES = {
     LINK_SOLID: "line",
     LINK_DOTTED: "dotted",
     LINK_DASHED: "dashed",
+    LINK_DOUBLE: "line",
 }
 
 ARROWS = {

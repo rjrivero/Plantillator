@@ -12,6 +12,7 @@ from .builder import SpecBuilder, BuilderHelper
 LINK_SOLID  = "solid"
 LINK_DOTTED = "dotted"
 LINK_DASHED = "dashed"
+LINK_DOUBLE = "double"
 
 # Estilos de flecha
 ARROW_SMALL = "small"
