@@ -15,8 +15,8 @@ from optparse import OptionParser
 from itertools import chain
 from traceback import print_exc, print_exception, format_exception_only
 
-from plantillator.pathfinder import FileSource
-from plantillator.iotools import ContextMaker
+from cuac.libs.pathfinder import FileSource
+from cuac.libs.iotools import ContextMaker
 
 
 VERSION           = "0.5"

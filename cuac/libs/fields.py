@@ -5,8 +5,8 @@ from itertools import chain
 from decimal import Decimal, getcontext
 import re
 
-from .ip import IPAddress
-from .meta import Field, BaseSet, BaseList
+from cuac.libs.ip import IPAddress
+from cuac.libs.meta import Field, BaseSet, BaseList
 
 
 class IntField(Field):

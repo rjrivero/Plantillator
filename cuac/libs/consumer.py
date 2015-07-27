@@ -7,8 +7,8 @@ import re
 import os.path
 import code
 
-import tools
-from .iotools import ShelfLoader, ContextMaker, Interactor
+import cuac.tools
+from cuac.libs.iotools import ShelfLoader, ContextMaker, Interactor
 
 
 # Nombre de variable valido. Excluyo los que comienzan por "_",

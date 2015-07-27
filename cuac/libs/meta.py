@@ -8,7 +8,7 @@ import re
 
 from traceback import format_exception_only
 from itertools import chain
-from .oset import OrderedSet
+from cuac.libs.oset import OrderedSet
 
 
 class DataError(Exception):

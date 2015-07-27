@@ -5,7 +5,7 @@ from copy import copy
 from collections import namedtuple, defaultdict
 from itertools import chain, groupby, izip
 
-from .builder import SpecBuilder, BuilderHelper
+from cuac.tools.builder import SpecBuilder, BuilderHelper
 
 
 # Estilos de linea

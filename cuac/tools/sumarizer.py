@@ -8,7 +8,7 @@
 
 
 import re
-from plantillator.IPy import IP
+from cuac.libs.IPy import IP
 
 
 # Conjunto de digitos al final de una cadena

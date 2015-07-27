@@ -9,10 +9,9 @@ from itertools import count, chain, repeat, izip
 from collections import defaultdict
 from copy import copy
 
-from .meta import DataError, Meta, DataObject, DataSet, PeerSet, BaseSet
-from .meta import ObjectField, DataSetField, Field
-from .pathfinder import FileSource
-from .fields import FieldMap, IntField
+from cuac.libs.pathfinder import FileSource
+from cuac.libs.fields import FieldMap, IntField
+from cuac.libs.meta import *
 
 
 class CSVMeta(Meta):

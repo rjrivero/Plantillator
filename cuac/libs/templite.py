@@ -13,7 +13,7 @@ try:
 except ImportError:
     import pickle
 
-from .oset import OrderedSet
+from cuac.libs.oset import OrderedSet
 
 
 def add_error(errlist, template, filename, lineno, exc_info):

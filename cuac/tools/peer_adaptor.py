@@ -6,8 +6,8 @@ de los peerings en el Ayto. de Sevilla al nuevo modelo de datos,
 con PEERs y PeerSets
 """
 
-from plantillator.meta import ObjectField
-from plantillator.fields import IntField
+from cuac.libs.meta import ObjectField
+from cuac.libs.fields import IntField
 
 
 def adapt_peers(from_dset, to_dset, adaptor):

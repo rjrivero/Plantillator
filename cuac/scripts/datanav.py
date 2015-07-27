@@ -14,15 +14,8 @@ from traceback import print_exc, format_exception_only, print_exception
 from optparse import OptionParser
 from contextlib import contextmanager
 
-try:
-    from plantillator import ShelfLoader, DataError
-    from tree import TreeCanvas
-except ImportError:
-    import os.path
-    import sys
-    sys.path.append(".")
-    from plantillator import ShelfLoader, DataError
-    from tree import TreeCanvas
+from cuac.libs import ShelfLoader, DataError
+from cuac.libs.tree import TreeCanvas
 
 
 _ASSIGNMENT = re.compile(r"^\s*(?P<var>[a-zA-Z]\w*)\s*=(?P<expr>.*)$")

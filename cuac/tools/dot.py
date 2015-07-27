@@ -11,9 +11,9 @@ import subprocess
 import os
 import os.path
 
-from .graph import StringWrapper
-from .graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, LINK_DOUBLE
-from .graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
+from cuac.tools.graph import StringWrapper
+from cuac.tools.graph import LINK_SOLID, LINK_DOTTED, LINK_DASHED, LINK_DOUBLE
+from cuac.tools.graph import ARROW_SMALL, ARROW_LARGE, ARROW_NONE
 
 
 class DotFilter(str):

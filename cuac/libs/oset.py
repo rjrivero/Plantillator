@@ -11,7 +11,7 @@ from itertools import repeat, chain
 try:
 	from collections import OrderedDict
 except ImportError:
-	from odict import OrderedDict
+	from cuac.libs.odict import OrderedDict
 
 
 class OrderedSet(MutableSet):

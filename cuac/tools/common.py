@@ -4,7 +4,7 @@
 from itertools import chain
 from copy import deepcopy
 
-from .builder import BuilderHelper, SpecBuilder, TagBuilder
+from cuac.tools.builder import BuilderHelper, SpecBuilder, TagBuilder
 
 
 def DefaultGetter(attr, default):
