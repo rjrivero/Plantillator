@@ -1,3 +1,12 @@
+# Compilation results
 *.pyc
+
+# Local installation products
 *.egg-info
+
+# Sdist packaging products
+dist/
+
+# Wheel packaging products
+build/
 
