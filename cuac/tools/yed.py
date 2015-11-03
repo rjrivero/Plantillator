@@ -25,7 +25,7 @@ ShapeFile = namedtuple("Shape", "width, height, data")
 
 def read_svg(path):
     """Lee un fichero SVG.
-    
+
     Devuelve una tupla (ancho, alto, contenido)
     """
     try:
@@ -62,7 +62,7 @@ ARROWS = {
 
 def YedGraph(graph, shapedir="iconos", plain=False):
     """Convierte un grafo en texto en formato yEd
-    
+
     - shapedir: Directorio donde encontrar los iconos (en .svg)
     - plain: si es True, se ignora la clasificacion en grupos.
     """
@@ -165,6 +165,11 @@ def _graph_yed(graph, resources, sfiles, plain):
             ))
             if link[2]:
                 yield '<y:EdgeLabel alignment="center" distance="2.0" fontFamily="Calibri" fontSize="9" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="side_slider" preferredPlacement="source" ratio="0.0" textColor="#000000" visible="true">%s</y:EdgeLabel>' % escape(str(link[2]))
+            else:
+                # Source label
+                yield '<y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Calibri" fontSize="9" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="free" modelPosition="anywhere" preferredPlacement="source" ratio="0.5" textColor="#000000" visible="true">%s<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" placement="source" side="anywhere" sideReference="relative_to_edge_flow"/></y:EdgeLabel>' % escape(str(link[0].label))
+                # Dest label
+                yield '<y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Calibri" fontSize="9" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" modelName="free" modelPosition="anywhere" preferredPlacement="source" ratio="0.5" textColor="#000000" visible="true">%s<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" placement="source" side="anywhere" sideReference="relative_to_edge_flow"/></y:EdgeLabel>' % escape(str(link[1].label))
             yield "\n".join((
                 '<y:BendStyle smoothed="false"/>',
                 '</y:PolyLineEdge>',
